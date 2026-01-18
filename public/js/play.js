@@ -11,18 +11,19 @@ const quizTitleDisplay = document.getElementById('quiz-title-display');
 const questionSection = document.getElementById('question-section');
 const currentQNum = document.getElementById('current-q-num');
 const totalQNum = document.getElementById('total-q-num');
-const questionText = document.getElementById('question-text');
+const scoreDisplay = document.getElementById('score-display');
 const timer = document.getElementById('timer');
+const timerProgress = document.getElementById('timer-progress');
+const questionText = document.getElementById('question-text');
 const optionsContainer = document.getElementById('options-container');
 const answerStatus = document.getElementById('answer-status');
-const scoreDisplay = document.getElementById('score-display');
 
 const resultsSection = document.getElementById('results-section');
-const resultStatus = document.getElementById('result-status');
+const resultIcon = document.getElementById('result-icon');
+const resultText = document.getElementById('result-text');
 const currentScoreEl = document.getElementById('current-score');
 const yourAnswer = document.getElementById('your-answer');
 const correctAnswer = document.getElementById('correct-answer');
-const resultsChart = document.getElementById('results-chart');
 
 const endedSection = document.getElementById('ended-section');
 const finalIcon = document.getElementById('final-icon');
@@ -38,10 +39,10 @@ let participantId = null;
 let currentQuestion = null;
 let selectedAnswer = null;
 let timerInterval = null;
-let chart = null;
+let timerDuration = 20;
 let currentScore = 0;
 
-// Motivating messages for those who don't pass
+// Motivating messages
 const motivatingMessages = [
   "Keep learning! Every expert was once a beginner.",
   "Progress, not perfection! Review and try again.",
@@ -67,19 +68,18 @@ joinForm.addEventListener('submit', async (e) => {
     if (data.success) {
       participantId = data.participantId;
       localStorage.setItem('markdownMashId', participantId);
-      localStorage.setItem('markdownMashName', name);
 
-      joinSection.classList.add('hidden');
+      hideAllSections();
       waitingSection.classList.remove('hidden');
       welcomeName.textContent = `Welcome, ${name}!`;
       quizTitleDisplay.textContent = data.quizTitle;
 
       initSocket();
     } else {
-      showError(joinError, data.error);
+      showError(data.error);
     }
   } catch (err) {
-    showError(joinError, 'Connection error. Please try again.');
+    showError('Connection error. Please try again.');
   }
 });
 
@@ -95,140 +95,131 @@ function initSocket() {
     quizTitleDisplay.textContent = data.title;
     totalQNum.textContent = data.totalQuestions;
     currentScore = 0;
-    scoreDisplay.textContent = `Score: 0`;
+    scoreDisplay.textContent = '0';
   });
 
   socket.on('question_started', (data) => {
     currentQuestion = data.question;
     selectedAnswer = null;
+    timerDuration = data.timeRemaining;
 
-    // Update UI
     currentQNum.textContent = data.questionNumber;
     totalQNum.textContent = data.totalQuestions;
     questionText.textContent = data.question.text;
     answerStatus.classList.add('hidden');
 
-    // Render options
     renderOptions(data.question.options);
-
-    // Start timer
     startTimer(data.timeRemaining);
 
-    // Show question section
-    waitingSection.classList.add('hidden');
-    resultsSection.classList.add('hidden');
+    hideAllSections();
     questionSection.classList.remove('hidden');
   });
 
-  socket.on('answer_confirmed', (data) => {
+  socket.on('answer_confirmed', () => {
     answerStatus.classList.remove('hidden');
   });
 
   socket.on('question_ended', (data) => {
     clearInterval(timerInterval);
 
-    const yourAnswerIdx = data.yourAnswer;
+    // Get my results from participantResults
+    const myResults = data.participantResults[participantId] || {};
+    const yourAnswerIdx = myResults.yourAnswer;
     const correctIdx = data.correctIndices[0];
     const isCorrect = yourAnswerIdx !== undefined && data.correctIndices.includes(yourAnswerIdx);
 
-    // Update current score
-    currentScore = data.currentScore;
-    scoreDisplay.textContent = `Score: ${currentScore}`;
+    // Update score
+    currentScore = myResults.currentScore || 0;
+    scoreDisplay.textContent = currentScore;
     currentScoreEl.textContent = currentScore;
 
-    // Set result icon
-    resultStatus.className = 'result-icon';
+    // Set result display
     if (yourAnswerIdx === undefined) {
-      resultStatus.classList.add('timeout');
+      resultIcon.className = 'result-icon timeout';
+      resultText.textContent = "Time's up!";
+      yourAnswer.textContent = 'No answer';
     } else if (isCorrect) {
-      resultStatus.classList.add('correct');
-    } else {
-      resultStatus.classList.add('incorrect');
-    }
-
-    // Show correct answer
-    correctAnswer.textContent = `${String.fromCharCode(65 + correctIdx)}. ${currentQuestion.options[correctIdx]}`;
-
-    // Show your answer
-    if (yourAnswerIdx !== undefined) {
+      resultIcon.className = 'result-icon correct';
+      resultText.textContent = 'Correct!';
       yourAnswer.textContent = `${String.fromCharCode(65 + yourAnswerIdx)}. ${currentQuestion.options[yourAnswerIdx]}`;
     } else {
-      yourAnswer.textContent = 'No answer';
+      resultIcon.className = 'result-icon incorrect';
+      resultText.textContent = 'Incorrect';
+      yourAnswer.textContent = `${String.fromCharCode(65 + yourAnswerIdx)}. ${currentQuestion.options[yourAnswerIdx]}`;
     }
 
-    // Show chart
-    showResultsChart(data);
+    correctAnswer.textContent = `${String.fromCharCode(65 + correctIdx)}. ${currentQuestion.options[correctIdx]}`;
 
-    questionSection.classList.add('hidden');
+    hideAllSections();
     resultsSection.classList.remove('hidden');
   });
 
   socket.on('quiz_ended', (data) => {
     clearInterval(timerInterval);
 
-    // Set final score display
-    finalScoreValue.textContent = data.finalScore;
-    finalScoreMax.textContent = data.totalScore;
-    finalPercentage.textContent = `${data.percentage}%`;
+    // Get my final results
+    const myResults = data.participantResults ? data.participantResults[participantId] : null;
 
-    // Set pass/fail styling
-    if (data.passed) {
-      finalIcon.className = 'final-icon passed';
-      finalStatus.textContent = 'Congratulations!';
-      finalStatus.className = 'final-status passed';
-      finalPercentage.className = 'final-percentage passed';
-      finalMessage.textContent = `You passed with ${data.correctCount}/${data.totalQuestions} correct answers!`;
-    } else {
-      finalIcon.className = 'final-icon failed';
-      finalStatus.textContent = 'Keep Practicing!';
-      finalStatus.className = 'final-status failed';
-      finalPercentage.className = 'final-percentage failed';
-      finalMessage.textContent = motivatingMessages[Math.floor(Math.random() * motivatingMessages.length)];
+    if (myResults || data.finalScore !== undefined) {
+      const finalScore = data.finalScore !== undefined ? data.finalScore : (myResults?.currentScore || 0);
+      const percentage = data.percentage !== undefined ? data.percentage : Math.round((myResults?.correctCount || 0) / data.totalQuestions * 100);
+      const passed = percentage >= 70;
+
+      finalScoreValue.textContent = finalScore;
+      finalScoreMax.textContent = data.totalScore;
+      finalPercentage.textContent = `${percentage}%`;
+
+      if (passed) {
+        finalIcon.className = 'final-icon passed';
+        finalStatus.textContent = 'Congratulations!';
+        finalPercentage.className = 'final-pct passed';
+        finalMessage.textContent = `You passed!`;
+      } else {
+        finalIcon.className = 'final-icon failed';
+        finalStatus.textContent = 'Keep Practicing!';
+        finalPercentage.className = 'final-pct failed';
+        finalMessage.textContent = motivatingMessages[Math.floor(Math.random() * motivatingMessages.length)];
+      }
     }
 
-    questionSection.classList.add('hidden');
-    resultsSection.classList.add('hidden');
-    waitingSection.classList.add('hidden');
+    hideAllSections();
     endedSection.classList.remove('hidden');
   });
 
   socket.on('disconnect', () => {
-    console.log('Disconnected from server');
-  });
-
-  socket.on('connect_error', () => {
-    showError(joinError, 'Connection lost. Please refresh the page.');
+    console.log('Disconnected');
   });
 }
 
-// Render answer options
+// Render options
 function renderOptions(options) {
   optionsContainer.innerHTML = '';
 
   options.forEach((opt, i) => {
     const btn = document.createElement('button');
-    btn.className = 'option-btn';
-    btn.textContent = `${String.fromCharCode(65 + i)}. ${opt}`;
+    btn.className = 'player-option';
+    btn.innerHTML = `
+      <span class="option-letter">${String.fromCharCode(65 + i)}</span>
+      <span class="option-text">${opt}</span>
+    `;
     btn.addEventListener('click', () => selectAnswer(i, btn));
     optionsContainer.appendChild(btn);
   });
 }
 
-// Select an answer
+// Select answer
 function selectAnswer(index, btn) {
-  if (selectedAnswer !== null) return; // Already answered
+  if (selectedAnswer !== null) return;
 
   selectedAnswer = index;
 
-  // Highlight selected
-  const allBtns = optionsContainer.querySelectorAll('.option-btn');
-  allBtns.forEach(b => b.classList.remove('selected'));
+  const allBtns = optionsContainer.querySelectorAll('.player-option');
+  allBtns.forEach(b => {
+    b.classList.remove('selected');
+    b.disabled = true;
+  });
   btn.classList.add('selected');
 
-  // Disable all options
-  allBtns.forEach(b => b.disabled = true);
-
-  // Submit to server
   socket.emit('submit_answer', {
     participantId,
     questionId: currentQuestion.id,
@@ -236,10 +227,16 @@ function selectAnswer(index, btn) {
   });
 }
 
-// Timer
+// Timer with circular progress
 function startTimer(seconds) {
   clearInterval(timerInterval);
   let remaining = seconds;
+  const circumference = 2 * Math.PI * 45;
+
+  timerProgress.style.strokeDasharray = circumference;
+  timerProgress.style.strokeDashoffset = 0;
+  timerProgress.classList.remove('urgent');
+
   timer.textContent = remaining;
   timer.classList.remove('urgent');
 
@@ -247,72 +244,35 @@ function startTimer(seconds) {
     remaining--;
     timer.textContent = remaining;
 
+    const progress = remaining / timerDuration;
+    const offset = circumference * (1 - progress);
+    timerProgress.style.strokeDashoffset = offset;
+
     if (remaining <= 5) {
       timer.classList.add('urgent');
+      timerProgress.classList.add('urgent');
     }
 
     if (remaining <= 0) {
       clearInterval(timerInterval);
-      // Disable options if not answered
-      const allBtns = optionsContainer.querySelectorAll('.option-btn');
+      const allBtns = optionsContainer.querySelectorAll('.player-option');
       allBtns.forEach(b => b.disabled = true);
     }
   }, 1000);
 }
 
-// Show results chart
-function showResultsChart(data) {
-  // Labels: just A, B, C, D for vertical bars
-  const labels = currentQuestion.options.map((_, i) => String.fromCharCode(65 + i));
-  const counts = data.stats.counts;
-  const colors = currentQuestion.options.map((_, i) =>
-    data.correctIndices.includes(i) ? 'rgba(34, 197, 94, 0.8)' : 'rgba(99, 102, 241, 0.8)'
-  );
-
-  if (chart) {
-    chart.destroy();
-  }
-
-  chart = new Chart(resultsChart, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Responses',
-        data: counts,
-        backgroundColor: colors,
-        borderRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.raw} response${ctx.raw !== 1 ? 's' : ''}`
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { stepSize: 1, color: '#94a3b8' },
-          grid: { color: 'rgba(71, 85, 105, 0.5)' }
-        },
-        x: {
-          ticks: { color: '#94a3b8', maxRotation: 0 },
-          grid: { display: false }
-        }
-      }
-    }
-  });
+// Hide all sections
+function hideAllSections() {
+  joinSection.classList.add('hidden');
+  waitingSection.classList.add('hidden');
+  questionSection.classList.add('hidden');
+  resultsSection.classList.add('hidden');
+  endedSection.classList.add('hidden');
 }
 
-// Utility
-function showError(el, message) {
-  el.textContent = message;
-  el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 5000);
+// Show error
+function showError(message) {
+  joinError.textContent = message;
+  joinError.classList.remove('hidden');
+  setTimeout(() => joinError.classList.add('hidden'), 5000);
 }

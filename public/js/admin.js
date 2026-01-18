@@ -18,6 +18,7 @@ const participantsSection = document.getElementById('participants-section');
 const participantCount = document.getElementById('participant-count');
 const participantList = document.getElementById('participant-list');
 const joinUrl = document.getElementById('join-url');
+const presenterUrl = document.getElementById('presenter-url');
 
 const controlsSection = document.getElementById('controls-section');
 const startBtn = document.getElementById('start-btn');
@@ -66,6 +67,8 @@ loginForm.addEventListener('submit', async (e) => {
       dashboardSection.classList.remove('hidden');
       initSocket();
       joinUrl.textContent = window.location.origin + '/play.html';
+      presenterUrl.textContent = window.location.origin + '/present.html';
+      presenterUrl.href = '/present.html';
     } else {
       showError(loginError, data.error);
     }

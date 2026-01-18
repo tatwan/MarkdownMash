@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presenter - Markdown Mash</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="presenter-body">
+  <div class="presenter-container">
+
+    <!-- Waiting for Quiz -->
+    <div id="waiting-section" class="presenter-section">
+      <div class="presenter-logo">Markdown Mash</div>
+      <div class="presenter-waiting">
+        <h1 id="quiz-title">Waiting for quiz...</h1>
+        <div class="participant-counter">
+          <span id="participant-count">0</span>
+          <span class="counter-label">participants joined</span>
+        </div>
+        <p class="presenter-hint">Share this link with participants:</p>
+        <div class="presenter-url" id="join-url"></div>
+      </div>
+    </div>
+
+    <!-- Get Ready Countdown -->
+    <div id="getready-section" class="presenter-section hidden">
+      <div class="getready-text">Get Ready!</div>
+      <div class="getready-sub">First question coming up...</div>
+    </div>
+
+    <!-- Question Display -->
+    <div id="question-section" class="presenter-section hidden">
+      <div class="presenter-header">
+        <span class="presenter-qnum">Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></span>
+        <span class="presenter-answered"><span id="answered-count">0</span>/<span id="total-participants">0</span> answered</span>
+      </div>
+
+      <div class="presenter-timer-ring">
+        <svg class="timer-svg" viewBox="0 0 100 100">
+          <circle class="timer-bg" cx="50" cy="50" r="45"></circle>
+          <circle class="timer-progress" id="timer-progress" cx="50" cy="50" r="45"></circle>
+        </svg>
+        <div class="timer-text" id="timer">20</div>
+      </div>
+
+      <h1 class="presenter-question" id="question-text">Question text goes here?</h1>
+
+      <div class="presenter-options" id="options-container"></div>
+    </div>
+
+    <!-- Results Display -->
+    <div id="results-section" class="presenter-section hidden">
+      <div class="presenter-header">
+        <span class="presenter-qnum">Question <span id="result-q-num">1</span> Results</span>
+      </div>
+
+      <h2 class="presenter-question smaller" id="result-question-text">Question text?</h2>
+
+      <div class="presenter-chart-container">
+        <canvas id="results-chart"></canvas>
+      </div>
+
+      <div class="presenter-stats">
+        <span><span id="correct-count">0</span> correct</span>
+        <span><span id="total-answered">0</span> answered</span>
+      </div>
+    </div>
+
+    <!-- Quiz Ended -->
+    <div id="ended-section" class="presenter-section hidden">
+      <div class="presenter-logo">Markdown Mash</div>
+      <h1 class="presenter-ended-title">Quiz Complete!</h1>
+      <p class="presenter-ended-sub">Check admin dashboard for final results</p>
+    </div>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/present.js"></script>
+</body>
+</html>

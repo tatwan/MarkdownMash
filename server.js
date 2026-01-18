@@ -245,6 +245,25 @@ io.on('connection', (socket) => {
     console.log('Admin joined');
   });
 
+  // Presenter joins admin room (receives same events, no controls)
+  socket.on('presenter_join', () => {
+    socket.join('admin');
+    console.log('Presenter joined');
+
+    // Send current participant count
+    socket.emit('participant_joined', {
+      count: Object.keys(store.participants).length
+    });
+
+    // If quiz is loaded, send title
+    if (store.quiz) {
+      socket.emit('quiz_loaded', {
+        title: store.quiz.title,
+        questionCount: store.quiz.questions.length
+      });
+    }
+  });
+
   // Participant joins with their ID
   socket.on('participant_join', (participantId) => {
     const participant = store.participants[participantId];
@@ -424,23 +443,27 @@ function endCurrentQuestion() {
     }
   }
 
-  // Send results to each participant individually (with their own answer and score)
+  // Build results for each participant
+  const participantResults = {};
   for (const participant of Object.values(store.participants)) {
-    if (participant.socketId) {
-      const currentScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
-      io.to(participant.socketId).emit('question_ended', {
-        questionId: question.id,
-        correctIndices: question.correctIndices,
-        stats,
-        yourAnswer: participant.answers[question.id],
-        currentScore,
-        totalScore: store.quiz.totalScore,
-        correctCount: participant.correctCount || 0,
-        questionsAnswered: store.quizState.currentQuestionIndex + 1,
-        totalQuestions: store.quiz.questions.length
-      });
-    }
+    const currentScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
+    participantResults[participant.id] = {
+      yourAnswer: participant.answers[question.id],
+      currentScore,
+      correctCount: participant.correctCount || 0
+    };
   }
+
+  // Broadcast to all participants - they'll look up their own data
+  io.to('participants').emit('question_ended', {
+    questionId: question.id,
+    correctIndices: question.correctIndices,
+    stats,
+    participantResults,
+    totalScore: store.quiz.totalScore,
+    questionsAnswered: store.quizState.currentQuestionIndex + 1,
+    totalQuestions: store.quiz.questions.length
+  });
 
   // Send to admin
   io.to('admin').emit('question_ended', {
