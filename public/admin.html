@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Mini-Kahoot</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Admin Dashboard</h1>
+      <p>Manage and control your quiz</p>
+    </header>
+
+    <!-- Login Section -->
+    <div id="login-section" class="card">
+      <h2>Admin Login</h2>
+      <form id="login-form">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter admin password" required>
+        <button type="submit" class="btn btn-primary btn-block">Login</button>
+      </form>
+      <p id="login-error" class="text-center mt-4 hidden" style="color: var(--danger);"></p>
+    </div>
+
+    <!-- Dashboard Section (hidden until login) -->
+    <div id="dashboard-section" class="hidden">
+
+      <!-- Upload Quiz -->
+      <div id="upload-section" class="card">
+        <h2>Upload Quiz</h2>
+        <p class="text-muted mb-4">Paste your quiz in Markdown format</p>
+        <textarea id="quiz-markdown" placeholder="# Quiz Title
+
+## Q1: What is the capital of France?
+- [ ] London
+- [x] Paris
+- [ ] Berlin
+- [ ] Madrid
+::time=20
+
+## Q2: True or False: The Earth is flat.
+- [ ] True
+- [x] False
+::time=10"></textarea>
+        <button id="upload-btn" class="btn btn-primary">Load Quiz</button>
+        <div id="upload-status" class="mt-4 hidden"></div>
+      </div>
+
+      <!-- Quiz Info -->
+      <div id="quiz-info-section" class="card hidden">
+        <div class="flex gap-4" style="justify-content: space-between; align-items: center; flex-wrap: wrap;">
+          <div>
+            <h2 id="quiz-title">Quiz Title</h2>
+            <p class="text-muted"><span id="question-count">0</span> questions</p>
+          </div>
+          <span id="quiz-status" class="badge badge-warning">Not Started</span>
+        </div>
+      </div>
+
+      <!-- Participants -->
+      <div id="participants-section" class="card hidden">
+        <h2>Participants <span id="participant-count" class="badge badge-info">0</span></h2>
+        <p class="text-muted">Share this URL with participants: <strong id="join-url"></strong></p>
+        <div id="participant-list" class="participant-list"></div>
+      </div>
+
+      <!-- Quiz Controls -->
+      <div id="controls-section" class="card hidden">
+        <h2>Quiz Controls</h2>
+        <div class="quiz-controls">
+          <button id="start-btn" class="btn btn-success">Start Quiz</button>
+          <button id="next-btn" class="btn btn-primary hidden">Next Question</button>
+          <button id="end-question-btn" class="btn btn-warning hidden">End Question Early</button>
+          <button id="show-results-btn" class="btn btn-primary hidden">Show Final Results</button>
+        </div>
+      </div>
+
+      <!-- Current Question Display -->
+      <div id="question-section" class="card hidden">
+        <div class="question-container">
+          <p class="question-meta">Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></p>
+          <h2 id="current-question-text" class="question-text">Question text here</h2>
+          <div id="timer-display" class="timer">20</div>
+          <p class="text-muted">Answers received: <span id="answers-received">0</span> / <span id="total-participants">0</span></p>
+        </div>
+
+        <div id="options-display" class="options-grid"></div>
+      </div>
+
+      <!-- Stats Display -->
+      <div id="stats-section" class="card hidden">
+        <h2>Results for Question <span id="stats-q-num">1</span></h2>
+        <canvas id="stats-chart" height="200"></canvas>
+      </div>
+
+      <!-- Final Results -->
+      <div id="results-section" class="card hidden">
+        <h2>Final Results</h2>
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Name</th>
+              <th>Score</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

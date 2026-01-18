@@ -1,0 +1,21 @@
+{
+  "name": "mini-kahoot",
+  "version": "1.0.0",
+  "description": "A simple real-time quiz application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "simulate": "node test-simulation.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join Quiz - Mini-Kahoot</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Mini-Kahoot</h1>
+      <p>Join the quiz and test your knowledge!</p>
+    </header>
+
+    <!-- Join Section -->
+    <div id="join-section" class="card">
+      <h2>Join Quiz</h2>
+      <form id="join-form">
+        <label for="player-name">Your Name</label>
+        <input type="text" id="player-name" placeholder="Enter your name" required maxlength="30">
+        <button type="submit" class="btn btn-success btn-block btn-lg">Join</button>
+      </form>
+      <p id="join-error" class="text-center mt-4 hidden" style="color: var(--danger);"></p>
+    </div>
+
+    <!-- Waiting Section -->
+    <div id="waiting-section" class="card hidden">
+      <div class="waiting-screen">
+        <div class="spinner"></div>
+        <h2>You're in!</h2>
+        <p id="welcome-name" class="text-muted">Welcome, Player</p>
+        <p class="text-muted mt-4">Waiting for the host to start the quiz...</p>
+        <p id="quiz-title-display" class="mt-4" style="font-size: 1.25rem;"></p>
+      </div>
+    </div>
+
+    <!-- Question Section -->
+    <div id="question-section" class="card hidden">
+      <div class="question-container">
+        <p class="question-meta">Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></p>
+        <h2 id="question-text" class="question-text">Question text here</h2>
+        <div id="timer" class="timer">20</div>
+      </div>
+
+      <div id="options-container" class="options-grid"></div>
+
+      <div id="answer-status" class="text-center mt-4 hidden">
+        <span class="badge badge-success">Answer submitted!</span>
+      </div>
+    </div>
+
+    <!-- Results Section (after each question) -->
+    <div id="results-section" class="card hidden">
+      <div class="question-container">
+        <p class="question-meta">Question <span id="result-q-num">1</span> Results</p>
+
+        <div class="result-summary">
+          <div class="result-row your-answer-row">
+            <span class="result-label">Your Answer:</span>
+            <span id="your-answer" class="result-value"></span>
+          </div>
+          <div class="result-row correct-answer-row">
+            <span class="result-label">Correct Answer:</span>
+            <span id="correct-answer" class="result-value"></span>
+          </div>
+          <p id="result-status" class="mt-4" style="font-size: 1.5rem; font-weight: 600;"></p>
+        </div>
+      </div>
+
+      <h3 class="text-center mt-4 mb-4">Response Distribution</h3>
+      <div class="stats-container">
+        <canvas id="results-chart" height="200"></canvas>
+      </div>
+
+      <p class="text-center text-muted mt-4">Waiting for next question...</p>
+    </div>
+
+    <!-- Quiz Ended Section -->
+    <div id="ended-section" class="card hidden">
+      <div class="waiting-screen">
+        <h2>Quiz Complete!</h2>
+        <p class="text-muted">Thanks for participating!</p>
+        <p class="mt-4" style="font-size: 1.5rem;">Check the host's screen for final results.</p>
+        <a href="/" class="btn btn-primary mt-4">Back to Home</a>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/play.js"></script>
+</body>
+</html>
