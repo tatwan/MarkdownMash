@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: mini-kahoot
+    name: markdown-mash
     runtime: node
     plan: free
     buildCommand: npm install

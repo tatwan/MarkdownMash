@@ -15,15 +15,22 @@ const questionText = document.getElementById('question-text');
 const timer = document.getElementById('timer');
 const optionsContainer = document.getElementById('options-container');
 const answerStatus = document.getElementById('answer-status');
+const scoreDisplay = document.getElementById('score-display');
 
 const resultsSection = document.getElementById('results-section');
-const resultQNum = document.getElementById('result-q-num');
+const resultStatus = document.getElementById('result-status');
+const currentScoreEl = document.getElementById('current-score');
 const yourAnswer = document.getElementById('your-answer');
 const correctAnswer = document.getElementById('correct-answer');
-const resultStatus = document.getElementById('result-status');
 const resultsChart = document.getElementById('results-chart');
 
 const endedSection = document.getElementById('ended-section');
+const finalIcon = document.getElementById('final-icon');
+const finalStatus = document.getElementById('final-status');
+const finalScoreValue = document.getElementById('final-score-value');
+const finalScoreMax = document.getElementById('final-score-max');
+const finalPercentage = document.getElementById('final-percentage');
+const finalMessage = document.getElementById('final-message');
 
 // State
 let socket = null;
@@ -32,6 +39,16 @@ let currentQuestion = null;
 let selectedAnswer = null;
 let timerInterval = null;
 let chart = null;
+let currentScore = 0;
+
+// Motivating messages for those who don't pass
+const motivatingMessages = [
+  "Keep learning! Every expert was once a beginner.",
+  "Progress, not perfection! Review and try again.",
+  "Learning takes time. You've got this!",
+  "Each question is a chance to grow. Keep going!",
+  "Success is built on practice. Don't give up!"
+];
 
 // Join quiz
 joinForm.addEventListener('submit', async (e) => {
@@ -49,8 +66,8 @@ joinForm.addEventListener('submit', async (e) => {
     const data = await res.json();
     if (data.success) {
       participantId = data.participantId;
-      localStorage.setItem('miniKahootId', participantId);
-      localStorage.setItem('miniKahootName', name);
+      localStorage.setItem('markdownMashId', participantId);
+      localStorage.setItem('markdownMashName', name);
 
       joinSection.classList.add('hidden');
       waitingSection.classList.remove('hidden');
@@ -77,6 +94,8 @@ function initSocket() {
   socket.on('quiz_started', (data) => {
     quizTitleDisplay.textContent = data.title;
     totalQNum.textContent = data.totalQuestions;
+    currentScore = 0;
+    scoreDisplay.textContent = `Score: 0`;
   });
 
   socket.on('question_started', (data) => {
@@ -108,12 +127,24 @@ function initSocket() {
   socket.on('question_ended', (data) => {
     clearInterval(timerInterval);
 
-    // Show results
-    resultQNum.textContent = currentQNum.textContent;
-
     const yourAnswerIdx = data.yourAnswer;
-    const correctIdx = data.correctIndices[0]; // First correct answer
+    const correctIdx = data.correctIndices[0];
     const isCorrect = yourAnswerIdx !== undefined && data.correctIndices.includes(yourAnswerIdx);
+
+    // Update current score
+    currentScore = data.currentScore;
+    scoreDisplay.textContent = `Score: ${currentScore}`;
+    currentScoreEl.textContent = currentScore;
+
+    // Set result icon
+    resultStatus.className = 'result-icon';
+    if (yourAnswerIdx === undefined) {
+      resultStatus.classList.add('timeout');
+    } else if (isCorrect) {
+      resultStatus.classList.add('correct');
+    } else {
+      resultStatus.classList.add('incorrect');
+    }
 
     // Show correct answer
     correctAnswer.textContent = `${String.fromCharCode(65 + correctIdx)}. ${currentQuestion.options[correctIdx]}`;
@@ -121,14 +152,8 @@ function initSocket() {
     // Show your answer
     if (yourAnswerIdx !== undefined) {
       yourAnswer.textContent = `${String.fromCharCode(65 + yourAnswerIdx)}. ${currentQuestion.options[yourAnswerIdx]}`;
-      yourAnswer.classList.remove('no-answer');
-      resultStatus.textContent = isCorrect ? 'Correct!' : 'Incorrect';
-      resultStatus.style.color = isCorrect ? 'var(--success)' : 'var(--danger)';
     } else {
-      yourAnswer.textContent = 'No answer submitted';
-      yourAnswer.classList.add('no-answer');
-      resultStatus.textContent = 'Time ran out!';
-      resultStatus.style.color = 'var(--warning)';
+      yourAnswer.textContent = 'No answer';
     }
 
     // Show chart
@@ -138,8 +163,29 @@ function initSocket() {
     resultsSection.classList.remove('hidden');
   });
 
-  socket.on('quiz_ended', () => {
+  socket.on('quiz_ended', (data) => {
     clearInterval(timerInterval);
+
+    // Set final score display
+    finalScoreValue.textContent = data.finalScore;
+    finalScoreMax.textContent = data.totalScore;
+    finalPercentage.textContent = `${data.percentage}%`;
+
+    // Set pass/fail styling
+    if (data.passed) {
+      finalIcon.className = 'final-icon passed';
+      finalStatus.textContent = 'Congratulations!';
+      finalStatus.className = 'final-status passed';
+      finalPercentage.className = 'final-percentage passed';
+      finalMessage.textContent = `You passed with ${data.correctCount}/${data.totalQuestions} correct answers!`;
+    } else {
+      finalIcon.className = 'final-icon failed';
+      finalStatus.textContent = 'Keep Practicing!';
+      finalStatus.className = 'final-status failed';
+      finalPercentage.className = 'final-percentage failed';
+      finalMessage.textContent = motivatingMessages[Math.floor(Math.random() * motivatingMessages.length)];
+    }
+
     questionSection.classList.add('hidden');
     resultsSection.classList.add('hidden');
     waitingSection.classList.add('hidden');
@@ -216,12 +262,8 @@ function startTimer(seconds) {
 
 // Show results chart
 function showResultsChart(data) {
-  // Labels show letter + truncated option text + count
-  const labels = currentQuestion.options.map((opt, i) => {
-    const letter = String.fromCharCode(65 + i);
-    const truncated = opt.length > 20 ? opt.substring(0, 17) + '...' : opt;
-    return `${letter}. ${truncated} (${data.stats.counts[i]})`;
-  });
+  // Labels: just A, B, C, D for vertical bars
+  const labels = currentQuestion.options.map((_, i) => String.fromCharCode(65 + i));
   const counts = data.stats.counts;
   const colors = currentQuestion.options.map((_, i) =>
     data.correctIndices.includes(i) ? 'rgba(34, 197, 94, 0.8)' : 'rgba(99, 102, 241, 0.8)'
@@ -243,8 +285,8 @@ function showResultsChart(data) {
       }]
     },
     options: {
-      indexAxis: 'y', // Horizontal bars for better label readability
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -254,13 +296,13 @@ function showResultsChart(data) {
         }
       },
       scales: {
-        x: {
+        y: {
           beginAtZero: true,
           ticks: { stepSize: 1, color: '#94a3b8' },
           grid: { color: 'rgba(71, 85, 105, 0.5)' }
         },
-        y: {
-          ticks: { color: '#94a3b8' },
+        x: {
+          ticks: { color: '#94a3b8', maxRotation: 0 },
           grid: { display: false }
         }
       }
@@ -274,11 +316,3 @@ function showError(el, message) {
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 5000);
 }
-
-// Check for existing session on page load
-window.addEventListener('load', () => {
-  const savedId = localStorage.getItem('miniKahootId');
-  const savedName = localStorage.getItem('miniKahootName');
-
-  // Could add reconnection logic here if needed
-});

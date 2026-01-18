@@ -268,12 +268,8 @@ function showStats(data) {
     }
   });
 
-  // Create/update chart
-  const labels = currentQuestion.options.map((opt, i) => {
-    const letter = String.fromCharCode(65 + i);
-    const truncated = opt.length > 25 ? opt.substring(0, 22) + '...' : opt;
-    return `${letter}. ${truncated} (${data.stats.counts[i]})`;
-  });
+  // Create/update chart - just A, B, C, D for vertical bars
+  const labels = currentQuestion.options.map((_, i) => String.fromCharCode(65 + i));
   const counts = data.stats.counts;
   const colors = currentQuestion.options.map((_, i) =>
     data.correctIndices.includes(i) ? 'rgba(34, 197, 94, 0.8)' : 'rgba(99, 102, 241, 0.8)'
@@ -295,8 +291,8 @@ function showStats(data) {
       }]
     },
     options: {
-      indexAxis: 'y', // Horizontal bars
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -306,13 +302,13 @@ function showStats(data) {
         }
       },
       scales: {
-        x: {
+        y: {
           beginAtZero: true,
           ticks: { stepSize: 1, color: '#94a3b8' },
           grid: { color: 'rgba(71, 85, 105, 0.5)' }
         },
-        y: {
-          ticks: { color: '#94a3b8' },
+        x: {
+          ticks: { color: '#94a3b8', maxRotation: 0 },
           grid: { display: false }
         }
       }

@@ -2,88 +2,90 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Join Quiz - Mini-Kahoot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <h1>Mini-Kahoot</h1>
-      <p>Join the quiz and test your knowledge!</p>
-    </header>
-
+  <div class="container compact">
     <!-- Join Section -->
     <div id="join-section" class="card">
-      <h2>Join Quiz</h2>
+      <div class="text-center mb-4">
+        <h1 class="logo">Markdown Mash</h1>
+      </div>
       <form id="join-form">
         <label for="player-name">Your Name</label>
         <input type="text" id="player-name" placeholder="Enter your name" required maxlength="30">
-        <button type="submit" class="btn btn-success btn-block btn-lg">Join</button>
+        <button type="submit" class="btn btn-success btn-block btn-lg">Join Quiz</button>
       </form>
       <p id="join-error" class="text-center mt-4 hidden" style="color: var(--danger);"></p>
     </div>
 
     <!-- Waiting Section -->
     <div id="waiting-section" class="card hidden">
-      <div class="waiting-screen">
+      <div class="waiting-screen compact">
         <div class="spinner"></div>
         <h2>You're in!</h2>
         <p id="welcome-name" class="text-muted">Welcome, Player</p>
-        <p class="text-muted mt-4">Waiting for the host to start the quiz...</p>
-        <p id="quiz-title-display" class="mt-4" style="font-size: 1.25rem;"></p>
+        <p id="quiz-title-display" class="mt-4" style="font-size: 1.25rem; font-weight: 600;"></p>
+        <p class="text-muted">Waiting for host to start...</p>
       </div>
     </div>
 
     <!-- Question Section -->
     <div id="question-section" class="card hidden">
-      <div class="question-container">
-        <p class="question-meta">Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></p>
-        <h2 id="question-text" class="question-text">Question text here</h2>
-        <div id="timer" class="timer">20</div>
+      <div class="question-header">
+        <span class="question-meta">Q<span id="current-q-num">1</span>/<span id="total-q-num">10</span></span>
+        <span id="score-display" class="score-badge">Score: 0</span>
       </div>
-
-      <div id="options-container" class="options-grid"></div>
-
-      <div id="answer-status" class="text-center mt-4 hidden">
-        <span class="badge badge-success">Answer submitted!</span>
+      <h2 id="question-text" class="question-text compact">Question text here</h2>
+      <div id="timer" class="timer compact">20</div>
+      <div id="options-container" class="options-grid compact"></div>
+      <div id="answer-status" class="text-center hidden">
+        <span class="badge badge-success">Submitted!</span>
       </div>
     </div>
 
     <!-- Results Section (after each question) -->
     <div id="results-section" class="card hidden">
-      <div class="question-container">
-        <p class="question-meta">Question <span id="result-q-num">1</span> Results</p>
-
-        <div class="result-summary">
-          <div class="result-row your-answer-row">
-            <span class="result-label">Your Answer:</span>
-            <span id="your-answer" class="result-value"></span>
-          </div>
-          <div class="result-row correct-answer-row">
-            <span class="result-label">Correct Answer:</span>
-            <span id="correct-answer" class="result-value"></span>
-          </div>
-          <p id="result-status" class="mt-4" style="font-size: 1.5rem; font-weight: 600;"></p>
+      <div class="result-header">
+        <span id="result-status" class="result-icon"></span>
+        <div class="result-score">
+          <span id="current-score">0</span> pts
         </div>
       </div>
 
-      <h3 class="text-center mt-4 mb-4">Response Distribution</h3>
-      <div class="stats-container">
-        <canvas id="results-chart" height="200"></canvas>
+      <div class="result-answers">
+        <div class="result-answer-row">
+          <span class="label">Your answer:</span>
+          <span id="your-answer" class="value"></span>
+        </div>
+        <div class="result-answer-row correct">
+          <span class="label">Correct:</span>
+          <span id="correct-answer" class="value"></span>
+        </div>
       </div>
 
-      <p class="text-center text-muted mt-4">Waiting for next question...</p>
+      <div class="chart-container compact">
+        <canvas id="results-chart"></canvas>
+      </div>
+
+      <p class="text-center text-muted">Next question coming...</p>
     </div>
 
     <!-- Quiz Ended Section -->
     <div id="ended-section" class="card hidden">
-      <div class="waiting-screen">
-        <h2>Quiz Complete!</h2>
-        <p class="text-muted">Thanks for participating!</p>
-        <p class="mt-4" style="font-size: 1.5rem;">Check the host's screen for final results.</p>
-        <a href="/" class="btn btn-primary mt-4">Back to Home</a>
+      <div class="final-results">
+        <div id="final-icon" class="final-icon"></div>
+        <h2 id="final-status">Quiz Complete!</h2>
+        <div class="final-score">
+          <span id="final-score-value">0</span>
+          <span class="final-score-total">/ <span id="final-score-max">100</span></span>
+        </div>
+        <p id="final-percentage" class="final-percentage">0%</p>
+        <p id="final-message" class="final-message"></p>
+        <a href="/" class="btn btn-primary mt-4">Play Again</a>
       </div>
     </div>
 

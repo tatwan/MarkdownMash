@@ -31,14 +31,21 @@ const store = {
 // ============================================
 function parseQuizMarkdown(markdown) {
   const lines = markdown.split('\n');
-  const quiz = { title: '', questions: [] };
+  const quiz = { title: '', questions: [], totalScore: 100, passingPercent: 70 };
   let currentQuestion = null;
 
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Quiz title (# Title)
-    if (trimmed.startsWith('# ') && !trimmed.startsWith('## ')) {
+    // Score setting (# Score 100)
+    const scoreMatch = trimmed.match(/^#\s*Score\s+(\d+)$/i);
+    if (scoreMatch) {
+      quiz.totalScore = parseInt(scoreMatch[1], 10);
+      continue;
+    }
+
+    // Quiz title (# Title) - but not # Score
+    if (trimmed.startsWith('# ') && !trimmed.startsWith('## ') && !trimmed.toLowerCase().startsWith('# score')) {
       quiz.title = trimmed.slice(2).trim();
       continue;
     }
@@ -279,10 +286,11 @@ io.on('connection', (socket) => {
     store.quizState.currentQuestionIndex = -1;
     store.quizState.showingResults = false;
 
-    // Reset all participant answers
+    // Reset all participant answers and scores
     for (const p of Object.values(store.participants)) {
       p.answers = {};
       p.score = 0;
+      p.correctCount = 0;
     }
 
     io.to('participants').emit('quiz_started', {
@@ -306,7 +314,27 @@ io.on('connection', (socket) => {
     if (store.quizState.currentQuestionIndex >= store.quiz.questions.length) {
       // Quiz ended
       store.quizState.isRunning = false;
-      io.to('participants').emit('quiz_ended');
+      const pointsPerQuestion = store.quiz.totalScore / store.quiz.questions.length;
+
+      // Send final results to each participant
+      for (const participant of Object.values(store.participants)) {
+        if (participant.socketId) {
+          const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
+          const percentage = Math.round(((participant.correctCount || 0) / store.quiz.questions.length) * 100);
+          const passed = percentage >= store.quiz.passingPercent;
+
+          io.to(participant.socketId).emit('quiz_ended', {
+            finalScore,
+            totalScore: store.quiz.totalScore,
+            correctCount: participant.correctCount || 0,
+            totalQuestions: store.quiz.questions.length,
+            percentage,
+            passed,
+            passingPercent: store.quiz.passingPercent
+          });
+        }
+      }
+
       io.to('admin').emit('quiz_ended');
       return;
     }
@@ -386,23 +414,30 @@ function endCurrentQuestion() {
   store.quizState.showingResults = true;
   const question = store.quiz.questions[store.quizState.currentQuestionIndex];
   const stats = calculateStats(question.id);
+  const pointsPerQuestion = store.quiz.totalScore / store.quiz.questions.length;
 
   // Update scores
   for (const participant of Object.values(store.participants)) {
     const answer = participant.answers[question.id];
     if (answer !== undefined && question.correctIndices.includes(answer)) {
-      participant.score++;
+      participant.correctCount = (participant.correctCount || 0) + 1;
     }
   }
 
-  // Send results to each participant individually (with their own answer)
+  // Send results to each participant individually (with their own answer and score)
   for (const participant of Object.values(store.participants)) {
     if (participant.socketId) {
+      const currentScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
       io.to(participant.socketId).emit('question_ended', {
         questionId: question.id,
         correctIndices: question.correctIndices,
         stats,
-        yourAnswer: participant.answers[question.id]
+        yourAnswer: participant.answers[question.id],
+        currentScore,
+        totalScore: store.quiz.totalScore,
+        correctCount: participant.correctCount || 0,
+        questionsAnswered: store.quizState.currentQuestionIndex + 1,
+        totalQuestions: store.quiz.questions.length
       });
     }
   }
@@ -420,6 +455,6 @@ function endCurrentQuestion() {
 // ============================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Mini-Kahoot server running on http://localhost:${PORT}`);
+  console.log(`Markdown Mash server running on http://localhost:${PORT}`);
   console.log(`Admin password: ${store.adminPassword}`);
 });

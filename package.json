@@ -1,7 +1,7 @@
 {
-  "name": "mini-kahoot",
+  "name": "markdown-mash",
   "version": "1.0.0",
-  "description": "A simple real-time quiz application",
+  "description": "A real-time quiz platform with Markdown-based questions and scoring",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -1,13 +1,14 @@
-# Mini-Kahoot
+# Markdown Mash
 
-A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results - no accounts required for participants.
+A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
 ## Features
 
 - **Real-time synchronization** - Questions, timers, and results sync instantly via WebSockets
 - **Markdown-based quizzes** - Write questions in simple Markdown format
+- **Scoring system** - Set total points, track progress, and show pass/fail results
 - **Live response charts** - See answer distribution after each question
-- **Mobile-friendly** - Responsive design works on phones, tablets, and desktops
+- **Mobile-friendly** - Compact design optimized for phones
 - **Zero setup for participants** - Students just enter their name and play
 - **Self-hosted** - Deploy on Render, Railway, or any Node.js host
 
@@ -27,8 +28,8 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/mini-kahoot.git
-cd mini-kahoot
+git clone https://github.com/yourusername/markdown-mash.git
+cd markdown-mash
 npm install
 npm start
 ```
@@ -46,6 +47,7 @@ Create quizzes in Markdown format:
 
 ```markdown
 # My Quiz Title
+# Score 100
 
 ## Q1: What is the capital of France?
 - [ ] London
@@ -72,10 +74,18 @@ Create quizzes in Markdown format:
 | Element | Syntax | Description |
 |---------|--------|-------------|
 | Quiz title | `# Title` | Single `#` at the start |
+| Total score | `# Score 100` | Points distributed across questions (default: 100) |
 | Question | `## Q1: Text` | The `Q1:` prefix is optional |
 | Wrong answer | `- [ ] Option` | Unchecked checkbox |
 | Correct answer | `- [x] Option` | Checked checkbox |
 | Time limit | `::time=20` | Seconds per question (default: 20) |
+
+### Scoring
+
+- Set total points with `# Score X` (e.g., `# Score 1000`)
+- Points are divided equally among questions
+- Participants see their score after each question
+- At the end: **Pass** (70%+) or motivating message to study more
 
 ## Hosting a Quiz
 
@@ -140,16 +150,16 @@ npm run simulate 10   # 10 participants
 ## Project Structure
 
 ```
-mini-kahoot/
+markdown-mash/
 ├── server.js              # Express + Socket.IO server
 ├── package.json
 ├── render.yaml            # Render.com deployment config
-├── sample-quiz.md         # Example quiz
+├── sample-quiz.md         # Example quiz with scoring
 ├── test-simulation.js     # Participant simulator
 └── public/
     ├── index.html         # Landing page
     ├── admin.html         # Host dashboard
-    ├── play.html          # Participant view
+    ├── play.html          # Participant view (mobile-optimized)
     ├── css/
     │   └── style.css
     └── js/

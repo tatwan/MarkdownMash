@@ -1,7 +1,8 @@
 # Sample Programming Quiz
+# Score 100
 
 ## Q1: What does HTML stand for?
-- [ ] Hyper Text Markup Language
+- [ ] Hyper Text Makeup Language
 - [x] Hyper Text Markup Language
 - [ ] Home Tool Markup Language
 - [ ] Hyperlinks and Text Markup Language
