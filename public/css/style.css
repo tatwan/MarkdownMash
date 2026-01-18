@@ -955,3 +955,367 @@ label {
     font-size: 4rem;
   }
 }
+
+/* ============================================
+   PLAYER VIEW (for participants)
+   ============================================ */
+
+.player-body {
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.player-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.player-section {
+  width: 100%;
+  max-width: 1200px;
+  text-align: center;
+}
+
+.player-logo {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--primary), #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 40px;
+}
+
+/* Join Section */
+.join-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 400px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+}
+
+.join-card h2 {
+  font-size: 1.75rem;
+  margin-bottom: 24px;
+  color: var(--text);
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin-top: 12px;
+}
+
+/* Waiting Section */
+.waiting-content {
+  padding: 40px 20px;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid var(--bg-card);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 30px;
+}
+
+.waiting-content h2 {
+  font-size: 2rem;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.quiz-title {
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.waiting-text {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+}
+
+/* Question Section */
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 0 20px;
+}
+
+.player-qnum {
+  font-size: 1.5rem;
+  color: var(--text-muted);
+}
+
+.player-score {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 8px 20px;
+  border-radius: 20px;
+}
+
+.player-score span {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.player-timer-ring {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 30px;
+}
+
+.player-question {
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 40px;
+  line-height: 1.3;
+  padding: 0 20px;
+}
+
+.player-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.player-option {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.player-option:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+  transform: scale(1.02);
+}
+
+.player-option.selected {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.player-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.player-option .option-letter {
+  width: 48px;
+  height: 48px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.player-option .option-text {
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+.answer-status {
+  margin-top: 30px;
+  font-size: 1.25rem;
+  color: var(--success);
+  font-weight: 600;
+}
+
+/* Results Section */
+.result-display {
+  margin-bottom: 40px;
+}
+
+.result-icon {
+  font-size: 5rem;
+  margin-bottom: 20px;
+}
+
+.result-icon.correct::before {
+  content: "✓";
+  color: var(--success);
+}
+
+.result-icon.incorrect::before {
+  content: "✗";
+  color: var(--danger);
+}
+
+.result-icon.timeout::before {
+  content: "⏱";
+  color: var(--warning);
+}
+
+.result-display h2 {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.result-score-display {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 30px;
+}
+
+.result-details {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 600px;
+  margin: 0 auto 30px;
+}
+
+.result-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.result-detail-row:last-child {
+  border-bottom: none;
+}
+
+.result-detail-row .label {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.result-detail-row .value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.result-detail-row.correct .value {
+  color: var(--success);
+}
+
+/* Player Results Chart */
+.player-chart-container {
+  height: 350px;
+  max-width: 900px;
+  margin: 0 auto 30px;
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 30px;
+}
+
+/* Final Results Section */
+.final-display {
+  padding: 40px 20px;
+}
+
+.final-icon {
+  font-size: 5rem;
+  margin-bottom: 20px;
+}
+
+.final-icon.passed::before {
+  content: "🎉";
+}
+
+.final-icon.failed::before {
+  content: "📚";
+}
+
+.final-display h2 {
+  font-size: 3rem;
+  margin-bottom: 30px;
+  color: var(--text);
+}
+
+.final-score-big {
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+.final-score-big .final-score-max {
+  font-size: 2rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.final-pct {
+  font-size: 2rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.final-pct.passed {
+  color: var(--success);
+}
+
+.final-pct.failed {
+  color: var(--warning);
+}
+
+.final-msg {
+  font-size: 1.25rem;
+  color: var(--text);
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+/* Responsive for smaller screens */
+@media (max-width: 900px) {
+  .player-options {
+    grid-template-columns: 1fr;
+  }
+
+  .player-question {
+    font-size: 1.75rem;
+  }
+
+  .player-container {
+    padding: 15px;
+  }
+
+  .join-card {
+    padding: 30px 20px;
+  }
+
+  .final-score-big {
+    font-size: 3rem;
+  }
+
+  .result-display h2 {
+    font-size: 2rem;
+  }
+}
+

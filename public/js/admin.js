@@ -35,9 +35,7 @@ const answersReceived = document.getElementById('answers-received');
 const totalParticipants = document.getElementById('total-participants');
 const optionsDisplay = document.getElementById('options-display');
 
-const statsSection = document.getElementById('stats-section');
-const statsQNum = document.getElementById('stats-q-num');
-const statsChart = document.getElementById('stats-chart');
+
 
 const resultsSection = document.getElementById('results-section');
 const resultsBody = document.getElementById('results-body');
@@ -47,7 +45,7 @@ let socket = null;
 let currentQuiz = null;
 let currentQuestion = null;
 let timerInterval = null;
-let chart = null;
+
 
 // Login
 loginForm.addEventListener('submit', async (e) => {
@@ -108,7 +106,6 @@ function initSocket() {
 
     nextBtn.classList.add('hidden');
     endQuestionBtn.classList.remove('hidden');
-    statsSection.classList.add('hidden');
     questionSection.classList.remove('hidden');
   });
 
@@ -121,7 +118,13 @@ function initSocket() {
     endQuestionBtn.classList.add('hidden');
     nextBtn.classList.remove('hidden');
 
-    showStats(data);
+    // Highlight correct answers in options
+    const optionBtns = optionsDisplay.querySelectorAll('.option-btn');
+    optionBtns.forEach((btn, i) => {
+      if (data.correctIndices.includes(i)) {
+        btn.classList.add('correct');
+      }
+    });
   });
 
   socket.on('quiz_ended', () => {
@@ -211,7 +214,6 @@ showResultsBtn.addEventListener('click', async () => {
       resultsBody.appendChild(tr);
     });
 
-    statsSection.classList.add('hidden');
     questionSection.classList.add('hidden');
     resultsSection.classList.remove('hidden');
     showResultsBtn.classList.add('hidden');
@@ -258,66 +260,7 @@ function startTimer(seconds) {
   }, 1000);
 }
 
-// Show statistics
-function showStats(data) {
-  statsQNum.textContent = currentQNum.textContent;
-  statsSection.classList.remove('hidden');
 
-  // Highlight correct answers in options
-  const optionBtns = optionsDisplay.querySelectorAll('.option-btn');
-  optionBtns.forEach((btn, i) => {
-    if (data.correctIndices.includes(i)) {
-      btn.classList.add('correct');
-    }
-  });
-
-  // Create/update chart - just A, B, C, D for vertical bars
-  const labels = currentQuestion.options.map((_, i) => String.fromCharCode(65 + i));
-  const counts = data.stats.counts;
-  const colors = currentQuestion.options.map((_, i) =>
-    data.correctIndices.includes(i) ? 'rgba(34, 197, 94, 0.8)' : 'rgba(99, 102, 241, 0.8)'
-  );
-
-  if (chart) {
-    chart.destroy();
-  }
-
-  chart = new Chart(statsChart, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Responses',
-        data: counts,
-        backgroundColor: colors,
-        borderRadius: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.raw} response${ctx.raw !== 1 ? 's' : ''}`
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { stepSize: 1, color: '#94a3b8' },
-          grid: { color: 'rgba(71, 85, 105, 0.5)' }
-        },
-        x: {
-          ticks: { color: '#94a3b8', maxRotation: 0 },
-          grid: { display: false }
-        }
-      }
-    }
-  });
-}
 
 // Add participant chip
 function addParticipantChip(name) {

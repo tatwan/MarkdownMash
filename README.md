@@ -7,10 +7,58 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 - **Real-time synchronization** - Questions, timers, and results sync instantly via WebSockets
 - **Markdown-based quizzes** - Write questions in simple Markdown format
 - **Scoring system** - Set total points, track progress, and show pass/fail results
-- **Live response charts** - See answer distribution after each question
-- **Mobile-friendly** - Compact design optimized for phones
+- **Live response charts** - Players and presenters see answer distribution after each question
+- **Presenter mode** - Beautiful full-screen view optimized for projection/screen sharing
+- **Premium design** - Gradient backgrounds, circular timers, and smooth animations
+- **Mobile-friendly** - Optimized for phones and tablets
 - **Zero setup for participants** - Students just enter their name and play
 - **Self-hosted** - Deploy on Render, Railway, or any Node.js host
+
+
+
+## Screen Shots
+
+#### Admin Screen 
+
+Loading Questions using a Markdown Template 
+
+![image-20260118133922012](images/image-20260118133922012.png)
+
+View progress, control flow (start, end early ..etc), and finally when done you can view summary 
+
+![image-20260118133941230](images/image-20260118133941230.png)
+
+#### Presentation Screen
+
+If needed to have a presenter view, there is one that you can share in class or remote setting 
+
+![image-20260118133957635](images/image-20260118133957635.png)
+
+![image-20260118134003432](images/image-20260118134003432.png)
+
+![image-20260118134013515](images/image-20260118134013515.png)
+
+#### Player Screen
+
+Each player will have their own view 
+
+![image-20260118134036398](images/image-20260118134036398.png)
+
+![image-20260118134041703](images/image-20260118134041703.png)
+
+![image-20260118134054989](images/image-20260118134054989.png)
+
+A final score will be presented for each user 
+
+![image-20260118134102050](images/image-20260118134102050.png)
+
+![image-20260118134105576](images/image-20260118134105576.png)
+
+
+
+
+
+
 
 ## Tech Stack
 
@@ -38,6 +86,7 @@ Open `http://localhost:3000` in your browser.
 
 - **Admin Dashboard:** `http://localhost:3000/admin.html`
 - **Participant Join:** `http://localhost:3000/play.html`
+- **Presenter View:** `http://localhost:3000/present.html`
 
 Default admin password: `admin123`
 
@@ -98,15 +147,21 @@ Create quizzes in Markdown format:
    - Give participants the `/play.html` URL
    - They enter their name to join
 
-3. **Run the quiz**
+3. **Screen sharing (optional)**
+   - Open `/present.html` in a new window
+   - Share this window with participants for a beautiful full-screen display
+   - Participants can still use their own devices to answer
+
+4. **Run the quiz**
    - Click "Start Quiz"
    - Click "Next Question" to advance
    - Use "End Question Early" if everyone answered
-   - View results after each question
+   - Participants and presenter view show results after each question
 
-4. **Final results**
+5. **Final results**
    - Click "Show Final Results" after the last question
-   - Displays ranked leaderboard
+   - Displays ranked leaderboard in admin view
+   - Participants see their individual scores and pass/fail status
 
 ## Deployment
 
@@ -160,11 +215,13 @@ markdown-mash/
     ├── index.html         # Landing page
     ├── admin.html         # Host dashboard
     ├── play.html          # Participant view (mobile-optimized)
+    ├── present.html       # Presenter view (for screen sharing)
     ├── css/
-    │   └── style.css
+    │   └── style.css      # All styles including presenter & player
     └── js/
         ├── admin.js       # Admin client logic
-        └── play.js        # Participant client logic
+        ├── play.js        # Participant client logic
+        └── present.js     # Presenter client logic
 ```
 
 ## Limitations

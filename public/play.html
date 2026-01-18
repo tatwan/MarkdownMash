@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body class="player-body">
   <div class="player-container">
 
@@ -65,6 +68,10 @@
         </div>
       </div>
 
+      <div class="player-chart-container">
+        <canvas id="results-chart"></canvas>
+      </div>
+
       <div class="result-details">
         <div class="result-detail-row">
           <span class="label">Your answer:</span>
@@ -99,4 +106,5 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/play.js"></script>
 </body>
+
 </html>

@@ -41,6 +41,7 @@ let selectedAnswer = null;
 let timerInterval = null;
 let timerDuration = 20;
 let currentScore = 0;
+let chart = null;
 
 // Motivating messages
 const motivatingMessages = [
@@ -150,6 +151,9 @@ function initSocket() {
 
     correctAnswer.textContent = `${String.fromCharCode(65 + correctIdx)}. ${currentQuestion.options[correctIdx]}`;
 
+    // Show results chart
+    showResultsChart(data);
+
     hideAllSections();
     resultsSection.classList.remove('hidden');
   });
@@ -226,6 +230,64 @@ function selectAnswer(index, btn) {
     answerIndex: index
   });
 }
+
+// Show results chart
+function showResultsChart(data) {
+  const resultsChart = document.getElementById('results-chart');
+
+  const labels = currentQuestion.options.map((opt, i) => {
+    const letter = String.fromCharCode(65 + i);
+    return `${letter}. ${opt.length > 30 ? opt.substring(0, 27) + '...' : opt}`;
+  });
+  const counts = data.stats.counts;
+  const colors = currentQuestion.options.map((_, i) =>
+    data.correctIndices.includes(i) ? 'rgba(34, 197, 94, 0.9)' : 'rgba(99, 102, 241, 0.7)'
+  );
+
+  if (chart) {
+    chart.destroy();
+  }
+
+  chart = new Chart(resultsChart, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Responses',
+        data: counts,
+        backgroundColor: colors,
+        borderRadius: 8
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: {
+            stepSize: 1,
+            color: '#f1f5f9',
+            font: { size: 16 }
+          },
+          grid: { color: 'rgba(71, 85, 105, 0.5)' }
+        },
+        y: {
+          ticks: {
+            color: '#f1f5f9',
+            font: { size: 18 }
+          },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
 
 // Timer with circular progress
 function startTimer(seconds) {
