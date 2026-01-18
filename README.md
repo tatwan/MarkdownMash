@@ -2,6 +2,12 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
+## 🚀 Live Demo
+
+**Try it now:** [https://markdownmash.onrender.com](https://markdownmash.onrender.com)
+
+> **Note:** The free tier spins down after inactivity. First visit may take 30 seconds to wake up.
+
 ## Features
 
 - **Real-time synchronization** - Questions, timers, and results sync instantly via WebSockets
@@ -10,7 +16,7 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 - **Live response charts** - Players and presenters see answer distribution after each question
 - **Presenter mode** - Beautiful full-screen view optimized for projection/screen sharing
 - **Premium design** - Gradient backgrounds, circular timers, and smooth animations
-- **Mobile-friendly** - Optimized for phones and tablets
+- **Mobile-optimized** - Smart mobile UI hides redundant info when watching shared screen
 - **Zero setup for participants** - Students just enter their name and play
 - **Self-hosted** - Deploy on Render, Railway, or any Node.js host
 

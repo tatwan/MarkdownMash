@@ -1319,3 +1319,71 @@ label {
   }
 }
 
+/* Mobile optimization - hide redundant info when watching presenter screen */
+@media (max-width: 768px) {
+  /* Hide question section elements on mobile - participants see this on the shared screen */
+  #question-section .player-header,
+  #question-section .player-timer-ring,
+  #question-section .player-question {
+    display: none;
+  }
+
+  /* Make player logo smaller on mobile */
+  .player-logo {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+  }
+
+  /* Optimize answer options for mobile - show as simple letter buttons */
+  .player-options {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    max-width: 400px;
+    padding: 0 10px;
+  }
+
+  /* Simplify option display - enlarge letter badges for easy tapping */
+  .player-option {
+    padding: 0;
+    min-height: 100px;
+    justify-content: center;
+    background: transparent;
+    border: 3px solid var(--border);
+  }
+
+  .player-option .option-letter {
+    width: 70px;
+    height: 70px;
+    font-size: 2.5rem;
+    margin-right: 0;
+  }
+
+  /* Hide the option text on mobile - participants read it on the shared screen */
+  .player-option .option-text {
+    display: none;
+  }
+
+  /* Make selected state very obvious */
+  .player-option.selected {
+    border-width: 4px;
+    background: rgba(99, 102, 241, 0.3);
+  }
+
+  .player-option.selected .option-letter {
+    transform: scale(1.1);
+  }
+
+  /* Answer status adjustment */
+  .answer-status {
+    font-size: 1rem;
+    margin-top: 20px;
+  }
+
+  /* Keep results chart but make it smaller on mobile */
+  .player-chart-container {
+    height: 250px;
+    padding: 20px;
+  }
+}
+
+
