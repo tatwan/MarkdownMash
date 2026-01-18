@@ -18,17 +18,7 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 
 ## Screen Shots
 
-#### Admin Screen 
-
-Loading Questions using a Markdown Template 
-
-![image-20260118133922012](images/image-20260118133922012.png)
-
-View progress, control flow (start, end early ..etc), and finally when done you can view summary 
-
-![image-20260118133941230](images/image-20260118133941230.png)
-
-#### Presentation Screen
+#### Presenter Screen
 
 If needed to have a presenter view, there is one that you can share in class or remote setting 
 
@@ -54,11 +44,15 @@ A final score will be presented for each user
 
 ![image-20260118134105576](images/image-20260118134105576.png)
 
+#### Admin Screen 
 
+Loading Questions using a Markdown Template 
 
+![image-20260118133922012](images/image-20260118133922012.png)
 
+View progress, control flow (start, end early ..etc), and finally when done you can view summary 
 
-
+![image-20260118133941230](images/image-20260118133941230.png)
 
 ## Tech Stack
 
