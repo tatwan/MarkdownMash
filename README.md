@@ -2,12 +2,6 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
-## 🚀 Live Demo
-
-**Try it now:** [https://markdownmash.onrender.com](https://markdownmash.onrender.com)
-
-> **Note:** The free tier spins down after inactivity. First visit may take 30 seconds to wake up.
-
 ## Features
 
 - **Real-time synchronization** - Questions, timers, and results sync instantly via WebSockets
