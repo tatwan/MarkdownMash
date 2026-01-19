@@ -3,6 +3,10 @@ const joinSection = document.getElementById('join-section');
 const joinForm = document.getElementById('join-form');
 const joinError = document.getElementById('join-error');
 const playerNameInput = document.getElementById('player-name');
+const sessionCodeInput = document.getElementById('session-code');
+
+const sessionEndedSection = document.getElementById('session-ended-section');
+const sessionEndedMessage = document.getElementById('session-ended-message');
 
 const waitingSection = document.getElementById('waiting-section');
 const welcomeName = document.getElementById('welcome-name');
@@ -36,6 +40,7 @@ const finalMessage = document.getElementById('final-message');
 // State
 let socket = null;
 let participantId = null;
+let sessionCode = null;
 let currentQuestion = null;
 let selectedAnswer = null;
 let timerInterval = null;
@@ -52,14 +57,29 @@ const motivatingMessages = [
   "Success is built on practice. Don't give up!"
 ];
 
+// Check for session code in URL on page load
+function init() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlSessionCode = urlParams.get('session');
+  if (urlSessionCode) {
+    sessionCodeInput.value = urlSessionCode.toUpperCase();
+  }
+}
+
 // Join quiz
 joinForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = playerNameInput.value.trim();
+  const code = sessionCodeInput.value.trim().toUpperCase();
+
   if (!name) return;
+  if (!code || code.length !== 6) {
+    showError('Please enter a valid 6-character session code');
+    return;
+  }
 
   try {
-    const res = await fetch('/api/join', {
+    const res = await fetch(`/api/session/${code}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
@@ -68,7 +88,11 @@ joinForm.addEventListener('submit', async (e) => {
     const data = await res.json();
     if (data.success) {
       participantId = data.participantId;
+      sessionCode = data.sessionCode;
+
+      // Store both participant ID and session code
       localStorage.setItem('markdownMashId', participantId);
+      localStorage.setItem('markdownMashSession', sessionCode);
 
       hideAllSections();
       waitingSection.classList.remove('hidden');
@@ -89,7 +113,41 @@ function initSocket() {
   socket = io();
 
   socket.on('connect', () => {
-    socket.emit('participant_join', participantId);
+    socket.emit('participant_join', {
+      participantId,
+      sessionCode
+    });
+  });
+
+  socket.on('session_invalid', (data) => {
+    // Clear stored credentials
+    localStorage.removeItem('markdownMashId');
+    localStorage.removeItem('markdownMashSession');
+
+    // Show session ended screen
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message || 'This session is no longer available.';
+    sessionEndedSection.classList.remove('hidden');
+  });
+
+  socket.on('clear_participant_id', () => {
+    localStorage.removeItem('markdownMashId');
+    localStorage.removeItem('markdownMashSession');
+    participantId = null;
+    sessionCode = null;
+  });
+
+  socket.on('session_ended', (data) => {
+    clearInterval(timerInterval);
+
+    // Show session ended screen
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message || 'This session has ended.';
+    sessionEndedSection.classList.remove('hidden');
+
+    // Clear stored credentials
+    localStorage.removeItem('markdownMashId');
+    localStorage.removeItem('markdownMashSession');
   });
 
   socket.on('quiz_started', (data) => {
@@ -226,6 +284,7 @@ function selectAnswer(index, btn) {
 
   socket.emit('submit_answer', {
     participantId,
+    sessionCode,
     questionId: currentQuestion.id,
     answerIndex: index
   });
@@ -326,6 +385,7 @@ function startTimer(seconds) {
 // Hide all sections
 function hideAllSections() {
   joinSection.classList.add('hidden');
+  sessionEndedSection.classList.add('hidden');
   waitingSection.classList.add('hidden');
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
@@ -338,3 +398,6 @@ function showError(message) {
   joinError.classList.remove('hidden');
   setTimeout(() => joinError.classList.add('hidden'), 5000);
 }
+
+// Initialize on page load
+init();

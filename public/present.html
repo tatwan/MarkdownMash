@@ -10,18 +10,47 @@
 <body class="presenter-body">
   <div class="presenter-container">
 
+    <!-- Session Code Input -->
+    <div id="session-input-section" class="presenter-section">
+      <div class="presenter-logo">Markdown Mash</div>
+      <div class="presenter-waiting">
+        <h1>Enter Session Code</h1>
+        <form id="session-form" style="max-width: 400px; margin: 2rem auto;">
+          <input type="text" id="session-code-input" placeholder="SESSION CODE" required maxlength="6" style="text-transform: uppercase; text-align: center; font-size: 2rem; letter-spacing: 0.3em; padding: 1rem;">
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; font-size: 1.25rem;">Join as Presenter</button>
+        </form>
+        <p id="session-error" class="error-text hidden" style="color: var(--danger); text-align: center;"></p>
+      </div>
+    </div>
+
     <!-- Waiting for Quiz -->
-    <div id="waiting-section" class="presenter-section">
+    <div id="waiting-section" class="presenter-section hidden">
       <div class="presenter-logo">Markdown Mash</div>
       <div class="presenter-waiting">
         <h1 id="quiz-title">Waiting for quiz...</h1>
+        <div class="session-info" style="margin: 1.5rem 0;">
+          <span style="font-size: 1.25rem; color: var(--text-muted);">Session Code:</span>
+          <span id="session-code-display" style="font-size: 3rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); display: block;">------</span>
+        </div>
         <div class="participant-counter">
           <span id="participant-count">0</span>
           <span class="counter-label">participants joined</span>
         </div>
-        <p class="presenter-hint">Share this link with participants:</p>
+        <div class="qr-section" style="margin: 2rem 0;">
+          <img id="qr-code" src="" alt="QR Code" style="width: 200px; height: 200px; border-radius: 8px; display: none;">
+          <p class="presenter-hint" style="margin-top: 1rem;">Scan to join</p>
+        </div>
+        <p class="presenter-hint">Or visit:</p>
         <div class="presenter-url" id="join-url"></div>
       </div>
+    </div>
+
+    <!-- Session Ended -->
+    <div id="session-ended-section" class="presenter-section hidden">
+      <div class="presenter-logo">Markdown Mash</div>
+      <h1 class="presenter-ended-title">Session Ended</h1>
+      <p class="presenter-ended-sub" id="session-ended-message">This session has ended.</p>
+      <a href="/present.html" class="btn btn-primary" style="margin-top: 2rem;">Join Another Session</a>
     </div>
 
     <!-- Get Ready Countdown -->

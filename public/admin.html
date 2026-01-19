@@ -49,22 +49,32 @@
         <div id="upload-status" class="mt-4 hidden"></div>
       </div>
 
-      <!-- Quiz Info -->
-      <div id="quiz-info-section" class="card hidden">
-        <div class="flex gap-4" style="justify-content: space-between; align-items: center; flex-wrap: wrap;">
-          <div>
+      <!-- Session Info -->
+      <div id="session-info-section" class="card hidden">
+        <div class="flex gap-4" style="justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+          <div style="flex: 1;">
             <h2 id="quiz-title">Quiz Title</h2>
             <p class="text-muted"><span id="question-count">0</span> questions</p>
+            <div class="session-code-display mt-4">
+              <span class="text-muted">Session Code:</span>
+              <span id="session-code" class="session-code">------</span>
+            </div>
+            <p class="text-muted mt-2">Join URL: <a id="join-url-link" href="#" target="_blank" style="color: var(--primary);"></a></p>
           </div>
-          <span id="quiz-status" class="badge badge-warning">Not Started</span>
+          <div style="text-align: center;">
+            <img id="qr-code" src="" alt="QR Code" style="width: 150px; height: 150px; border-radius: 8px; display: none;">
+            <p class="text-muted mt-2" style="font-size: 0.85rem;">Scan to join</p>
+          </div>
+          <div style="text-align: right;">
+            <span id="quiz-status" class="badge badge-warning">Not Started</span>
+          </div>
         </div>
       </div>
 
       <!-- Participants -->
       <div id="participants-section" class="card hidden">
         <h2>Participants <span id="participant-count" class="badge badge-info">0</span></h2>
-        <p class="text-muted">Participant URL: <strong id="join-url"></strong></p>
-        <p class="text-muted">Presenter URL (for screen share): <a id="presenter-url" href="/present.html" target="_blank" style="color: var(--primary);"></a></p>
+        <p class="text-muted">Presenter URL (for screen share): <a id="presenter-url" href="#" target="_blank" style="color: var(--primary);"></a></p>
         <div id="participant-list" class="participant-list"></div>
       </div>
 
@@ -76,6 +86,7 @@
           <button id="next-btn" class="btn btn-primary hidden">Next Question</button>
           <button id="end-question-btn" class="btn btn-warning hidden">End Question Early</button>
           <button id="show-results-btn" class="btn btn-primary hidden">Show Final Results</button>
+          <button id="end-session-btn" class="btn btn-danger hidden">End Session</button>
         </div>
       </div>
 

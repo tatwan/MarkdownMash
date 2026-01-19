@@ -29,3 +29,9 @@ build/
 *.temp
 .cache/
 
+# Database
+data/
+
+.gitignore
+CLAUDE.md
+

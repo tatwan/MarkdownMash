@@ -1,13 +1,22 @@
 // DOM Elements
+const sessionInputSection = document.getElementById('session-input-section');
+const sessionForm = document.getElementById('session-form');
+const sessionCodeInput = document.getElementById('session-code-input');
+const sessionError = document.getElementById('session-error');
+
 const waitingSection = document.getElementById('waiting-section');
+const sessionEndedSection = document.getElementById('session-ended-section');
+const sessionEndedMessage = document.getElementById('session-ended-message');
 const getreadySection = document.getElementById('getready-section');
 const questionSection = document.getElementById('question-section');
 const resultsSection = document.getElementById('results-section');
 const endedSection = document.getElementById('ended-section');
 
 const quizTitle = document.getElementById('quiz-title');
+const sessionCodeDisplay = document.getElementById('session-code-display');
 const participantCount = document.getElementById('participant-count');
 const joinUrl = document.getElementById('join-url');
+const qrCodeImg = document.getElementById('qr-code');
 
 const currentQNum = document.getElementById('current-q-num');
 const totalQNum = document.getElementById('total-q-num');
@@ -26,15 +35,65 @@ const resultsChart = document.getElementById('results-chart');
 
 // State
 let socket = null;
+let sessionCode = null;
 let currentQuestion = null;
 let timerInterval = null;
 let timerDuration = 20;
 let chart = null;
 
-// Initialize
+// Initialize - check for session code in URL
 function init() {
-  joinUrl.textContent = window.location.origin + '/play.html';
-  initSocket();
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlSessionCode = urlParams.get('session');
+
+  if (urlSessionCode) {
+    sessionCodeInput.value = urlSessionCode.toUpperCase();
+    // Auto-join if session code is provided
+    joinSession(urlSessionCode.toUpperCase());
+  }
+}
+
+// Session form submission
+sessionForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const code = sessionCodeInput.value.trim().toUpperCase();
+  if (code && code.length === 6) {
+    joinSession(code);
+  } else {
+    showSessionError('Please enter a valid 6-character session code');
+  }
+});
+
+// Join session
+async function joinSession(code) {
+  sessionCode = code;
+
+  // Fetch QR code and session info
+  try {
+    const res = await fetch(`/api/admin/session/${code}/qr`);
+    const data = await res.json();
+
+    if (data.success) {
+      // Show waiting section with QR code
+      sessionCodeDisplay.textContent = code;
+      joinUrl.textContent = data.joinUrl;
+
+      if (data.qrCode) {
+        qrCodeImg.src = data.qrCode;
+        qrCodeImg.style.display = 'block';
+      }
+
+      hideAllSections();
+      waitingSection.classList.remove('hidden');
+
+      // Initialize socket connection
+      initSocket();
+    } else {
+      showSessionError(data.error || 'Session not found');
+    }
+  } catch (err) {
+    showSessionError('Connection error. Please try again.');
+  }
 }
 
 // Initialize Socket.IO
@@ -42,7 +101,20 @@ function initSocket() {
   socket = io();
 
   socket.on('connect', () => {
-    socket.emit('presenter_join');
+    socket.emit('presenter_join', sessionCode);
+  });
+
+  socket.on('session_invalid', (data) => {
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message || 'Session not found';
+    sessionEndedSection.classList.remove('hidden');
+  });
+
+  socket.on('session_ended', (data) => {
+    clearInterval(timerInterval);
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message || 'This session has ended.';
+    sessionEndedSection.classList.remove('hidden');
   });
 
   socket.on('participant_joined', (data) => {
@@ -52,6 +124,9 @@ function initSocket() {
 
   socket.on('quiz_loaded', (data) => {
     quizTitle.textContent = data.title;
+    if (data.sessionCode) {
+      sessionCodeDisplay.textContent = data.sessionCode;
+    }
   });
 
   socket.on('quiz_started', (data) => {
@@ -222,11 +297,20 @@ function showResultsChart(data) {
 
 // Hide all sections
 function hideAllSections() {
+  sessionInputSection.classList.add('hidden');
   waitingSection.classList.add('hidden');
+  sessionEndedSection.classList.add('hidden');
   getreadySection.classList.add('hidden');
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
   endedSection.classList.add('hidden');
+}
+
+// Show session error
+function showSessionError(message) {
+  sessionError.textContent = message;
+  sessionError.classList.remove('hidden');
+  setTimeout(() => sessionError.classList.add('hidden'), 5000);
 }
 
 // Start

@@ -460,8 +460,28 @@ label {
   margin-top: 24px;
 }
 
+.mt-2 {
+  margin-top: 12px;
+}
+
 .mb-4 {
   margin-bottom: 24px;
+}
+
+/* Session code display */
+.session-code-display {
+  margin-top: 16px;
+}
+
+.session-code {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--primary);
+  background: var(--bg-input);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-family: monospace;
 }
 
 .flex {

@@ -18,10 +18,22 @@
       <div class="join-card">
         <h2>Join Quiz</h2>
         <form id="join-form">
+          <input type="text" id="session-code" placeholder="Session Code (e.g., ABC123)" required maxlength="6" style="text-transform: uppercase; text-align: center; font-size: 1.5rem; letter-spacing: 0.2em;">
           <input type="text" id="player-name" placeholder="Enter your name" required maxlength="30">
           <button type="submit" class="btn btn-success btn-block btn-lg">Join</button>
         </form>
         <p id="join-error" class="error-text hidden"></p>
+      </div>
+    </div>
+
+    <!-- Session Ended Section -->
+    <div id="session-ended-section" class="player-section hidden">
+      <div class="player-logo">Markdown Mash</div>
+      <div class="final-display">
+        <div class="final-icon timeout"></div>
+        <h2>Session Ended</h2>
+        <p id="session-ended-message" class="final-msg">This session has ended.</p>
+        <a href="/play.html" class="btn btn-primary">Join Another Session</a>
       </div>
     </div>
 

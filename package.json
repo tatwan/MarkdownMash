@@ -6,10 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "simulate": "node test-simulation.js"
+    "simulate": "node test-simulation.js",
+    "simulate:help": "node test-simulation.js"
   },
   "dependencies": {
+    "better-sqlite3": "^11.7.0",
     "express": "^4.18.2",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
