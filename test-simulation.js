@@ -58,12 +58,18 @@ async function createParticipant(name, sessionCode) {
   });
 
   socket.on('question_started', (data) => {
-    console.log(`  ${name} received question: "${data.question.text.substring(0, 40)}..."`);
+    console.log(`  ${name} received question: \"${data.question.text.substring(0, 40)}...\"`);
 
-    // Simulate thinking time (1-3 seconds), then answer randomly
+    // Simulate thinking time (1-3 seconds), then answer CORRECTLY for test quiz
     const thinkTime = 1000 + Math.random() * 2000;
     setTimeout(() => {
-      const answerIndex = Math.floor(Math.random() * data.question.options.length);
+      // For the Module 2 test quiz: Q1=B(1), Q2=C(2), Q3=B(1)
+      let answerIndex;
+      if (data.questionNumber === 1) answerIndex = 1;
+      else if (data.questionNumber === 2) answerIndex = 2;
+      else if (data.questionNumber === 3) answerIndex = 1;
+      else answerIndex = Math.floor(Math.random() * data.question.options.length);
+
       socket.emit('submit_answer', {
         participantId,
         sessionCode,
@@ -97,7 +103,7 @@ async function main() {
 
   for (let i = 0; i < PARTICIPANT_COUNT; i++) {
     const name = names[i] || `Student${i + 1}`;
-    const p = await createParticipant(name, SESSION_CODE);
+    const p = await createParticipant(name, sessionCode);
     if (p) participants.push(p);
     // Small delay between joins
     await new Promise(r => setTimeout(r, 200));

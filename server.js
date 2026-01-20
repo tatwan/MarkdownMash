@@ -329,20 +329,47 @@ app.get('/api/admin/session/:code/results', (req, res) => {
     return res.json({ results: [] });
   }
 
+  // Get all answers from database with response times
+  const dbAnswers = db.getAnswersBySession(session.id);
+
+  // Calculate results with response time consideration
   const results = Object.values(session.participants).map(p => {
     let correctCount = 0;
+    let totalResponseTime = 0;
+    let answeredCount = 0;
+
     for (const question of session.quiz.questions) {
       const answer = p.answers[question.id];
       if (answer !== undefined && question.correctIndices.includes(answer)) {
         correctCount++;
       }
+
+      // Get response time for this answer from database
+      const dbAnswer = dbAnswers.find(a =>
+        a.participant_id === p.id && a.question_index === session.quiz.questions.indexOf(question)
+      );
+      if (dbAnswer && dbAnswer.response_time_ms) {
+        totalResponseTime += dbAnswer.response_time_ms;
+        answeredCount++;
+      }
     }
+
+    const avgResponseTime = answeredCount > 0 ? totalResponseTime / answeredCount : 999999;
+
     return {
       name: p.name,
       score: correctCount,
-      total: session.quiz.questions.length
+      total: session.quiz.questions.length,
+      avgResponseTime
     };
-  }).sort((a, b) => b.score - a.score);
+  }).sort((a, b) => {
+    // Primary sort: by score (descending)
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    // Secondary sort: by average response time (ascending - faster is better)
+    return a.avgResponseTime - b.avgResponseTime;
+  });
 
   res.json({ results });
 });
@@ -543,10 +570,12 @@ io.on('connection', (socket) => {
       db.updateSessionStatus(sessionCode, 'ended');
 
       // Save final scores to database and send results to each participant
+      console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
       for (const participant of Object.values(session.participants)) {
         const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
         const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
         const passed = percentage >= session.quiz.passingPercent;
+        console.log(`[FINAL SCORES] ${participant.name}: ${participant.correctCount} correct, ${finalScore}/${session.quiz.totalScore} points, ${percentage}%`);
 
         // Update database
         db.updateParticipantScore(participant.id, finalScore, participant.correctCount || 0);
@@ -637,6 +666,7 @@ io.on('connection', (socket) => {
 
     // Record answer in database
     const isCorrect = question.correctIndices.includes(answerIndex);
+    console.log(`[ANSWER] Participant: ${participant.name}, Q${questionId}, Answer: ${answerIndex}, Correct: ${isCorrect}, CorrectIndices: [${question.correctIndices}]`);
     db.recordAnswer(
       session.id,
       participantId,
@@ -702,11 +732,14 @@ function endCurrentQuestion(sessionCode) {
   const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
 
   // Update scores
+  console.log(`[SCORING] Question ${question.id} ended. Correct indices: [${question.correctIndices}]`);
   for (const participant of Object.values(session.participants)) {
     const answer = participant.answers[question.id];
-    if (answer !== undefined && question.correctIndices.includes(answer)) {
+    const wasCorrect = answer !== undefined && question.correctIndices.includes(answer);
+    if (wasCorrect) {
       participant.correctCount = (participant.correctCount || 0) + 1;
     }
+    console.log(`[SCORING] ${participant.name}: answered ${answer}, correct: ${wasCorrect}, total correct: ${participant.correctCount}`);
   }
 
   // Build results for each participant
