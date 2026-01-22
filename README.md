@@ -22,7 +22,7 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 
 If needed to have a presenter view, there is one that you can share in class or remote setting 
 
-![image-20260118133957635](images/image-20260118133957635.png)
+![image-20260122143937116](images/image-20260122143937116.png)
 
 ![image-20260118134003432](images/image-20260118134003432.png)
 
