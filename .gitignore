@@ -31,7 +31,3 @@ build/
 
 # Database
 data/
-
-.gitignore
-CLAUDE.md
-

@@ -7,12 +7,16 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 - **Real-time synchronization** - Questions, timers, and results sync instantly via WebSockets
 - **Markdown-based quizzes** - Write questions in simple Markdown format
 - **Scoring system** - Set total points, track progress, and show pass/fail results
+- **Speed-based ranking** - Ties are broken by response time (faster players rank higher)
 - **Live response charts** - Players and presenters see answer distribution after each question
+- **Analytics dashboard** - Track question difficulty, participant performance, and export data as CSV
 - **Presenter mode** - Beautiful full-screen view optimized for projection/screen sharing
 - **Premium design** - Gradient backgrounds, circular timers, and smooth animations
 - **Mobile-optimized** - Smart mobile UI hides redundant info when watching shared screen
+- **Multi-session support** - Run multiple concurrent quiz sessions with unique codes
+- **PostgreSQL persistence** - Session history and analytics survive server restarts
 - **Zero setup for participants** - Students just enter their name and play
-- **Self-hosted** - Deploy on Render, Railway, or any Node.js host
+- **Self-hosted** - Deploy on Render with Supabase (free tiers available)
 
 
 
@@ -57,15 +61,17 @@ View progress, control flow (start, end early ..etc), and finally when done you 
 ## Tech Stack
 
 - **Backend:** Node.js, Express, Socket.IO
+- **Database:** PostgreSQL (Supabase)
 - **Frontend:** Vanilla HTML/CSS/JavaScript
 - **Charts:** Chart.js
-- **Deployment:** Render.com (free tier compatible)
+- **Deployment:** Render.com + Supabase (free tiers compatible)
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
+- PostgreSQL database (we recommend [Supabase](https://supabase.com) free tier)
 
 ### Installation
 
@@ -73,6 +79,26 @@ View progress, control flow (start, end early ..etc), and finally when done you 
 git clone https://github.com/yourusername/markdown-mash.git
 cd markdown-mash
 npm install
+```
+
+### Configuration
+
+Create a `.env` file:
+
+```env
+DATABASE_URL=postgresql://user:password@host:port/database
+ADMIN_PASSWORD=your_secure_password
+```
+
+**Get your DATABASE_URL from Supabase:**
+1. Create a free account at [supabase.com](https://supabase.com)
+2. Create a new project
+3. Go to Project Settings → Database
+4. Copy the "Connection pooling" URL (port 6543)
+
+### Run
+
+```bash
 npm start
 ```
 
@@ -82,7 +108,7 @@ Open `http://localhost:3000` in your browser.
 - **Participant Join:** `http://localhost:3000/play.html`
 - **Presenter View:** `http://localhost:3000/present.html`
 
-Default admin password: `admin123`
+Default admin password: `admin123` (change via `.env`)
 
 ## Quiz Format
 
@@ -159,7 +185,19 @@ Create quizzes in Markdown format:
 
 ## Deployment
 
-### Render.com (Recommended)
+### Render.com + Supabase (Recommended)
+
+**Step 1: Set up Supabase (Database)**
+
+1. Create a free account at [supabase.com](https://supabase.com)
+2. Create a new project (choose a region close to your users)
+3. Wait for the project to finish provisioning
+4. Go to **Project Settings** → **Database**
+5. Scroll to **Connection pooling** section
+6. Copy the connection string (should use port 6543)
+7. Replace `[YOUR-PASSWORD]` with your actual database password
+
+**Step 2: Deploy to Render**
 
 1. Push your code to GitHub
 
@@ -171,19 +209,33 @@ Create quizzes in Markdown format:
    - **Build Command:** `npm install`
    - **Start Command:** `npm start`
 
-5. Add environment variable:
+5. Add environment variables:
    - `ADMIN_PASSWORD` = your secure password
+   - `DATABASE_URL` = your Supabase connection string from Step 1
+   
+   ⚠️ **Important**: Use the unencoded password (e.g., `Pass!123`) not URL-encoded (`Pass%21123`)
 
-6. Deploy
+6. Click **Deploy**
 
-The free tier spins down after 15 minutes of inactivity. First request after sleep takes ~30 seconds.
+**Step 3: Verify**
+
+- Check deployment logs for:
+  - ✅ `Connected to PostgreSQL database`
+  - ✅ `Database tables initialized`
+- Create a test quiz and verify session history persists after redeployment
+
+**Notes:**
+- Render free tier spins down after 15 minutes of inactivity (~30s cold start)
+- Supabase free tier includes 500MB database and 2GB bandwidth
+- Your quiz history and analytics now survive server restarts! 🎉
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | Server port |
-| `ADMIN_PASSWORD` | `admin123` | Admin login password |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | **Yes** | - | PostgreSQL connection string (Supabase pooler) |
+| `ADMIN_PASSWORD` | No | `admin123` | Admin login password |
+| `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
 ## Development
 
@@ -196,34 +248,60 @@ npm run simulate      # 3 participants
 npm run simulate 10   # 10 participants
 ```
 
+## Analytics Dashboard
+
+View detailed insights from completed quiz sessions:
+
+- **Platform Overview**: Total sessions, participants, average scores
+- **Question Difficulty**: Automatic difficulty ratings (easy/medium/hard)
+- **Answer Distribution**: See which options players chose
+- **Response Times**: Track how quickly participants answered
+- **Performance Rankings**: Leaderboard with scores and speed
+- **CSV Export**: Download session data for Excel/spreadsheet analysis
+
+Access via Admin Dashboard → Session History → View Analytics
+
 ## Project Structure
 
 ```
 markdown-mash/
 ├── server.js              # Express + Socket.IO server
+├── db.js                  # PostgreSQL database module
 ├── package.json
+├── .env                   # Environment variables (create this)
 ├── render.yaml            # Render.com deployment config
 ├── sample-quiz.md         # Example quiz with scoring
 ├── test-simulation.js     # Participant simulator
+├── MIGRATION.md           # PostgreSQL migration guide
+├── DEPLOYMENT-CHECKLIST.md # Deployment steps
 └── public/
     ├── index.html         # Landing page
-    ├── admin.html         # Host dashboard
+    ├── admin.html         # Host dashboard with analytics
     ├── play.html          # Participant view (mobile-optimized)
     ├── present.html       # Presenter view (for screen sharing)
     ├── css/
-    │   └── style.css      # All styles including presenter & player
+    │   └── style.css      # All styles
     └── js/
         ├── admin.js       # Admin client logic
         ├── play.js        # Participant client logic
         └── present.js     # Presenter client logic
 ```
 
+## Database Schema
+
+The app automatically creates these PostgreSQL tables:
+
+- **sessions**: Quiz sessions with unique 6-character codes
+- **participants**: Players who joined sessions (with scores)
+- **answers**: Individual answer records (for analytics and response time tracking)
+
+All data includes proper foreign keys and indexes for performance.
+
 ## Limitations
 
-- Single quiz session at a time (no multi-room support)
-- In-memory storage (data resets on server restart)
-- No persistent user accounts
-- No image/media support in questions
+- No persistent user accounts (participants join per-session)
+- No image/media support in questions (text only)
+- Active session state is in-memory (historical data persists in database)
 
 ## License
 
