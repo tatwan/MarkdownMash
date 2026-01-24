@@ -175,7 +175,7 @@ app.post('/api/admin/session', async (req, res) => {
     const quiz = parseQuizMarkdown(markdown);
 
     // Create session in database
-    const { id, code, quizData } = db.createSession(quiz);
+    const { id, code, quizData } = await db.createSession(quiz);
 
     // Create in-memory session state
     const sessionState = {
@@ -228,7 +228,7 @@ app.get('/api/admin/session/:code/qr', async (req, res) => {
 });
 
 // End a session
-app.post('/api/admin/session/:code/end', (req, res) => {
+app.post('/api/admin/session/:code/end', async (req, res) => {
   const { code } = req.params;
   const session = activeSessions.get(code);
 
@@ -237,11 +237,11 @@ app.post('/api/admin/session/:code/end', (req, res) => {
   }
 
   // Update database status
-  db.updateSessionStatus(code, 'ended');
+  await db.updateSessionStatus(code, 'ended');
 
   // Save final participant scores to database
   for (const participant of Object.values(session.participants)) {
-    db.updateParticipantScore(participant.id, participant.score || 0, participant.correctCount || 0);
+    await db.updateParticipantScore(participant.id, participant.score || 0, participant.correctCount || 0);
   }
 
   // Notify all clients in this session
@@ -262,21 +262,22 @@ app.post('/api/admin/session/:code/end', (req, res) => {
 });
 
 // Get session info
-app.get('/api/admin/session/:code', (req, res) => {
+app.get('/api/admin/session/:code', async (req, res) => {
   const { code } = req.params;
   const session = activeSessions.get(code);
 
   if (!session) {
     // Try to get from database (might be ended session)
-    const dbSession = db.getSession(code);
+    const dbSession = await db.getSession(code);
     if (dbSession) {
+      const participants = await db.getParticipantsBySession(dbSession.id);
       return res.json({
         success: true,
         session: {
           code: dbSession.code,
           quiz: dbSession.quiz_data,
           status: dbSession.status,
-          participantCount: db.getParticipantsBySession(dbSession.id).length
+          participantCount: participants.length
         }
       });
     }
@@ -295,9 +296,9 @@ app.get('/api/admin/session/:code', (req, res) => {
 });
 
 // List session history
-app.get('/api/admin/sessions', (req, res) => {
+app.get('/api/admin/sessions', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
-  const sessions = db.listSessions(limit);
+  const sessions = await db.listSessions(limit);
   res.json({ success: true, sessions });
 });
 
@@ -321,7 +322,7 @@ app.get('/api/admin/session/:code/participants', (req, res) => {
 });
 
 // Get final results for a session
-app.get('/api/admin/session/:code/results', (req, res) => {
+app.get('/api/admin/session/:code/results', async (req, res) => {
   const { code } = req.params;
   const session = activeSessions.get(code);
 
@@ -330,7 +331,7 @@ app.get('/api/admin/session/:code/results', (req, res) => {
   }
 
   // Get all answers from database with response times
-  const dbAnswers = db.getAnswersBySession(session.id);
+  const dbAnswers = await db.getAnswersBySession(session.id);
 
   // Calculate results with response time consideration
   const results = Object.values(session.participants).map(p => {
@@ -375,7 +376,7 @@ app.get('/api/admin/session/:code/results', (req, res) => {
 });
 
 // Join a specific session (replaces /api/join)
-app.post('/api/session/:code/join', (req, res) => {
+app.post('/api/session/:code/join', async (req, res) => {
   const { code } = req.params;
   const { name } = req.body;
 
@@ -393,7 +394,7 @@ app.post('/api/session/:code/join', (req, res) => {
   }
 
   // Create participant in database
-  const { id } = db.createParticipant(session.id, name.trim());
+  const { id } = await db.createParticipant(session.id, name.trim());
 
   // Add to in-memory session
   session.participants[id] = {
@@ -450,8 +451,8 @@ function getDifficultyRating(correctPercent) {
 }
 
 // Platform overview statistics
-app.get('/api/admin/analytics/overview', (req, res) => {
-  const stats = db.getPlatformStats();
+app.get('/api/admin/analytics/overview', async (req, res) => {
+  const stats = await db.getPlatformStats();
   res.json({
     success: true,
     stats: {
@@ -464,9 +465,9 @@ app.get('/api/admin/analytics/overview', (req, res) => {
 });
 
 // List completed sessions with analytics
-app.get('/api/admin/analytics/sessions', (req, res) => {
+app.get('/api/admin/analytics/sessions', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
-  const sessions = db.getSessionAnalytics(limit);
+  const sessions = await db.getSessionAnalytics(limit);
   res.json({
     success: true,
     sessions: sessions.map(s => ({
@@ -485,17 +486,17 @@ app.get('/api/admin/analytics/sessions', (req, res) => {
 });
 
 // Detailed session analytics
-app.get('/api/admin/analytics/session/:code', (req, res) => {
+app.get('/api/admin/analytics/session/:code', async (req, res) => {
   const { code } = req.params;
-  const session = db.getSession(code);
+  const session = await db.getSession(code);
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
   }
 
-  const questionAnalytics = db.getQuestionAnalytics(session.id);
-  const participantPerformance = db.getParticipantPerformance(session.id);
-  const answerDistribution = db.getAnswerDistribution(session.id);
+  const questionAnalytics = await db.getQuestionAnalytics(session.id);
+  const participantPerformance = await db.getParticipantPerformance(session.id);
+  const answerDistribution = await db.getAnswerDistribution(session.id);
 
   // Build question details with quiz data
   const questions = questionAnalytics.map(q => {
@@ -550,16 +551,16 @@ app.get('/api/admin/analytics/session/:code', (req, res) => {
 });
 
 // Question difficulty breakdown
-app.get('/api/admin/analytics/session/:code/questions', (req, res) => {
+app.get('/api/admin/analytics/session/:code/questions', async (req, res) => {
   const { code } = req.params;
-  const session = db.getSession(code);
+  const session = await db.getSession(code);
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
   }
 
-  const questionAnalytics = db.getQuestionAnalytics(session.id);
-  const answerDistribution = db.getAnswerDistribution(session.id);
+  const questionAnalytics = await db.getQuestionAnalytics(session.id);
+  const answerDistribution = await db.getAnswerDistribution(session.id);
 
   const questions = questionAnalytics.map(q => {
     const quizQuestion = session.quiz_data.questions[q.question_index];
@@ -592,15 +593,15 @@ app.get('/api/admin/analytics/session/:code/questions', (req, res) => {
 });
 
 // Export session data as CSV
-app.get('/api/admin/analytics/session/:code/export', (req, res) => {
+app.get('/api/admin/analytics/session/:code/export', async (req, res) => {
   const { code } = req.params;
-  const session = db.getSession(code);
+  const session = await db.getSession(code);
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
   }
 
-  const answers = db.getAnswersForExport(session.id);
+  const answers = await db.getAnswersForExport(session.id);
   const quizData = session.quiz_data;
 
   // Build CSV content
@@ -695,7 +696,7 @@ io.on('connection', (socket) => {
   });
 
   // Participant joins with their ID and session code
-  socket.on('participant_join', (data) => {
+  socket.on('participant_join', async (data) => {
     const { participantId, sessionCode } = data;
 
     const session = activeSessions.get(sessionCode);
@@ -718,7 +719,7 @@ io.on('connection', (socket) => {
     participant.socketId = socket.id;
 
     // Update socket ID in database
-    db.updateParticipantSocket(participantId, socket.id);
+    await db.updateParticipantSocket(participantId, socket.id);
 
     console.log('Participant joined:', participant.name, 'in session:', sessionCode);
 
@@ -746,7 +747,7 @@ io.on('connection', (socket) => {
   });
 
   // Admin starts quiz
-  socket.on('start_quiz', (sessionCode) => {
+  socket.on('start_quiz', async (sessionCode) => {
     const session = activeSessions.get(sessionCode);
     if (!session || !session.quiz || session.quiz.questions.length === 0) return;
 
@@ -755,7 +756,7 @@ io.on('connection', (socket) => {
     session.quizState.showingResults = false;
 
     // Update database status
-    db.updateSessionStatus(sessionCode, 'active');
+    await db.updateSessionStatus(sessionCode, 'active');
 
     // Reset all participant answers and scores
     for (const p of Object.values(session.participants)) {
@@ -776,7 +777,7 @@ io.on('connection', (socket) => {
   });
 
   // Admin advances to next question
-  socket.on('next_question', (sessionCode) => {
+  socket.on('next_question', async (sessionCode) => {
     const session = activeSessions.get(sessionCode);
     if (!session || !session.quiz || !session.quizState.isRunning) return;
 
@@ -789,7 +790,7 @@ io.on('connection', (socket) => {
       const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
 
       // Update database status
-      db.updateSessionStatus(sessionCode, 'ended');
+      await db.updateSessionStatus(sessionCode, 'ended');
 
       // Save final scores to database and send results to each participant
       console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
@@ -800,7 +801,7 @@ io.on('connection', (socket) => {
         console.log(`[FINAL SCORES] ${participant.name}: ${participant.correctCount} correct, ${finalScore}/${session.quiz.totalScore} points, ${percentage}%`);
 
         // Update database
-        db.updateParticipantScore(participant.id, finalScore, participant.correctCount || 0);
+        await db.updateParticipantScore(participant.id, finalScore, participant.correctCount || 0);
 
         if (participant.socketId) {
           io.to(participant.socketId).emit('quiz_ended', {
@@ -852,7 +853,7 @@ io.on('connection', (socket) => {
   });
 
   // Participant submits answer (session-aware fix for the bug)
-  socket.on('submit_answer', (data) => {
+  socket.on('submit_answer', async (data) => {
     const { participantId, sessionCode, questionId, answerIndex } = data;
 
     const session = activeSessions.get(sessionCode);
@@ -889,7 +890,7 @@ io.on('connection', (socket) => {
     // Record answer in database
     const isCorrect = question.correctIndices.includes(answerIndex);
     console.log(`[ANSWER] Participant: ${participant.name}, Q${questionId}, Answer: ${answerIndex}, Correct: ${isCorrect}, CorrectIndices: [${question.correctIndices}]`);
-    db.recordAnswer(
+    await db.recordAnswer(
       session.id,
       participantId,
       session.quizState.currentQuestionIndex,
@@ -912,16 +913,16 @@ io.on('connection', (socket) => {
   });
 
   // Admin ends session
-  socket.on('end_session', (sessionCode) => {
+  socket.on('end_session', async (sessionCode) => {
     const session = activeSessions.get(sessionCode);
     if (!session) return;
 
     // Update database status
-    db.updateSessionStatus(sessionCode, 'ended');
+    await db.updateSessionStatus(sessionCode, 'ended');
 
     // Save final participant scores
     for (const participant of Object.values(session.participants)) {
-      db.updateParticipantScore(participant.id, participant.score || 0, participant.correctCount || 0);
+      await db.updateParticipantScore(participant.id, participant.score || 0, participant.correctCount || 0);
     }
 
     // Notify all clients
