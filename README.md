@@ -93,8 +93,15 @@ ADMIN_PASSWORD=your_secure_password
 **Get your DATABASE_URL from Supabase:**
 1. Create a free account at [supabase.com](https://supabase.com)
 2. Create a new project
-3. Go to Project Settings → Database
-4. Copy the "Connection pooling" URL (port 6543)
+3. Go to **Project Settings** → **Database**
+4. Copy the **"Connection pooling"** URI (uses port 6543, recommended for serverless)
+5. Replace `[YOUR-PASSWORD]` with your actual database password
+
+> **💡 Alternative PostgreSQL Providers:**
+> - **Neon**: [neon.tech](https://neon.tech) - Serverless Postgres with generous free tier
+> - **Railway**: [railway.app](https://railway.app) - Simple deployment with built-in Postgres
+> - **ElephantSQL**: [elephantsql.com](https://elephantsql.com) - Managed PostgreSQL
+> - **Self-hosted**: Any PostgreSQL 12+ instance
 
 ### Run
 
@@ -185,49 +192,165 @@ Create quizzes in Markdown format:
 
 ## Deployment
 
-### Render.com + Supabase (Recommended)
+### Database Setup (Required)
 
-**Step 1: Set up Supabase (Database)**
+This app requires a PostgreSQL database. Choose one of these options:
 
-1. Create a free account at [supabase.com](https://supabase.com)
-2. Create a new project (choose a region close to your users)
-3. Wait for the project to finish provisioning
-4. Go to **Project Settings** → **Database**
-5. Scroll to **Connection pooling** section
-6. Copy the connection string (should use port 6543)
-7. Replace `[YOUR-PASSWORD]` with your actual database password
+#### Option 1: Supabase (Recommended - Free Tier)
 
-**Step 2: Deploy to Render**
+1. Create account at [supabase.com](https://supabase.com)
+2. Create new project (choose region closest to your users)
+3. Go to **Project Settings** → **Database** → **Connection pooling**
+4. Copy the connection string (port 6543)
+5. Note your database password
 
-1. Push your code to GitHub
+**Free tier includes:** 500MB database, 2GB bandwidth, unlimited API requests
 
-2. Go to [Render Dashboard](https://dashboard.render.com) → **New** → **Web Service**
+#### Option 2: Neon (Serverless Postgres)
 
-3. Connect your GitHub repository
+1. Create account at [neon.tech](https://neon.tech)
+2. Create new project
+3. Copy the connection string from dashboard
 
-4. Configure:
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
+**Free tier includes:** 512MB storage, auto-suspend after inactivity
 
-5. Add environment variables:
-   - `ADMIN_PASSWORD` = your secure password
-   - `DATABASE_URL` = your Supabase connection string from Step 1
+#### Option 3: Railway (Integrated Platform)
+
+1. Create account at [railway.app](https://railway.app)
+2. Create new Postgres database
+3. Copy the connection URL
+
+**Free tier includes:** $5/month credit
+
+#### Option 4: Self-Hosted PostgreSQL
+
+Any PostgreSQL 12+ instance will work. You'll need:
+- Host, port, database name
+- Username and password
+- Format: `postgresql://username:password@host:port/database`
+
+---
+
+### Deploy to Render.com
+
+**Prerequisites:**
+- GitHub account with this repository forked/cloned
+- PostgreSQL database from one of the options above
+
+**Steps:**
+
+1. **Push your code to GitHub** (if you haven't already)
+
+2. **Go to Render Dashboard**
+   - Visit [dashboard.render.com](https://dashboard.render.com)
+   - Click **New** → **Web Service**
+
+3. **Connect Repository**
+   - Connect your GitHub account
+   - Select your MarkdownMash repository
+
+4. **Configure Service**
+   - **Name**: `markdownmash` (or your choice)
+   - **Region**: Choose closest to your users
+   - **Branch**: `main`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Plan**: Free (or upgrade for better performance)
+
+5. **Add Environment Variables**
    
-   ⚠️ **Important**: Use the unencoded password (e.g., `Pass!123`) not URL-encoded (`Pass%21123`)
+   Click **Advanced** → **Add Environment Variable**:
+   
+   **Variable 1: DATABASE_URL**
+   - Key: `DATABASE_URL`
+   - Value: Your PostgreSQL connection string from database setup
+   
+   > ⚠️ **CRITICAL - Password Encoding**:
+   > If your database password contains special characters (`!`, `@`, `#`, `$`, `%`, `&`, etc.), you MUST URL-encode them:
+   > - `!` → `%21`
+   > - `@` → `%40`
+   > - `#` → `%23`
+   > - `$` → `%24`
+   > - `%` → `%25`
+   > - `&` → `%26`
+   > 
+   > **Example:** Password `MyPass!@#` becomes `MyPass%21%40%23`
+   > 
+   > **Tool:** Use [urlencoder.org](https://www.urlencoder.org/) to encode your password
+   
+   **Variable 2: ADMIN_PASSWORD** (Optional)
+   - Key: `ADMIN_PASSWORD`
+   - Value: Your custom admin password (default is `admin123`)
 
-6. Click **Deploy**
+6. **Deploy**
+   - Click **Create Web Service**
+   - Wait for build to complete (~2-3 minutes)
 
-**Step 3: Verify**
+7. **Verify Deployment**
+   
+   Check the deployment logs for:
+   ```
+   ✅ Connected to PostgreSQL database
+   ✅ Database tables initialized
+   ✅ Markdown Mash server running
+   ```
+   
+   Visit your app at the provided URL (e.g., `https://yourapp.onrender.com`)
 
-- Check deployment logs for:
-  - ✅ `Connected to PostgreSQL database`
-  - ✅ `Database tables initialized`
-- Create a test quiz and verify session history persists after redeployment
+---
 
-**Notes:**
-- Render free tier spins down after 15 minutes of inactivity (~30s cold start)
-- Supabase free tier includes 500MB database and 2GB bandwidth
-- Your quiz history and analytics now survive server restarts! 🎉
+### Alternative Deployment Options
+
+#### Railway.app (All-in-One)
+
+Railway can host both your app and database:
+
+1. Connect GitHub repository
+2. Add PostgreSQL service
+3. Deploy automatically links DATABASE_URL
+
+#### Heroku
+
+1. Install Heroku Postgres add-on
+2. Set `ADMIN_PASSWORD` config var
+3. Deploy from GitHub
+
+#### Self-Hosted / VPS
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/MarkdownMash
+cd MarkdownMash
+
+# Install dependencies
+npm install
+
+# Create .env file
+cat > .env << EOF
+DATABASE_URL=postgresql://user:password@localhost:5432/markdownmash
+ADMIN_PASSWORD=your_secure_password
+PORT=3000
+EOF
+
+# Run with PM2 (process manager)
+npm install -g pm2
+pm2 start server.js --name markdownmash
+pm2 save
+```
+
+---
+
+### Deployment Notes
+
+**Render Free Tier:**
+- Spins down after 15 minutes of inactivity
+- First request after sleep takes ~30 seconds to wake up
+- Perfect for classroom use, demos, and low-traffic deployments
+
+**Database Persistence:**
+- All quiz sessions, participants, and analytics are stored in PostgreSQL
+- Data survives server restarts and redeployments
+- You can view/export data through your database provider's dashboard
 
 ### Environment Variables
 
@@ -261,19 +384,15 @@ View detailed insights from completed quiz sessions:
 
 Access via Admin Dashboard → Session History → View Analytics
 
-## Project Structure
-
 ```
 markdown-mash/
 ├── server.js              # Express + Socket.IO server
 ├── db.js                  # PostgreSQL database module
-├── package.json
-├── .env                   # Environment variables (create this)
+├── package.json           # Dependencies and scripts
+├── .env.example           # Environment variables template
 ├── render.yaml            # Render.com deployment config
-├── sample-quiz.md         # Example quiz with scoring
-├── test-simulation.js     # Participant simulator
-├── MIGRATION.md           # PostgreSQL migration guide
-├── DEPLOYMENT-CHECKLIST.md # Deployment steps
+├── sample-quiz.md         # Example quiz
+├── test-simulation.js     # Participant simulator for testing
 └── public/
     ├── index.html         # Landing page
     ├── admin.html         # Host dashboard with analytics
