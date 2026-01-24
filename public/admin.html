@@ -12,6 +12,7 @@
     <header class="header">
       <h1>Admin Dashboard</h1>
       <p>Manage and control your quiz</p>
+      <button id="analytics-btn" class="btn btn-secondary hidden">View Analytics</button>
     </header>
 
     <!-- Login Section -->
@@ -117,6 +118,121 @@
           </thead>
           <tbody id="results-body"></tbody>
         </table>
+      </div>
+
+      <!-- Analytics Section -->
+      <div id="analytics-section" class="card hidden">
+        <div class="analytics-header">
+          <div>
+            <h2>Analytics & Insights</h2>
+            <p class="text-muted">View performance data from completed sessions</p>
+          </div>
+          <div class="analytics-tabs">
+            <button class="tab-btn active" data-tab="overview">Overview</button>
+            <button class="tab-btn" data-tab="sessions">Sessions</button>
+          </div>
+          <button id="back-to-dashboard-btn" class="btn">Back to Dashboard</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="analytics-overview" class="analytics-tab-content">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-value" id="total-sessions-stat">0</span>
+              <span class="stat-label">Total Sessions</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="completed-sessions-stat">0</span>
+              <span class="stat-label">Completed</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="total-participants-stat">0</span>
+              <span class="stat-label">Total Participants</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="avg-score-stat">0%</span>
+              <span class="stat-label">Avg Score</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sessions List Tab -->
+        <div id="analytics-sessions" class="analytics-tab-content hidden">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Session</th>
+                <th>Quiz Title</th>
+                <th>Participants</th>
+                <th>Avg Score</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="analytics-sessions-body"></tbody>
+          </table>
+          <p id="no-sessions-msg" class="text-muted text-center mt-4 hidden">No completed sessions yet.</p>
+        </div>
+      </div>
+
+      <!-- Session Detail Section -->
+      <div id="session-detail-section" class="card hidden">
+        <div class="session-detail-header">
+          <button id="back-to-analytics-btn" class="btn">&larr; Back</button>
+          <h2 id="detail-quiz-title">Quiz Title</h2>
+          <button id="export-csv-btn" class="btn btn-primary">Export CSV</button>
+        </div>
+
+        <!-- Session Summary -->
+        <div class="stats-grid mt-4">
+          <div class="stat-card">
+            <span class="stat-value" id="detail-participants">0</span>
+            <span class="stat-label">Participants</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="detail-avg-score">0%</span>
+            <span class="stat-label">Avg Score</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="detail-questions">0</span>
+            <span class="stat-label">Questions</span>
+          </div>
+        </div>
+
+        <!-- Question Difficulty -->
+        <div class="detail-card mt-4">
+          <h3>Question Difficulty</h3>
+          <p class="text-muted">Questions ranked by difficulty (lowest correct % = hardest)</p>
+          <table class="results-table mt-4" id="question-breakdown-table">
+            <thead>
+              <tr>
+                <th>Q#</th>
+                <th>Question</th>
+                <th>Correct %</th>
+                <th>Avg Time</th>
+                <th>Difficulty</th>
+              </tr>
+            </thead>
+            <tbody id="question-breakdown-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Participant Performance -->
+        <div class="detail-card mt-4">
+          <h3>Participant Performance</h3>
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Name</th>
+                <th>Correct</th>
+                <th>Score</th>
+                <th>Avg Response</th>
+              </tr>
+            </thead>
+            <tbody id="participant-performance-body"></tbody>
+          </table>
+        </div>
       </div>
 
     </div>

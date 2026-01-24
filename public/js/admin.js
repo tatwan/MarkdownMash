@@ -41,12 +41,40 @@ const optionsDisplay = document.getElementById('options-display');
 const resultsSection = document.getElementById('results-section');
 const resultsBody = document.getElementById('results-body');
 
+// Analytics elements
+const analyticsBtn = document.getElementById('analytics-btn');
+const analyticsSection = document.getElementById('analytics-section');
+const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
+const analyticsTabs = document.querySelectorAll('.tab-btn');
+const analyticsOverview = document.getElementById('analytics-overview');
+const analyticsSessions = document.getElementById('analytics-sessions');
+const analyticsSessionsBody = document.getElementById('analytics-sessions-body');
+const noSessionsMsg = document.getElementById('no-sessions-msg');
+
+// Analytics stats elements
+const totalSessionsStat = document.getElementById('total-sessions-stat');
+const completedSessionsStat = document.getElementById('completed-sessions-stat');
+const totalParticipantsStat = document.getElementById('total-participants-stat');
+const avgScoreStat = document.getElementById('avg-score-stat');
+
+// Session detail elements
+const sessionDetailSection = document.getElementById('session-detail-section');
+const backToAnalyticsBtn = document.getElementById('back-to-analytics-btn');
+const detailQuizTitle = document.getElementById('detail-quiz-title');
+const exportCsvBtn = document.getElementById('export-csv-btn');
+const detailParticipants = document.getElementById('detail-participants');
+const detailAvgScore = document.getElementById('detail-avg-score');
+const detailQuestions = document.getElementById('detail-questions');
+const questionBreakdownBody = document.getElementById('question-breakdown-body');
+const participantPerformanceBody = document.getElementById('participant-performance-body');
+
 // State
 let socket = null;
 let currentQuiz = null;
 let currentQuestion = null;
 let timerInterval = null;
 let sessionCode = null;
+let viewingSessionCode = null; // For analytics detail view
 
 // Login
 loginForm.addEventListener('submit', async (e) => {
@@ -64,6 +92,7 @@ loginForm.addEventListener('submit', async (e) => {
     if (data.success) {
       loginSection.classList.add('hidden');
       dashboardSection.classList.remove('hidden');
+      analyticsBtn.classList.remove('hidden');
     } else {
       showError(loginError, data.error);
     }
@@ -370,4 +399,217 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ============================================
+// ANALYTICS FUNCTIONS
+// ============================================
+
+// Show analytics section
+analyticsBtn.addEventListener('click', () => {
+  showAnalytics();
+});
+
+// Back to dashboard from analytics
+backToDashboardBtn.addEventListener('click', () => {
+  hideAnalytics();
+});
+
+// Tab switching
+analyticsTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    const tabName = tab.dataset.tab;
+    analyticsTabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    if (tabName === 'overview') {
+      analyticsOverview.classList.remove('hidden');
+      analyticsSessions.classList.add('hidden');
+    } else {
+      analyticsOverview.classList.add('hidden');
+      analyticsSessions.classList.remove('hidden');
+      loadSessionsList();
+    }
+  });
+});
+
+// Back to analytics from session detail
+backToAnalyticsBtn.addEventListener('click', () => {
+  sessionDetailSection.classList.add('hidden');
+  analyticsSection.classList.remove('hidden');
+  viewingSessionCode = null;
+});
+
+// Export CSV
+exportCsvBtn.addEventListener('click', () => {
+  if (viewingSessionCode) {
+    window.location.href = `/api/admin/analytics/session/${viewingSessionCode}/export`;
+  }
+});
+
+// Show analytics view
+async function showAnalytics() {
+  // Hide dashboard elements
+  uploadSection.classList.add('hidden');
+  sessionInfoSection.classList.add('hidden');
+  participantsSection.classList.add('hidden');
+  controlsSection.classList.add('hidden');
+  questionSection.classList.add('hidden');
+  resultsSection.classList.add('hidden');
+
+  // Show analytics
+  analyticsSection.classList.remove('hidden');
+  sessionDetailSection.classList.add('hidden');
+
+  // Reset to overview tab
+  analyticsTabs.forEach(t => t.classList.remove('active'));
+  analyticsTabs[0].classList.add('active');
+  analyticsOverview.classList.remove('hidden');
+  analyticsSessions.classList.add('hidden');
+
+  // Load overview stats
+  await loadPlatformStats();
+}
+
+// Hide analytics and return to dashboard
+function hideAnalytics() {
+  analyticsSection.classList.add('hidden');
+  sessionDetailSection.classList.add('hidden');
+  uploadSection.classList.remove('hidden');
+
+  // Show session info if there's an active session
+  if (sessionCode) {
+    sessionInfoSection.classList.remove('hidden');
+    participantsSection.classList.remove('hidden');
+    controlsSection.classList.remove('hidden');
+  }
+}
+
+// Load platform overview stats
+async function loadPlatformStats() {
+  try {
+    const res = await fetch('/api/admin/analytics/overview');
+    const data = await res.json();
+
+    if (data.success) {
+      totalSessionsStat.textContent = data.stats.totalSessions;
+      completedSessionsStat.textContent = data.stats.completedSessions;
+      totalParticipantsStat.textContent = data.stats.totalParticipants;
+      avgScoreStat.textContent = `${Math.round(data.stats.overallAvgScore || 0)}%`;
+    }
+  } catch (err) {
+    console.error('Failed to load platform stats', err);
+  }
+}
+
+// Load sessions list
+async function loadSessionsList() {
+  try {
+    const res = await fetch('/api/admin/analytics/sessions');
+    const data = await res.json();
+
+    analyticsSessionsBody.innerHTML = '';
+
+    if (data.success && data.sessions.length > 0) {
+      noSessionsMsg.classList.add('hidden');
+
+      data.sessions.forEach(session => {
+        const tr = document.createElement('tr');
+        const date = session.endedAt ? new Date(session.endedAt).toLocaleDateString() : 'N/A';
+
+        tr.innerHTML = `
+          <td><code>${escapeHtml(session.code)}</code></td>
+          <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
+          <td>${session.participantCount}</td>
+          <td>${Math.round(session.avgScorePercent || 0)}%</td>
+          <td>${date}</td>
+          <td><button class="btn btn-small" data-code="${escapeHtml(session.code)}">View</button></td>
+        `;
+
+        // Add click handler for view button
+        const viewBtn = tr.querySelector('button');
+        viewBtn.addEventListener('click', () => {
+          loadSessionDetail(session.code);
+        });
+
+        analyticsSessionsBody.appendChild(tr);
+      });
+    } else {
+      noSessionsMsg.classList.remove('hidden');
+    }
+  } catch (err) {
+    console.error('Failed to load sessions list', err);
+  }
+}
+
+// Load session detail
+async function loadSessionDetail(code) {
+  try {
+    const res = await fetch(`/api/admin/analytics/session/${code}`);
+    const data = await res.json();
+
+    if (!data.success) {
+      alert('Failed to load session details');
+      return;
+    }
+
+    viewingSessionCode = code;
+
+    // Hide analytics list, show detail
+    analyticsSection.classList.add('hidden');
+    sessionDetailSection.classList.remove('hidden');
+
+    // Populate session info
+    detailQuizTitle.textContent = data.session.quizTitle || 'Untitled Quiz';
+    detailParticipants.textContent = data.participants.length;
+    detailQuestions.textContent = data.session.totalQuestions;
+
+    // Calculate average score
+    const avgScore = data.participants.length > 0
+      ? data.participants.reduce((sum, p) => sum + (p.correctCount / data.session.totalQuestions * 100), 0) / data.participants.length
+      : 0;
+    detailAvgScore.textContent = `${Math.round(avgScore)}%`;
+
+    // Populate question difficulty table (sorted by difficulty - hardest first)
+    questionBreakdownBody.innerHTML = '';
+    data.questionsByDifficulty.forEach(q => {
+      const tr = document.createElement('tr');
+      const avgTime = q.avgResponseTimeMs ? `${(q.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
+      const difficultyClass = `difficulty-${q.difficulty}`;
+
+      tr.innerHTML = `
+        <td>Q${q.index + 1}</td>
+        <td class="question-text-cell">${escapeHtml(truncateText(q.text, 50))}</td>
+        <td>${Math.round(q.correctPercent)}%</td>
+        <td>${avgTime}</td>
+        <td><span class="difficulty-badge ${difficultyClass}">${q.difficulty}</span></td>
+      `;
+      questionBreakdownBody.appendChild(tr);
+    });
+
+    // Populate participant performance table
+    participantPerformanceBody.innerHTML = '';
+    data.participants.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      const avgTime = p.avgResponseTimeMs ? `${(p.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
+
+      tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${p.correctCount} / ${data.session.totalQuestions}</td>
+        <td>${p.score}</td>
+        <td>${avgTime}</td>
+      `;
+      participantPerformanceBody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error('Failed to load session detail', err);
+  }
+}
+
+// Helper to truncate long text
+function truncateText(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 }

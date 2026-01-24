@@ -429,6 +429,228 @@ app.post('/api/join', (req, res) => {
 });
 
 // ============================================
+// ANALYTICS API ENDPOINTS
+// ============================================
+
+// Helper function for CSV escaping
+function escapeCSV(value) {
+  if (value == null) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+// Helper function for difficulty rating
+function getDifficultyRating(correctPercent) {
+  if (correctPercent >= 70) return 'easy';
+  if (correctPercent >= 40) return 'medium';
+  return 'hard';
+}
+
+// Platform overview statistics
+app.get('/api/admin/analytics/overview', (req, res) => {
+  const stats = db.getPlatformStats();
+  res.json({
+    success: true,
+    stats: {
+      totalSessions: stats.total_sessions || 0,
+      completedSessions: stats.completed_sessions || 0,
+      totalParticipants: stats.total_participants || 0,
+      overallAvgScore: stats.overall_avg_score || 0
+    }
+  });
+});
+
+// List completed sessions with analytics
+app.get('/api/admin/analytics/sessions', (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  const sessions = db.getSessionAnalytics(limit);
+  res.json({
+    success: true,
+    sessions: sessions.map(s => ({
+      id: s.id,
+      code: s.code,
+      quizTitle: s.quiz_title,
+      status: s.status,
+      createdAt: s.created_at,
+      startedAt: s.started_at,
+      endedAt: s.ended_at,
+      totalQuestions: s.total_questions,
+      participantCount: s.participant_count || 0,
+      avgScorePercent: s.avg_score_percent || 0
+    }))
+  });
+});
+
+// Detailed session analytics
+app.get('/api/admin/analytics/session/:code', (req, res) => {
+  const { code } = req.params;
+  const session = db.getSession(code);
+
+  if (!session) {
+    return res.status(404).json({ success: false, error: 'Session not found' });
+  }
+
+  const questionAnalytics = db.getQuestionAnalytics(session.id);
+  const participantPerformance = db.getParticipantPerformance(session.id);
+  const answerDistribution = db.getAnswerDistribution(session.id);
+
+  // Build question details with quiz data
+  const questions = questionAnalytics.map(q => {
+    const quizQuestion = session.quiz_data.questions[q.question_index];
+    const distribution = answerDistribution.filter(a => a.question_index === q.question_index);
+
+    return {
+      index: q.question_index,
+      text: quizQuestion ? quizQuestion.text : `Question ${q.question_index + 1}`,
+      options: quizQuestion ? quizQuestion.options : [],
+      correctIndices: quizQuestion ? quizQuestion.correctIndices : [],
+      totalAnswers: q.total_answers,
+      correctCount: q.correct_count,
+      correctPercent: q.correct_percent || 0,
+      avgResponseTimeMs: q.avg_response_time_ms,
+      minResponseTimeMs: q.min_response_time_ms,
+      maxResponseTimeMs: q.max_response_time_ms,
+      difficulty: getDifficultyRating(q.correct_percent || 0),
+      optionDistribution: distribution.map(d => ({
+        optionIndex: d.answer_index,
+        count: d.count
+      }))
+    };
+  });
+
+  // Sort questions by difficulty (hardest first)
+  const questionsByDifficulty = [...questions].sort((a, b) => a.correctPercent - b.correctPercent);
+
+  res.json({
+    success: true,
+    session: {
+      code: session.code,
+      quizTitle: session.quiz_title,
+      status: session.status,
+      totalQuestions: session.total_questions,
+      totalScore: session.total_score,
+      createdAt: session.created_at,
+      startedAt: session.started_at,
+      endedAt: session.ended_at
+    },
+    questions,
+    questionsByDifficulty,
+    participants: participantPerformance.map(p => ({
+      id: p.id,
+      name: p.name,
+      score: p.score,
+      correctCount: p.correct_count,
+      avgResponseTimeMs: p.avg_response_time_ms,
+      questionsAnswered: p.questions_answered
+    }))
+  });
+});
+
+// Question difficulty breakdown
+app.get('/api/admin/analytics/session/:code/questions', (req, res) => {
+  const { code } = req.params;
+  const session = db.getSession(code);
+
+  if (!session) {
+    return res.status(404).json({ success: false, error: 'Session not found' });
+  }
+
+  const questionAnalytics = db.getQuestionAnalytics(session.id);
+  const answerDistribution = db.getAnswerDistribution(session.id);
+
+  const questions = questionAnalytics.map(q => {
+    const quizQuestion = session.quiz_data.questions[q.question_index];
+    const distribution = answerDistribution.filter(a => a.question_index === q.question_index);
+
+    return {
+      index: q.question_index,
+      text: quizQuestion ? quizQuestion.text : `Question ${q.question_index + 1}`,
+      options: quizQuestion ? quizQuestion.options : [],
+      correctIndices: quizQuestion ? quizQuestion.correctIndices : [],
+      totalAnswers: q.total_answers,
+      correctCount: q.correct_count,
+      correctPercent: q.correct_percent || 0,
+      avgResponseTimeMs: q.avg_response_time_ms,
+      difficulty: getDifficultyRating(q.correct_percent || 0),
+      optionBreakdown: (quizQuestion ? quizQuestion.options : []).map((opt, idx) => {
+        const dist = distribution.find(d => d.answer_index === idx);
+        const count = dist ? dist.count : 0;
+        return {
+          option: opt,
+          count,
+          percent: q.total_answers > 0 ? Math.round(count * 100 / q.total_answers) : 0,
+          isCorrect: quizQuestion ? quizQuestion.correctIndices.includes(idx) : false
+        };
+      })
+    };
+  });
+
+  res.json({ success: true, questions });
+});
+
+// Export session data as CSV
+app.get('/api/admin/analytics/session/:code/export', (req, res) => {
+  const { code } = req.params;
+  const session = db.getSession(code);
+
+  if (!session) {
+    return res.status(404).json({ success: false, error: 'Session not found' });
+  }
+
+  const answers = db.getAnswersForExport(session.id);
+  const quizData = session.quiz_data;
+
+  // Build CSV content
+  const csvRows = [];
+
+  // Header row
+  csvRows.push([
+    'Participant Name',
+    'Question Number',
+    'Question Text',
+    'Selected Answer',
+    'Correct Answer(s)',
+    'Is Correct',
+    'Response Time (ms)',
+    'Answered At'
+  ].join(','));
+
+  // Data rows
+  for (const answer of answers) {
+    const question = quizData.questions[answer.question_index];
+    if (!question) continue;
+
+    const selectedOption = answer.answer_index !== null && question.options[answer.answer_index]
+      ? question.options[answer.answer_index]
+      : 'No answer';
+    const correctOptions = question.correctIndices
+      .map(i => question.options[i])
+      .filter(Boolean)
+      .join('; ');
+
+    csvRows.push([
+      escapeCSV(answer.participant_name),
+      answer.question_index + 1,
+      escapeCSV(question.text),
+      escapeCSV(selectedOption),
+      escapeCSV(correctOptions),
+      answer.is_correct ? 'Yes' : 'No',
+      answer.response_time_ms || '',
+      answer.answered_at || ''
+    ].join(','));
+  }
+
+  const csvContent = csvRows.join('\n');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${code}-results.csv"`);
+  res.send(csvContent);
+});
+
+// ============================================
 // SOCKET.IO EVENTS
 // ============================================
 io.on('connection', (socket) => {

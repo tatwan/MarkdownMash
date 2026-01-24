@@ -98,7 +98,85 @@ const statements = {
     VALUES (@session_id, @participant_id, @question_index, @answer_index, @is_correct, @response_time_ms)
   `),
   getAnswersBySession: db.prepare(`SELECT * FROM answers WHERE session_id = ?`),
-  getAnswersByParticipant: db.prepare(`SELECT * FROM answers WHERE participant_id = ?`)
+  getAnswersByParticipant: db.prepare(`SELECT * FROM answers WHERE participant_id = ?`),
+
+  // Analytics
+  getSessionAnalytics: db.prepare(`
+    SELECT
+      s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at,
+      s.total_questions, s.total_score,
+      COUNT(DISTINCT p.id) as participant_count,
+      ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0)), 1) as avg_score_percent
+    FROM sessions s
+    LEFT JOIN participants p ON p.session_id = s.id
+    WHERE s.status = 'ended'
+    GROUP BY s.id
+    ORDER BY s.ended_at DESC
+    LIMIT ?
+  `),
+
+  getQuestionAnalytics: db.prepare(`
+    SELECT
+      a.question_index,
+      COUNT(*) as total_answers,
+      SUM(a.is_correct) as correct_count,
+      ROUND(SUM(a.is_correct) * 100.0 / COUNT(*), 1) as correct_percent,
+      ROUND(AVG(a.response_time_ms), 0) as avg_response_time_ms,
+      MIN(a.response_time_ms) as min_response_time_ms,
+      MAX(a.response_time_ms) as max_response_time_ms
+    FROM answers a
+    WHERE a.session_id = ?
+    GROUP BY a.question_index
+    ORDER BY a.question_index
+  `),
+
+  getAnswerDistribution: db.prepare(`
+    SELECT
+      a.question_index,
+      a.answer_index,
+      COUNT(*) as count
+    FROM answers a
+    WHERE a.session_id = ?
+    GROUP BY a.question_index, a.answer_index
+    ORDER BY a.question_index, a.answer_index
+  `),
+
+  getParticipantPerformance: db.prepare(`
+    SELECT
+      p.id, p.name, p.score, p.correct_count,
+      ROUND(AVG(a.response_time_ms), 0) as avg_response_time_ms,
+      COUNT(a.id) as questions_answered
+    FROM participants p
+    LEFT JOIN answers a ON a.participant_id = p.id
+    WHERE p.session_id = ?
+    GROUP BY p.id
+    ORDER BY p.correct_count DESC, avg_response_time_ms ASC
+  `),
+
+  getPlatformStats: db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM sessions) as total_sessions,
+      (SELECT COUNT(*) FROM sessions WHERE status = 'ended') as completed_sessions,
+      (SELECT COUNT(*) FROM participants) as total_participants,
+      (SELECT ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0)), 1)
+       FROM participants p
+       JOIN sessions s ON s.id = p.session_id
+       WHERE s.status = 'ended') as overall_avg_score
+  `),
+
+  getAnswersForExport: db.prepare(`
+    SELECT
+      p.name as participant_name,
+      a.question_index,
+      a.answer_index,
+      a.is_correct,
+      a.response_time_ms,
+      a.answered_at
+    FROM answers a
+    JOIN participants p ON p.id = a.participant_id
+    WHERE a.session_id = ?
+    ORDER BY p.name, a.question_index
+  `)
 };
 
 // Helper functions
@@ -220,6 +298,31 @@ const dbApi = {
 
   getAnswersByParticipant(participantId) {
     return statements.getAnswersByParticipant.all(participantId);
+  },
+
+  // Analytics operations
+  getSessionAnalytics(limit = 50) {
+    return statements.getSessionAnalytics.all(limit);
+  },
+
+  getQuestionAnalytics(sessionId) {
+    return statements.getQuestionAnalytics.all(sessionId);
+  },
+
+  getAnswerDistribution(sessionId) {
+    return statements.getAnswerDistribution.all(sessionId);
+  },
+
+  getParticipantPerformance(sessionId) {
+    return statements.getParticipantPerformance.all(sessionId);
+  },
+
+  getPlatformStats() {
+    return statements.getPlatformStats.get();
+  },
+
+  getAnswersForExport(sessionId) {
+    return statements.getAnswersForExport.all(sessionId);
   },
 
   // Utility
