@@ -7,6 +7,7 @@ const forgotPasswordLink = document.getElementById('forgot-password-link');
 
 // Settings elements
 const settingsBtn = document.getElementById('settings-btn');
+const logoutBtn = document.getElementById('logout-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
 const settingsTabs = document.querySelectorAll('.settings-tab');
@@ -119,6 +120,7 @@ loginForm.addEventListener('submit', async (e) => {
       dashboardSection.classList.remove('hidden');
       analyticsBtn.classList.remove('hidden');
       settingsBtn.classList.remove('hidden');
+      logoutBtn.classList.remove('hidden');
 
       // If first login or no security questions, prompt to set them
       if (data.isFirstLogin || !data.admin.hasSecurityQuestions) {
@@ -151,6 +153,7 @@ async function checkExistingAuth() {
         dashboardSection.classList.remove('hidden');
         analyticsBtn.classList.remove('hidden');
         settingsBtn.classList.remove('hidden');
+        logoutBtn.classList.remove('hidden');
         return;
       }
     } catch (err) {
@@ -168,6 +171,8 @@ checkExistingAuth();
 
 // Logout function
 function logout() {
+  if (!confirm('Are you sure you want to logout?')) return;
+
   authToken = null;
   currentAdmin = null;
   localStorage.removeItem('authToken');
@@ -176,8 +181,15 @@ function logout() {
   dashboardSection.classList.add('hidden');
   analyticsBtn.classList.add('hidden');
   settingsBtn.classList.add('hidden');
+  logoutBtn.classList.add('hidden');
   resetToUploadState();
+
+  // Clear password field
+  document.getElementById('password').value = '';
 }
+
+// Logout button click
+logoutBtn.addEventListener('click', logout);
 
 // Helper to make authenticated requests
 async function authFetch(url, options = {}) {
