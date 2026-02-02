@@ -3,6 +3,25 @@ const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
+const forgotPasswordLink = document.getElementById('forgot-password-link');
+
+// Settings elements
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const closeSettingsBtn = document.getElementById('close-settings-btn');
+const settingsTabs = document.querySelectorAll('.settings-tab');
+const changePasswordForm = document.getElementById('change-password-form');
+const securityQuestionsForm = document.getElementById('security-questions-form');
+const emailForm = document.getElementById('email-form');
+
+// Recovery elements
+const recoveryModal = document.getElementById('recovery-modal');
+const closeRecoveryBtn = document.getElementById('close-recovery-btn');
+const recoveryForm = document.getElementById('recovery-form');
+
+// Auth state
+let authToken = localStorage.getItem('authToken');
+let currentAdmin = JSON.parse(localStorage.getItem('currentAdmin') || 'null');
 
 const uploadSection = document.getElementById('upload-section');
 const quizMarkdown = document.getElementById('quiz-markdown');
@@ -90,9 +109,25 @@ loginForm.addEventListener('submit', async (e) => {
 
     const data = await res.json();
     if (data.success) {
+      // Store auth token
+      authToken = data.token;
+      currentAdmin = data.admin;
+      localStorage.setItem('authToken', authToken);
+      localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
+
       loginSection.classList.add('hidden');
       dashboardSection.classList.remove('hidden');
       analyticsBtn.classList.remove('hidden');
+      settingsBtn.classList.remove('hidden');
+
+      // If first login or no security questions, prompt to set them
+      if (data.isFirstLogin || !data.admin.hasSecurityQuestions) {
+        setTimeout(() => {
+          alert('Welcome! Please set up security questions in Settings for password recovery.');
+          openSettings();
+          switchSettingsTab('security');
+        }, 500);
+      }
     } else {
       showError(loginError, data.error);
     }
@@ -100,6 +135,58 @@ loginForm.addEventListener('submit', async (e) => {
     showError(loginError, 'Connection error');
   }
 });
+
+// Check for existing valid token on page load
+async function checkExistingAuth() {
+  if (authToken) {
+    try {
+      const res = await fetch('/api/admin/settings', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        currentAdmin = data.admin;
+        localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
+        loginSection.classList.add('hidden');
+        dashboardSection.classList.remove('hidden');
+        analyticsBtn.classList.remove('hidden');
+        settingsBtn.classList.remove('hidden');
+        return;
+      }
+    } catch (err) {
+      // Token invalid, clear it
+    }
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentAdmin');
+    authToken = null;
+    currentAdmin = null;
+  }
+}
+
+// Run auth check on load
+checkExistingAuth();
+
+// Logout function
+function logout() {
+  authToken = null;
+  currentAdmin = null;
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('currentAdmin');
+  loginSection.classList.remove('hidden');
+  dashboardSection.classList.add('hidden');
+  analyticsBtn.classList.add('hidden');
+  settingsBtn.classList.add('hidden');
+  resetToUploadState();
+}
+
+// Helper to make authenticated requests
+async function authFetch(url, options = {}) {
+  const headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${authToken}`
+  };
+  return fetch(url, { ...options, headers });
+}
 
 // Initialize Socket.IO for a specific session
 function initSocket(code) {
@@ -117,8 +204,15 @@ function initSocket(code) {
     participantCount.textContent = data.count;
     totalParticipants.textContent = data.count;
     if (data.name) {
-      addParticipantChip(data.name);
+      addParticipantChip(data.name, data.id);
     }
+  });
+
+  socket.on('participant_kicked', (data) => {
+    const chip = participantList.querySelector(`[data-id="${data.participantId}"]`);
+    if (chip) chip.remove();
+    participantCount.textContent = data.count;
+    totalParticipants.textContent = data.count;
   });
 
   socket.on('quiz_started', (data) => {
@@ -380,12 +474,16 @@ function startTimer(seconds) {
   }, 1000);
 }
 
-// Add participant chip
-function addParticipantChip(name) {
-  const chip = document.createElement('span');
-  chip.className = 'participant-chip';
-  chip.textContent = name;
-  participantList.appendChild(chip);
+// Add participant chip (with kick button if we have participant ID)
+function addParticipantChip(name, id = null) {
+  if (id) {
+    addParticipantChipWithKick(id, name);
+  } else {
+    const chip = document.createElement('span');
+    chip.className = 'participant-chip';
+    chip.textContent = name;
+    participantList.appendChild(chip);
+  }
 }
 
 // Utility functions
@@ -612,4 +710,325 @@ async function loadSessionDetail(code) {
 function truncateText(text, maxLength) {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
+}
+
+// ============================================
+// SETTINGS FUNCTIONS
+// ============================================
+
+// Open settings modal
+function openSettings() {
+  settingsModal.classList.remove('hidden');
+  loadAdminSettings();
+}
+
+// Close settings modal
+function closeSettings() {
+  settingsModal.classList.add('hidden');
+  clearSettingsForms();
+}
+
+// Switch settings tabs
+function switchSettingsTab(tabName) {
+  settingsTabs.forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tabName);
+  });
+  document.getElementById('settings-password').classList.toggle('hidden', tabName !== 'password');
+  document.getElementById('settings-security').classList.toggle('hidden', tabName !== 'security');
+  document.getElementById('settings-email').classList.toggle('hidden', tabName !== 'email');
+}
+
+// Load admin settings
+async function loadAdminSettings() {
+  try {
+    const res = await authFetch('/api/admin/settings');
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('admin-email').value = data.admin.email || '';
+      if (data.admin.securityQuestion1) {
+        document.getElementById('security-q1').value = data.admin.securityQuestion1;
+      }
+      if (data.admin.securityQuestion2) {
+        document.getElementById('security-q2').value = data.admin.securityQuestion2;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load settings', err);
+  }
+}
+
+// Clear settings forms
+function clearSettingsForms() {
+  document.getElementById('current-password').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('confirm-password').value = '';
+  document.getElementById('security-a1').value = '';
+  document.getElementById('security-a2').value = '';
+  hideStatus('password-status');
+  hideStatus('security-status');
+  hideStatus('email-status');
+}
+
+// Show status message
+function showStatus(elementId, message, isSuccess) {
+  const el = document.getElementById(elementId);
+  el.textContent = message;
+  el.className = `status-message ${isSuccess ? 'success' : 'error'}`;
+  el.classList.remove('hidden');
+}
+
+// Hide status message
+function hideStatus(elementId) {
+  document.getElementById(elementId).classList.add('hidden');
+}
+
+// Settings button click
+settingsBtn.addEventListener('click', openSettings);
+
+// Close settings button
+closeSettingsBtn.addEventListener('click', closeSettings);
+
+// Close modal when clicking outside
+settingsModal.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettings();
+});
+
+// Settings tab switching
+settingsTabs.forEach(tab => {
+  tab.addEventListener('click', () => switchSettingsTab(tab.dataset.tab));
+});
+
+// Change password form
+changePasswordForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const currentPassword = document.getElementById('current-password').value;
+  const newPassword = document.getElementById('new-password').value;
+  const confirmPassword = document.getElementById('confirm-password').value;
+
+  if (newPassword !== confirmPassword) {
+    showStatus('password-status', 'New passwords do not match', false);
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    showStatus('password-status', 'Password must be at least 6 characters', false);
+    return;
+  }
+
+  try {
+    const res = await authFetch('/api/admin/settings/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showStatus('password-status', 'Password updated successfully!', true);
+      document.getElementById('current-password').value = '';
+      document.getElementById('new-password').value = '';
+      document.getElementById('confirm-password').value = '';
+    } else {
+      showStatus('password-status', data.error, false);
+    }
+  } catch (err) {
+    showStatus('password-status', 'Connection error', false);
+  }
+});
+
+// Security questions form
+securityQuestionsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question1 = document.getElementById('security-q1').value;
+  const answer1 = document.getElementById('security-a1').value;
+  const question2 = document.getElementById('security-q2').value;
+  const answer2 = document.getElementById('security-a2').value;
+
+  if (!question1 || !answer1 || !question2 || !answer2) {
+    showStatus('security-status', 'All fields are required', false);
+    return;
+  }
+
+  if (question1 === question2) {
+    showStatus('security-status', 'Please choose different questions', false);
+    return;
+  }
+
+  try {
+    const res = await authFetch('/api/admin/settings/security-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question1, answer1, question2, answer2 })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showStatus('security-status', 'Security questions saved!', true);
+      document.getElementById('security-a1').value = '';
+      document.getElementById('security-a2').value = '';
+    } else {
+      showStatus('security-status', data.error, false);
+    }
+  } catch (err) {
+    showStatus('security-status', 'Connection error', false);
+  }
+});
+
+// Email form
+emailForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('admin-email').value;
+
+  try {
+    const res = await authFetch('/api/admin/settings/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showStatus('email-status', 'Email updated!', true);
+    } else {
+      showStatus('email-status', data.error, false);
+    }
+  } catch (err) {
+    showStatus('email-status', 'Connection error', false);
+  }
+});
+
+// ============================================
+// PASSWORD RECOVERY
+// ============================================
+
+// Forgot password link
+forgotPasswordLink.addEventListener('click', async (e) => {
+  e.preventDefault();
+
+  try {
+    const res = await fetch('/api/admin/recovery/questions', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      document.getElementById('recovery-q1').textContent = data.questions.question1;
+      document.getElementById('recovery-q2').textContent = data.questions.question2;
+      recoveryModal.classList.remove('hidden');
+    } else {
+      showError(loginError, data.error);
+    }
+  } catch (err) {
+    showError(loginError, 'Connection error');
+  }
+});
+
+// Close recovery modal
+closeRecoveryBtn.addEventListener('click', () => {
+  recoveryModal.classList.add('hidden');
+  recoveryForm.reset();
+  hideStatus('recovery-status');
+});
+
+// Recovery modal click outside
+recoveryModal.addEventListener('click', (e) => {
+  if (e.target === recoveryModal) {
+    recoveryModal.classList.add('hidden');
+    recoveryForm.reset();
+    hideStatus('recovery-status');
+  }
+});
+
+// Recovery form submit
+recoveryForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const answer1 = document.getElementById('recovery-a1').value;
+  const answer2 = document.getElementById('recovery-a2').value;
+  const newPassword = document.getElementById('recovery-new-password').value;
+
+  if (newPassword.length < 6) {
+    showStatus('recovery-status', 'Password must be at least 6 characters', false);
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/recovery/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer1, answer2, newPassword })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showStatus('recovery-status', 'Password reset! You can now login.', true);
+      setTimeout(() => {
+        recoveryModal.classList.add('hidden');
+        recoveryForm.reset();
+        hideStatus('recovery-status');
+      }, 2000);
+    } else {
+      showStatus('recovery-status', data.error, false);
+    }
+  } catch (err) {
+    showStatus('recovery-status', 'Connection error', false);
+  }
+});
+
+// ============================================
+// PARTICIPANT MANAGEMENT
+// ============================================
+
+// Add participant chip with kick button
+function addParticipantChipWithKick(id, name) {
+  const chip = document.createElement('span');
+  chip.className = 'participant-chip';
+  chip.dataset.id = id;
+  chip.innerHTML = `
+    ${escapeHtml(name)}
+    <button class="kick-btn" title="Remove participant">&times;</button>
+  `;
+
+  chip.querySelector('.kick-btn').addEventListener('click', async () => {
+    if (!confirm(`Remove ${name} from the session?`)) return;
+    await kickParticipant(id, name);
+  });
+
+  participantList.appendChild(chip);
+}
+
+// Kick participant
+async function kickParticipant(participantId, participantName) {
+  if (!sessionCode) return;
+
+  try {
+    const res = await authFetch(`/api/admin/session/${sessionCode}/kick/${participantId}`, {
+      method: 'POST'
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      // Remove chip from UI
+      const chip = participantList.querySelector(`[data-id="${participantId}"]`);
+      if (chip) chip.remove();
+
+      // Update count
+      const currentCount = parseInt(participantCount.textContent) - 1;
+      participantCount.textContent = currentCount;
+      totalParticipants.textContent = currentCount;
+    } else {
+      alert(data.error || 'Failed to remove participant');
+    }
+  } catch (err) {
+    console.error('Kick error:', err);
+    alert('Failed to remove participant');
+  }
+}
+
+// Handle participant_kicked socket event
+if (socket) {
+  socket.on('participant_kicked', (data) => {
+    const chip = participantList.querySelector(`[data-id="${data.participantId}"]`);
+    if (chip) chip.remove();
+    participantCount.textContent = data.count;
+    totalParticipants.textContent = data.count;
+  });
 }

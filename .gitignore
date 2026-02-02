@@ -31,3 +31,10 @@ build/
 
 # Database
 data/
+
+# Internal documentation (not for public repo)
+CLAUDE.md
+DEPLOYMENT-CHECKLIST.md
+MIGRATION.md
+SAFE-PUSH-GUIDE.md
+MULTI_ADMIN_PLAN.md

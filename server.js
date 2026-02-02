@@ -3,6 +3,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const QRCode = require('qrcode');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const db = require('./db');
 
 const app = express();
@@ -17,6 +19,44 @@ app.use(express.static(path.join(__dirname, 'public')));
 // CONFIGURATION
 // ============================================
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+const JWT_SECRET = process.env.JWT_SECRET || 'markdown-mash-secret-key-change-in-production';
+const JWT_EXPIRY = '24h';
+const SALT_ROUNDS = 10;
+
+// ============================================
+// JWT AUTHENTICATION MIDDLEWARE
+// ============================================
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Authentication required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, admin) => {
+    if (err) {
+      return res.status(403).json({ success: false, error: 'Invalid or expired token' });
+    }
+    req.admin = admin;
+    next();
+  });
+}
+
+// Optional auth - doesn't fail, just attaches admin if valid token
+function optionalAuth(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    jwt.verify(token, JWT_SECRET, (err, admin) => {
+      if (!err) {
+        req.admin = admin;
+      }
+    });
+  }
+  next();
+}
 
 // ============================================
 // SESSION-KEYED STATE (replaces global store)
@@ -159,12 +199,103 @@ async function generateQRCode(url) {
 // ============================================
 
 // Admin login
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', async (req, res) => {
   const { password } = req.body;
-  if (password === adminPassword) {
-    res.json({ success: true });
-  } else {
-    res.status(401).json({ success: false, error: 'Invalid password' });
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  try {
+    // Check if master admin exists in database
+    let admin = await db.getMasterAdmin();
+
+    if (!admin) {
+      // First login - create master admin from env password
+      if (password === adminPassword) {
+        const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+        admin = await db.createAdmin({
+          username: 'admin',
+          passwordHash,
+          displayName: 'Master Admin',
+          role: 'master',
+          createdBy: null
+        });
+
+        await db.logActivity(admin.id, 'account_created', { method: 'first_login' }, ipAddress);
+
+        const token = jwt.sign(
+          { id: admin.id, username: admin.username, role: admin.role },
+          JWT_SECRET,
+          { expiresIn: JWT_EXPIRY }
+        );
+
+        return res.json({
+          success: true,
+          token,
+          admin: { id: admin.id, username: admin.username, role: admin.role, displayName: admin.display_name },
+          isFirstLogin: true
+        });
+      } else {
+        return res.status(401).json({ success: false, error: 'Invalid password' });
+      }
+    }
+
+    // Admin exists - check if locked
+    if (await db.isAdminLocked(admin.id)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Account temporarily locked. Please try again in 5 minutes.'
+      });
+    }
+
+    // Verify password
+    const passwordValid = await bcrypt.compare(password, admin.password_hash);
+
+    if (!passwordValid) {
+      const lockInfo = await db.recordFailedLogin(admin.id);
+      await db.logActivity(admin.id, 'failed_login', { attempts: lockInfo.failed_login_attempts }, ipAddress);
+
+      const attemptsLeft = 5 - lockInfo.failed_login_attempts;
+      if (attemptsLeft > 0) {
+        return res.status(401).json({
+          success: false,
+          error: `Invalid password. ${attemptsLeft} attempts remaining.`
+        });
+      } else {
+        return res.status(429).json({
+          success: false,
+          error: 'Account locked for 5 minutes due to too many failed attempts.'
+        });
+      }
+    }
+
+    // Successful login
+    await db.resetLoginAttempts(admin.id);
+    await db.logActivity(admin.id, 'login', {}, ipAddress);
+
+    const token = jwt.sign(
+      { id: admin.id, username: admin.username, role: admin.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRY }
+    );
+
+    // Check if security questions are set
+    const hasSecurityQuestions = admin.security_question_1 && admin.security_answer_1;
+
+    res.json({
+      success: true,
+      token,
+      admin: {
+        id: admin.id,
+        username: admin.username,
+        role: admin.role,
+        displayName: admin.display_name,
+        email: admin.email,
+        hasSecurityQuestions
+      }
+    });
+
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
   }
 });
 
@@ -427,6 +558,266 @@ app.post('/api/join', (req, res) => {
     success: false,
     error: 'Please use a session code to join. Go to /play.html and enter a session code.'
   });
+});
+
+// ============================================
+// ADMIN SETTINGS ENDPOINTS
+// ============================================
+
+// Get admin profile/settings
+app.get('/api/admin/settings', authenticateToken, async (req, res) => {
+  try {
+    const admin = await db.getAdminById(req.admin.id);
+    if (!admin) {
+      return res.status(404).json({ success: false, error: 'Admin not found' });
+    }
+
+    res.json({
+      success: true,
+      admin: {
+        id: admin.id,
+        username: admin.username,
+        displayName: admin.display_name,
+        email: admin.email,
+        role: admin.role,
+        hasSecurityQuestions: !!(admin.security_question_1 && admin.security_answer_1),
+        securityQuestion1: admin.security_question_1 || null,
+        securityQuestion2: admin.security_question_2 || null,
+        createdAt: admin.created_at
+      }
+    });
+  } catch (err) {
+    console.error('Get settings error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Change password
+app.post('/api/admin/settings/password', authenticateToken, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, error: 'Current and new passwords are required' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+  }
+
+  try {
+    const admin = await db.getAdminById(req.admin.id);
+    if (!admin) {
+      return res.status(404).json({ success: false, error: 'Admin not found' });
+    }
+
+    // Verify current password
+    const passwordValid = await bcrypt.compare(currentPassword, admin.password_hash);
+    if (!passwordValid) {
+      await db.logActivity(admin.id, 'password_change_failed', { reason: 'wrong_current_password' }, ipAddress);
+      return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+    }
+
+    // Hash and save new password
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await db.updateAdminPassword(admin.id, newHash);
+    await db.logActivity(admin.id, 'password_changed', {}, ipAddress);
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Password change error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Update security questions
+app.post('/api/admin/settings/security-questions', authenticateToken, async (req, res) => {
+  const { question1, answer1, question2, answer2 } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  if (!question1 || !answer1 || !question2 || !answer2) {
+    return res.status(400).json({ success: false, error: 'Both questions and answers are required' });
+  }
+
+  try {
+    // Hash the answers for security
+    const hashedAnswer1 = await bcrypt.hash(answer1.toLowerCase().trim(), SALT_ROUNDS);
+    const hashedAnswer2 = await bcrypt.hash(answer2.toLowerCase().trim(), SALT_ROUNDS);
+
+    await db.updateAdminSecurityQuestions(
+      req.admin.id,
+      question1,
+      hashedAnswer1,
+      question2,
+      hashedAnswer2
+    );
+
+    await db.logActivity(req.admin.id, 'security_questions_updated', {}, ipAddress);
+
+    res.json({ success: true, message: 'Security questions updated successfully' });
+  } catch (err) {
+    console.error('Security questions update error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Update email
+app.post('/api/admin/settings/email', authenticateToken, async (req, res) => {
+  const { email } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  try {
+    await db.updateAdminEmail(req.admin.id, email || null);
+    await db.logActivity(req.admin.id, 'email_updated', { email }, ipAddress);
+
+    res.json({ success: true, message: 'Email updated successfully' });
+  } catch (err) {
+    console.error('Email update error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Password recovery - Step 1: Get security questions
+app.post('/api/admin/recovery/questions', async (req, res) => {
+  try {
+    const admin = await db.getMasterAdmin();
+    if (!admin || !admin.security_question_1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password recovery not available. Security questions not set.'
+      });
+    }
+
+    res.json({
+      success: true,
+      questions: {
+        question1: admin.security_question_1,
+        question2: admin.security_question_2
+      }
+    });
+  } catch (err) {
+    console.error('Recovery questions error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Password recovery - Step 2: Verify answers and reset
+app.post('/api/admin/recovery/verify', async (req, res) => {
+  const { answer1, answer2, newPassword } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  if (!answer1 || !answer2 || !newPassword) {
+    return res.status(400).json({ success: false, error: 'All fields are required' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+  }
+
+  try {
+    const admin = await db.getMasterAdmin();
+    if (!admin || !admin.security_answer_1) {
+      return res.status(400).json({ success: false, error: 'Recovery not available' });
+    }
+
+    // Verify both answers
+    const answer1Valid = await bcrypt.compare(answer1.toLowerCase().trim(), admin.security_answer_1);
+    const answer2Valid = await bcrypt.compare(answer2.toLowerCase().trim(), admin.security_answer_2);
+
+    if (!answer1Valid || !answer2Valid) {
+      await db.logActivity(admin.id, 'recovery_failed', { reason: 'wrong_answers' }, ipAddress);
+      return res.status(401).json({ success: false, error: 'Security answers are incorrect' });
+    }
+
+    // Reset password
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await db.updateAdminPassword(admin.id, newHash);
+    await db.resetLoginAttempts(admin.id);
+    await db.logActivity(admin.id, 'password_recovered', {}, ipAddress);
+
+    res.json({ success: true, message: 'Password reset successfully. You can now login.' });
+  } catch (err) {
+    console.error('Recovery verify error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// ============================================
+// PARTICIPANT MANAGEMENT ENDPOINTS
+// ============================================
+
+// Kick participant from session
+app.post('/api/admin/session/:code/kick/:participantId', authenticateToken, async (req, res) => {
+  const { code, participantId } = req.params;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  const session = activeSessions.get(code);
+  if (!session) {
+    return res.status(404).json({ success: false, error: 'Session not found' });
+  }
+
+  const participant = session.participants[participantId];
+  if (!participant) {
+    return res.status(404).json({ success: false, error: 'Participant not found' });
+  }
+
+  try {
+    // Mark as kicked in database
+    await db.kickParticipant(participantId);
+
+    // Disconnect socket if connected
+    if (participant.socketId) {
+      const participantSocket = io.sockets.sockets.get(participant.socketId);
+      if (participantSocket) {
+        participantSocket.emit('kicked', { message: 'You have been removed from this session.' });
+        participantSocket.leave(`session:${code}`);
+        participantSocket.disconnect(true);
+      }
+    }
+
+    // Remove from in-memory session
+    delete session.participants[participantId];
+
+    // Log activity
+    await db.logActivity(req.admin.id, 'participant_kicked', {
+      sessionCode: code,
+      participantId,
+      participantName: participant.name
+    }, ipAddress);
+
+    // Notify admin room
+    io.to(`admin:${code}`).emit('participant_kicked', {
+      participantId,
+      name: participant.name,
+      count: Object.keys(session.participants).length
+    });
+
+    res.json({ success: true, message: `${participant.name} has been removed from the session` });
+  } catch (err) {
+    console.error('Kick participant error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Get activity log
+app.get('/api/admin/activity-log', authenticateToken, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const logs = await db.getActivityLog(req.admin.id, limit);
+
+    res.json({
+      success: true,
+      logs: logs.map(log => ({
+        id: log.id,
+        action: log.action,
+        details: log.details,
+        createdAt: log.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('Activity log error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
 });
 
 // ============================================
@@ -702,6 +1093,14 @@ io.on('connection', (socket) => {
     const session = activeSessions.get(sessionCode);
     if (!session) {
       socket.emit('session_invalid', { message: 'Session no longer exists' });
+      socket.emit('clear_participant_id');
+      return;
+    }
+
+    // Check if participant was kicked
+    const wasKicked = await db.isParticipantKicked(participantId);
+    if (wasKicked) {
+      socket.emit('kicked', { message: 'You have been removed from this session.' });
       socket.emit('clear_participant_id');
       return;
     }

@@ -22,7 +22,28 @@ pool.query('SELECT NOW()')
 async function initializeDatabase() {
   const client = await pool.connect();
   try {
+    // Create new tables
     await client.query(`
+      -- Admins: Admin user accounts (multi-admin ready)
+      CREATE TABLE IF NOT EXISTS admins (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        email TEXT,
+        display_name TEXT,
+        role TEXT DEFAULT 'admin',
+        security_question_1 TEXT,
+        security_answer_1 TEXT,
+        security_question_2 TEXT,
+        security_answer_2 TEXT,
+        created_by INTEGER REFERENCES admins(id),
+        is_active BOOLEAN DEFAULT true,
+        failed_login_attempts INTEGER DEFAULT 0,
+        locked_until TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
       -- Sessions: Core session management
       CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
@@ -61,16 +82,72 @@ async function initializeDatabase() {
         answered_at TIMESTAMP DEFAULT NOW()
       );
 
+      -- Admin activity log for audit trail
+      CREATE TABLE IF NOT EXISTS admin_activity_log (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER REFERENCES admins(id),
+        action TEXT NOT NULL,
+        details JSONB,
+        ip_address TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
       -- Indexes
       CREATE INDEX IF NOT EXISTS idx_sessions_code ON sessions(code);
       CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(session_id);
       CREATE INDEX IF NOT EXISTS idx_answers_session ON answers(session_id);
+      CREATE INDEX IF NOT EXISTS idx_admin_activity_admin ON admin_activity_log(admin_id);
     `);
+
+    // Add new columns to existing tables (migrations)
+    await runMigrations(client);
+
     console.log('Database tables initialized');
   } catch (err) {
     console.error('Error initializing database:', err.message);
   } finally {
     client.release();
+  }
+}
+
+// Run migrations to add new columns to existing tables
+async function runMigrations(client) {
+  const migrations = [
+    // Add owner_id to sessions
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'owner_id'",
+      migrate: "ALTER TABLE sessions ADD COLUMN owner_id INTEGER REFERENCES admins(id)"
+    },
+    // Add is_kicked to participants
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'participants' AND column_name = 'is_kicked'",
+      migrate: "ALTER TABLE participants ADD COLUMN is_kicked BOOLEAN DEFAULT false"
+    },
+    // Add kicked_at to participants
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'participants' AND column_name = 'kicked_at'",
+      migrate: "ALTER TABLE participants ADD COLUMN kicked_at TIMESTAMP"
+    }
+  ];
+
+  for (const migration of migrations) {
+    try {
+      const result = await client.query(migration.check);
+      if (result.rows.length === 0) {
+        await client.query(migration.migrate);
+        console.log('Migration applied:', migration.migrate.substring(0, 50) + '...');
+      }
+    } catch (err) {
+      // Ignore errors for migrations (column might already exist)
+      console.log('Migration skipped or already applied');
+    }
+  }
+
+  // Create index for owner_id if it doesn't exist
+  try {
+    await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_id)');
+  } catch (err) {
+    // Ignore
   }
 }
 
@@ -328,6 +405,140 @@ const dbApi = {
   // Utility
   generateParticipantId,
   generateSessionCode,
+
+  // ============================================
+  // ADMIN OPERATIONS
+  // ============================================
+
+  async getAdminByUsername(username) {
+    const result = await pool.query('SELECT * FROM admins WHERE username = $1', [username]);
+    return result.rows[0] || null;
+  },
+
+  async getAdminById(id) {
+    const result = await pool.query('SELECT * FROM admins WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async getMasterAdmin() {
+    const result = await pool.query("SELECT * FROM admins WHERE role = 'master' LIMIT 1");
+    return result.rows[0] || null;
+  },
+
+  async createAdmin({ username, passwordHash, email, displayName, role, createdBy }) {
+    const result = await pool.query(
+      `INSERT INTO admins (username, password_hash, email, display_name, role, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, username, email, display_name, role, created_at`,
+      [username, passwordHash, email, displayName, role || 'admin', createdBy]
+    );
+    return result.rows[0];
+  },
+
+  async updateAdminPassword(adminId, passwordHash) {
+    return pool.query(
+      'UPDATE admins SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+      [passwordHash, adminId]
+    );
+  },
+
+  async updateAdminSecurityQuestions(adminId, q1, a1, q2, a2) {
+    return pool.query(
+      `UPDATE admins SET
+        security_question_1 = $1, security_answer_1 = $2,
+        security_question_2 = $3, security_answer_2 = $4,
+        updated_at = NOW()
+       WHERE id = $5`,
+      [q1, a1, q2, a2, adminId]
+    );
+  },
+
+  async updateAdminEmail(adminId, email) {
+    return pool.query(
+      'UPDATE admins SET email = $1, updated_at = NOW() WHERE id = $2',
+      [email, adminId]
+    );
+  },
+
+  async recordFailedLogin(adminId) {
+    const result = await pool.query(
+      `UPDATE admins SET
+        failed_login_attempts = failed_login_attempts + 1,
+        locked_until = CASE
+          WHEN failed_login_attempts >= 4 THEN NOW() + INTERVAL '5 minutes'
+          ELSE locked_until
+        END
+       WHERE id = $1
+       RETURNING failed_login_attempts, locked_until`,
+      [adminId]
+    );
+    return result.rows[0];
+  },
+
+  async resetLoginAttempts(adminId) {
+    return pool.query(
+      'UPDATE admins SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1',
+      [adminId]
+    );
+  },
+
+  async isAdminLocked(adminId) {
+    const result = await pool.query(
+      'SELECT locked_until FROM admins WHERE id = $1',
+      [adminId]
+    );
+    if (!result.rows[0] || !result.rows[0].locked_until) return false;
+    return new Date(result.rows[0].locked_until) > new Date();
+  },
+
+  // ============================================
+  // PARTICIPANT KICK OPERATIONS
+  // ============================================
+
+  async kickParticipant(participantId) {
+    return pool.query(
+      'UPDATE participants SET is_kicked = true, kicked_at = NOW() WHERE id = $1',
+      [participantId]
+    );
+  },
+
+  async isParticipantKicked(participantId) {
+    const result = await pool.query(
+      'SELECT is_kicked FROM participants WHERE id = $1',
+      [participantId]
+    );
+    return result.rows[0]?.is_kicked || false;
+  },
+
+  async getKickedParticipants(sessionId) {
+    const result = await pool.query(
+      'SELECT * FROM participants WHERE session_id = $1 AND is_kicked = true',
+      [sessionId]
+    );
+    return result.rows;
+  },
+
+  // ============================================
+  // ACTIVITY LOG
+  // ============================================
+
+  async logActivity(adminId, action, details = {}, ipAddress = null) {
+    return pool.query(
+      'INSERT INTO admin_activity_log (admin_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
+      [adminId, action, JSON.stringify(details), ipAddress]
+    );
+  },
+
+  async getActivityLog(adminId, limit = 50) {
+    const result = await pool.query(
+      `SELECT * FROM admin_activity_log
+       WHERE admin_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [adminId, limit]
+    );
+    return result.rows;
+  },
 
   // Close pool (for cleanup)
   async close() {

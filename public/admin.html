@@ -12,7 +12,10 @@
     <header class="header">
       <h1>Admin Dashboard</h1>
       <p>Manage and control your quiz</p>
-      <button id="analytics-btn" class="btn btn-secondary hidden">View Analytics</button>
+      <div class="header-actions">
+        <button id="analytics-btn" class="btn btn-secondary hidden">View Analytics</button>
+        <button id="settings-btn" class="btn hidden" title="Settings">Settings</button>
+      </div>
     </header>
 
     <!-- Login Section -->
@@ -24,6 +27,7 @@
         <button type="submit" class="btn btn-primary btn-block">Login</button>
       </form>
       <p id="login-error" class="text-center mt-4 hidden" style="color: var(--danger);"></p>
+      <p class="text-center mt-4"><a href="#" id="forgot-password-link" style="color: var(--primary);">Forgot Password?</a></p>
     </div>
 
     <!-- Dashboard Section (hidden until login) -->
@@ -235,6 +239,124 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Admin Settings</h2>
+        <button id="close-settings-btn" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Settings Tabs -->
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="password">Password</button>
+          <button class="settings-tab" data-tab="security">Security Questions</button>
+          <button class="settings-tab" data-tab="email">Email</button>
+        </div>
+
+        <!-- Password Tab -->
+        <div id="settings-password" class="settings-tab-content">
+          <form id="change-password-form">
+            <div class="form-group">
+              <label for="current-password">Current Password</label>
+              <input type="password" id="current-password" required>
+            </div>
+            <div class="form-group">
+              <label for="new-password">New Password</label>
+              <input type="password" id="new-password" minlength="6" required>
+            </div>
+            <div class="form-group">
+              <label for="confirm-password">Confirm New Password</label>
+              <input type="password" id="confirm-password" minlength="6" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Update Password</button>
+          </form>
+          <p id="password-status" class="status-message hidden"></p>
+        </div>
+
+        <!-- Security Questions Tab -->
+        <div id="settings-security" class="settings-tab-content hidden">
+          <p class="text-muted mb-4">Set security questions for password recovery.</p>
+          <form id="security-questions-form">
+            <div class="form-group">
+              <label for="security-q1">Security Question 1</label>
+              <select id="security-q1" required>
+                <option value="">Select a question...</option>
+                <option value="What was the name of your first pet?">What was the name of your first pet?</option>
+                <option value="What city were you born in?">What city were you born in?</option>
+                <option value="What was your childhood nickname?">What was your childhood nickname?</option>
+                <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+                <option value="What was the name of your first school?">What was the name of your first school?</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="security-a1">Answer 1</label>
+              <input type="text" id="security-a1" required>
+            </div>
+            <div class="form-group">
+              <label for="security-q2">Security Question 2</label>
+              <select id="security-q2" required>
+                <option value="">Select a question...</option>
+                <option value="What is your favorite book?">What is your favorite book?</option>
+                <option value="What was the make of your first car?">What was the make of your first car?</option>
+                <option value="What street did you grow up on?">What street did you grow up on?</option>
+                <option value="What is your favorite movie?">What is your favorite movie?</option>
+                <option value="What was your first job?">What was your first job?</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="security-a2">Answer 2</label>
+              <input type="text" id="security-a2" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Save Security Questions</button>
+          </form>
+          <p id="security-status" class="status-message hidden"></p>
+        </div>
+
+        <!-- Email Tab -->
+        <div id="settings-email" class="settings-tab-content hidden">
+          <p class="text-muted mb-4">Optional: Add an email for account recovery.</p>
+          <form id="email-form">
+            <div class="form-group">
+              <label for="admin-email">Email Address</label>
+              <input type="email" id="admin-email" placeholder="your@email.com">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Update Email</button>
+          </form>
+          <p id="email-status" class="status-message hidden"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Recovery Modal -->
+  <div id="recovery-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Password Recovery</h2>
+        <button id="close-recovery-btn" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="recovery-form">
+          <p id="recovery-q1" class="recovery-question"></p>
+          <div class="form-group">
+            <input type="text" id="recovery-a1" placeholder="Your answer" required>
+          </div>
+          <p id="recovery-q2" class="recovery-question"></p>
+          <div class="form-group">
+            <input type="text" id="recovery-a2" placeholder="Your answer" required>
+          </div>
+          <div class="form-group">
+            <label for="recovery-new-password">New Password</label>
+            <input type="password" id="recovery-new-password" minlength="6" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
+        </form>
+        <p id="recovery-status" class="status-message hidden"></p>
+      </div>
     </div>
   </div>
 

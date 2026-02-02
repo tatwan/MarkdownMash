@@ -137,6 +137,24 @@ function initSocket() {
     sessionCode = null;
   });
 
+  socket.on('kicked', (data) => {
+    // Clear stored credentials
+    localStorage.removeItem('markdownMashId');
+    localStorage.removeItem('markdownMashSession');
+    participantId = null;
+    sessionCode = null;
+
+    // Show kicked message
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message || 'You have been removed from this session.';
+    sessionEndedSection.classList.remove('hidden');
+
+    // Disconnect socket
+    if (socket) {
+      socket.disconnect();
+    }
+  });
+
   socket.on('session_ended', (data) => {
     clearInterval(timerInterval);
 
