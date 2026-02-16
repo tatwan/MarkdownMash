@@ -18,9 +18,22 @@ pool.query('SELECT NOW()')
   .then(() => console.log('Connected to PostgreSQL database'))
   .catch(err => console.error('Database connection error:', err.message));
 
-// Initialize tables
-async function initializeDatabase() {
-  const client = await pool.connect();
+// Initialize tables (with retry for cold-start connection issues)
+async function initializeDatabase(retries = 5, delay = 3000) {
+  let client;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      client = await pool.connect();
+      break;
+    } catch (err) {
+      console.error(`Database connection attempt ${attempt}/${retries} failed: ${err.message}`);
+      if (attempt === retries) {
+        console.error('All database connection attempts failed. Exiting.');
+        process.exit(1);
+      }
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
   try {
     // Create new tables
     await client.query(`
