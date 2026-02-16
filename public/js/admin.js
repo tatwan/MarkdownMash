@@ -991,6 +991,10 @@ recoveryForm.addEventListener('submit', async (e) => {
 
 // Add participant chip with kick button
 function addParticipantChipWithKick(id, name) {
+  // Prevent duplicate chips
+  const existing = participantList.querySelector(`[data-id="${id}"]`);
+  if (existing) return;
+
   const chip = document.createElement('span');
   chip.className = 'participant-chip';
   chip.dataset.id = id;

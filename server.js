@@ -509,7 +509,7 @@ app.get('/api/admin/session/:code/results', async (req, res) => {
 // Join a specific session (replaces /api/join)
 app.post('/api/session/:code/join', async (req, res) => {
   const { code } = req.params;
-  const { name } = req.body;
+  const { name, existingParticipantId } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ success: false, error: 'Name is required' });
@@ -522,6 +522,20 @@ app.post('/api/session/:code/join', async (req, res) => {
 
   if (session.quizState.isRunning && session.quizState.currentQuestionIndex >= session.quiz.questions.length - 1) {
     return res.status(400).json({ success: false, error: 'Cannot join - quiz is ending' });
+  }
+
+  // Check if this is a rejoin with an existing participant ID
+  if (existingParticipantId && session.participants[existingParticipantId]) {
+    const existing = session.participants[existingParticipantId];
+    // Update name in case it changed
+    existing.name = name.trim();
+
+    return res.json({
+      success: true,
+      participantId: existingParticipantId,
+      sessionCode: code,
+      quizTitle: session.quiz.title
+    });
   }
 
   // Create participant in database

@@ -67,8 +67,14 @@ function init() {
 }
 
 // Join quiz
+let isJoining = false;
+
 joinForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+
+  // Prevent double-submission
+  if (isJoining) return;
+
   const name = playerNameInput.value.trim();
   const code = sessionCodeInput.value.trim().toUpperCase();
 
@@ -78,11 +84,20 @@ joinForm.addEventListener('submit', async (e) => {
     return;
   }
 
+  isJoining = true;
+  const submitBtn = joinForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Joining...';
+
   try {
+    // Check if we already have a stored participant for this session
+    const storedId = localStorage.getItem('markdownMashId');
+    const storedSession = localStorage.getItem('markdownMashSession');
+
     const res = await fetch(`/api/session/${code}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, existingParticipantId: storedSession === code ? storedId : null })
     });
 
     const data = await res.json();
@@ -102,9 +117,15 @@ joinForm.addEventListener('submit', async (e) => {
       initSocket();
     } else {
       showError(data.error);
+      isJoining = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Join';
     }
   } catch (err) {
     showError('Connection error. Please try again.');
+    isJoining = false;
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Join';
   }
 });
 
