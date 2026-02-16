@@ -693,14 +693,14 @@ function renderScoreDistribution(participants, totalQuestions) {
         backgroundColor: [
           'rgba(239, 68, 68, 0.7)',
           'rgba(239, 68, 68, 0.7)',
-          'rgba(239, 68, 68, 0.7)',
+          'rgba(245, 158, 11, 0.7)',
           'rgba(34, 197, 94, 0.7)',
           'rgba(34, 197, 94, 0.7)'
         ],
         borderColor: [
           'rgba(239, 68, 68, 1)',
           'rgba(239, 68, 68, 1)',
-          'rgba(239, 68, 68, 1)',
+          'rgba(245, 158, 11, 1)',
           'rgba(34, 197, 94, 1)',
           'rgba(34, 197, 94, 1)'
         ],
@@ -941,13 +941,17 @@ async function loadSessionDetail(code) {
       const scorePercent = data.session.totalQuestions > 0
         ? (p.correctCount / data.session.totalQuestions) * 100
         : 0;
-      const passed = scorePercent >= 65;
+      const passed = scorePercent >= 60;
       (passed ? passedList : failedList).push({ ...p, overallRank: i + 1, scorePercent });
     });
+
+    const totalScore = data.session.totalScore || 100;
+    const pointsPerQuestion = data.session.totalQuestions > 0 ? totalScore / data.session.totalQuestions : 0;
 
     function buildParticipantRow(p, rank, totalQuestions) {
       const tr = document.createElement('tr');
       const avgTime = p.avgResponseTimeMs ? `${(p.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
+      const computedScore = Math.round((p.correctCount || 0) * pointsPerQuestion);
 
       // Rank display with trophy icons for top 5
       let rankHtml;
@@ -974,7 +978,7 @@ async function loadSessionDetail(code) {
         <td>${rankHtml}</td>
         <td>${escapeHtml(p.name)}</td>
         <td>${p.correctCount} / ${totalQuestions}</td>
-        <td>${p.score}</td>
+        <td>${computedScore} / ${totalScore}</td>
         <td>${avgTime}</td>
         <td>${streakHtml}</td>
       `;
