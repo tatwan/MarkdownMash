@@ -247,9 +247,9 @@
           <div id="tricky-questions-container" class="mt-4"></div>
         </div>
 
-        <!-- Participant Performance -->
-        <div class="detail-card mt-4">
-          <h3>Participant Performance</h3>
+        <!-- Passed Participants -->
+        <div class="detail-card mt-4" id="passed-section">
+          <h3>Passed Participants <span class="pass-count-badge" id="passed-count-badge"></span></h3>
           <table class="results-table">
             <thead>
               <tr>
@@ -259,11 +259,30 @@
                 <th>Score</th>
                 <th>Avg Response</th>
                 <th>Best Streak</th>
-                <th>Status</th>
               </tr>
             </thead>
-            <tbody id="participant-performance-body"></tbody>
+            <tbody id="passed-participants-body"></tbody>
           </table>
+          <p id="no-passed-msg" class="text-muted text-center mt-4 hidden">No participants passed.</p>
+        </div>
+
+        <!-- Failed Participants -->
+        <div class="detail-card mt-4" id="failed-section">
+          <h3>Did Not Pass <span class="pass-count-badge" id="failed-count-badge"></span></h3>
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Name</th>
+                <th>Correct</th>
+                <th>Score</th>
+                <th>Avg Response</th>
+                <th>Best Streak</th>
+              </tr>
+            </thead>
+            <tbody id="failed-participants-body"></tbody>
+          </table>
+          <p id="no-failed-msg" class="text-muted text-center mt-4 hidden">Everyone passed!</p>
         </div>
       </div>
 

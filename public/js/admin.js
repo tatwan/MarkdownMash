@@ -86,7 +86,8 @@ const detailParticipants = document.getElementById('detail-participants');
 const detailAvgScore = document.getElementById('detail-avg-score');
 const detailQuestions = document.getElementById('detail-questions');
 const questionBreakdownBody = document.getElementById('question-breakdown-body');
-const participantPerformanceBody = document.getElementById('participant-performance-body');
+const passedParticipantsBody = document.getElementById('passed-participants-body');
+const failedParticipantsBody = document.getElementById('failed-participants-body');
 
 // State
 let socket = null;
@@ -929,16 +930,24 @@ async function loadSessionDetail(code) {
     // Feature 3: Tricky Questions
     renderTrickyQuestions(data.questions);
 
-    // Populate participant performance table (with streak column)
-    participantPerformanceBody.innerHTML = '';
+    // Split participants into passed / failed
+    passedParticipantsBody.innerHTML = '';
+    failedParticipantsBody.innerHTML = '';
+
+    const passedList = [];
+    const failedList = [];
+
     data.participants.forEach((p, i) => {
-      const tr = document.createElement('tr');
-      const avgTime = p.avgResponseTimeMs ? `${(p.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
-      const rank = i + 1;
       const scorePercent = data.session.totalQuestions > 0
         ? (p.correctCount / data.session.totalQuestions) * 100
         : 0;
       const passed = scorePercent >= 65;
+      (passed ? passedList : failedList).push({ ...p, overallRank: i + 1, scorePercent });
+    });
+
+    function buildParticipantRow(p, rank, totalQuestions) {
+      const tr = document.createElement('tr');
+      const avgTime = p.avgResponseTimeMs ? `${(p.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
 
       // Rank display with trophy icons for top 5
       let rankHtml;
@@ -948,20 +957,15 @@ async function loadSessionDetail(code) {
         rankHtml = `<span class="rank-trophy rank-silver"><span class="trophy-icon">&#129352;</span>${rank}</span>`;
       } else if (rank === 3) {
         rankHtml = `<span class="rank-trophy rank-bronze"><span class="trophy-icon">&#129353;</span>${rank}</span>`;
-      } else if (rank <= 5 && passed) {
+      } else if (rank <= 5) {
         rankHtml = `<span class="rank-trophy rank-top5"><span class="trophy-icon">&#127941;</span>${rank}</span>`;
       } else {
         rankHtml = `${rank}`;
       }
 
-      // Pass/fail badge
-      const statusHtml = passed
-        ? `<span class="pass-badge pass-badge-passed">Passed</span>`
-        : `<span class="pass-badge pass-badge-failed">Failed</span>`;
-
-      // Feature 5: Streak badge
+      // Streak badge
       const streak = p.bestStreak || 0;
-      const streakClass = streak >= Math.ceil(data.session.totalQuestions / 2) ? 'high' : '';
+      const streakClass = streak >= Math.ceil(totalQuestions / 2) ? 'high' : '';
       const streakHtml = streak > 0
         ? `<span class="streak-badge ${streakClass}">${streak}</span>`
         : '0';
@@ -969,14 +973,36 @@ async function loadSessionDetail(code) {
       tr.innerHTML = `
         <td>${rankHtml}</td>
         <td>${escapeHtml(p.name)}</td>
-        <td>${p.correctCount} / ${data.session.totalQuestions}</td>
+        <td>${p.correctCount} / ${totalQuestions}</td>
         <td>${p.score}</td>
         <td>${avgTime}</td>
         <td>${streakHtml}</td>
-        <td>${statusHtml}</td>
       `;
-      participantPerformanceBody.appendChild(tr);
+      return tr;
+    }
+
+    // Passed table
+    passedList.forEach((p, i) => {
+      passedParticipantsBody.appendChild(
+        buildParticipantRow(p, i + 1, data.session.totalQuestions)
+      );
     });
+
+    // Failed table
+    failedList.forEach((p, i) => {
+      failedParticipantsBody.appendChild(
+        buildParticipantRow(p, i + 1, data.session.totalQuestions)
+      );
+    });
+
+    // Show/hide empty messages
+    document.getElementById('no-passed-msg').classList.toggle('hidden', passedList.length > 0);
+    document.getElementById('no-failed-msg').classList.toggle('hidden', failedList.length > 0);
+    document.getElementById('passed-count-badge').textContent = passedList.length;
+    document.getElementById('failed-count-badge').textContent = failedList.length;
+
+    // Hide the failed section entirely if nobody failed
+    document.getElementById('failed-section').classList.toggle('hidden', failedList.length === 0);
 
   } catch (err) {
     console.error('Failed to load session detail', err);
