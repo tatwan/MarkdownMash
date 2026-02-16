@@ -710,7 +710,8 @@ label {
 .presenter-body {
   background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
   min-height: 100vh;
-  overflow: hidden;
+  min-height: 100dvh;
+  overflow-y: auto;
 }
 
 .presenter-container {
@@ -983,12 +984,14 @@ label {
 .player-body {
   background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
   min-height: 100vh;
-  overflow: hidden;
+  min-height: 100dvh;
+  overflow-y: auto;
 }
 
 .player-container {
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1339,58 +1342,73 @@ label {
   }
 }
 
-/* Mobile optimization - hide redundant info when watching presenter screen */
+/* Mobile optimization for participant view */
 @media (max-width: 768px) {
-  /* Hide question section elements on mobile - participants see this on the shared screen */
-  #question-section .player-header,
-  #question-section .player-timer-ring,
-  #question-section .player-question {
-    display: none;
-  }
-
   /* Make player logo smaller on mobile */
   .player-logo {
     font-size: 1.5rem;
     margin-bottom: 20px;
   }
 
-  /* Optimize answer options for mobile - show as simple letter buttons */
-  .player-options {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    max-width: 400px;
+  /* Scale down header and timer for mobile */
+  .player-header {
+    margin-bottom: 16px;
     padding: 0 10px;
   }
 
-  /* Simplify option display - enlarge letter badges for easy tapping */
+  .player-qnum {
+    font-size: 1.1rem;
+  }
+
+  .player-score {
+    font-size: 1rem;
+    padding: 6px 14px;
+  }
+
+  .player-timer-ring {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 16px;
+  }
+
+  .timer-text {
+    font-size: 2.5rem;
+  }
+
+  .player-question {
+    font-size: 1.25rem;
+    margin-bottom: 20px;
+    padding: 0 10px;
+  }
+
+  /* Stack options in single column for easy tapping */
+  .player-options {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    max-width: 500px;
+    padding: 0 10px;
+  }
+
   .player-option {
-    padding: 0;
-    min-height: 100px;
-    justify-content: center;
-    background: transparent;
-    border: 3px solid var(--border);
+    padding: 14px 16px;
+    min-height: 50px;
   }
 
   .player-option .option-letter {
-    width: 70px;
-    height: 70px;
-    font-size: 2.5rem;
-    margin-right: 0;
+    width: 40px;
+    height: 40px;
+    font-size: 1.25rem;
+    margin-right: 12px;
   }
 
-  /* Hide the option text on mobile - participants read it on the shared screen */
   .player-option .option-text {
-    display: none;
+    font-size: 1rem;
   }
 
   /* Make selected state very obvious */
   .player-option.selected {
-    border-width: 4px;
+    border-width: 3px;
     background: rgba(99, 102, 241, 0.3);
-  }
-
-  .player-option.selected .option-letter {
-    transform: scale(1.1);
   }
 
   /* Answer status adjustment */
@@ -1399,10 +1417,48 @@ label {
     margin-top: 20px;
   }
 
-  /* Keep results chart but make it smaller on mobile */
+  /* Smaller chart on mobile */
   .player-chart-container {
-    height: 250px;
-    padding: 20px;
+    height: 220px;
+    padding: 16px;
+  }
+
+  /* Scale down results display */
+  .result-display h2 {
+    font-size: 1.75rem;
+  }
+
+  .result-icon {
+    font-size: 3.5rem;
+  }
+
+  .result-score-display {
+    font-size: 1.5rem;
+  }
+
+  .result-details {
+    padding: 16px;
+  }
+
+  /* Scale down final score display */
+  .final-display {
+    padding: 20px 15px;
+  }
+
+  .final-display h2 {
+    font-size: 2rem;
+  }
+
+  .final-score-big {
+    font-size: 2.5rem;
+  }
+
+  .final-score-big .final-score-max {
+    font-size: 1.25rem;
+  }
+
+  .final-pct {
+    font-size: 1.5rem;
   }
 }
 
