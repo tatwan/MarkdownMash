@@ -902,6 +902,28 @@ app.get('/api/admin/analytics/session/:code', async (req, res) => {
   const questionAnalytics = await db.getQuestionAnalytics(session.id);
   const participantPerformance = await db.getParticipantPerformance(session.id);
   const answerDistribution = await db.getAnswerDistribution(session.id);
+  const participantAnswers = await db.getParticipantAnswers(session.id);
+
+  // Compute streaks per participant
+  const streakMap = {};
+  let currentPid = null;
+  let currentStreak = 0;
+  let bestStreak = 0;
+  for (const row of participantAnswers) {
+    if (row.participant_id !== currentPid) {
+      if (currentPid) streakMap[currentPid] = bestStreak;
+      currentPid = row.participant_id;
+      currentStreak = 0;
+      bestStreak = 0;
+    }
+    if (row.is_correct) {
+      currentStreak++;
+      if (currentStreak > bestStreak) bestStreak = currentStreak;
+    } else {
+      currentStreak = 0;
+    }
+  }
+  if (currentPid) streakMap[currentPid] = bestStreak;
 
   // Build question details with quiz data
   const questions = questionAnalytics.map(q => {
@@ -950,7 +972,9 @@ app.get('/api/admin/analytics/session/:code', async (req, res) => {
       score: p.score,
       correctCount: p.correct_count,
       avgResponseTimeMs: p.avg_response_time_ms,
-      questionsAnswered: p.questions_answered
+      questionsAnswered: p.questions_answered,
+      totalQuestions: session.total_questions,
+      bestStreak: streakMap[p.id] || 0
     }))
   });
 });

@@ -397,6 +397,17 @@ const dbApi = {
     return result.rows[0];
   },
 
+  async getParticipantAnswers(sessionId) {
+    const result = await pool.query(
+      `SELECT participant_id, question_index, is_correct
+       FROM answers
+       WHERE session_id = $1
+       ORDER BY participant_id, question_index`,
+      [sessionId]
+    );
+    return result.rows;
+  },
+
   async getAnswersForExport(sessionId) {
     const result = await pool.query(
       `SELECT

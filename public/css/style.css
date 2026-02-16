@@ -443,6 +443,43 @@ label {
   color: var(--warning);
 }
 
+/* Rank trophies & pass badges */
+.rank-trophy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.rank-trophy .trophy-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.rank-gold { color: #fbbf24; }
+.rank-silver { color: #d1d5db; }
+.rank-bronze { color: #d97706; }
+.rank-top5 { color: #a78bfa; }
+
+.pass-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.pass-badge-passed {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.pass-badge-failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
 /* Utility */
 .hidden {
   display: none !important;
@@ -1593,6 +1630,72 @@ label {
 .difficulty-hard {
   background: rgba(239, 68, 68, 0.2);
   color: var(--danger);
+}
+
+/* Chart Wrapper */
+.chart-wrapper {
+  position: relative;
+  height: 280px;
+}
+
+/* Stat Note (for engagement drop-off) */
+.stat-note {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--warning);
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+/* Tricky Question Alert */
+.tricky-alert {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.tricky-alert:last-child {
+  margin-bottom: 0;
+}
+
+.tricky-alert-header {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.tricky-alert-detail {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.tricky-alert-detail .wrong-pick {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.tricky-alert-detail .correct-pick {
+  color: var(--success);
+  font-weight: 500;
+}
+
+/* Streak badge */
+.streak-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+}
+
+.streak-badge.high {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
 }
 
 /* Question text cell in table */

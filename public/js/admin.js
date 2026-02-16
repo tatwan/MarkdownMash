@@ -96,6 +96,10 @@ let timerInterval = null;
 let sessionCode = null;
 let viewingSessionCode = null; // For analytics detail view
 
+// Chart instances (for cleanup on re-render)
+let scoreDistributionChart = null;
+let questionDifficultyChart = null;
+
 // Login
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -545,6 +549,7 @@ analyticsTabs.forEach(tab => {
 
 // Back to analytics from session detail
 backToAnalyticsBtn.addEventListener('click', () => {
+  destroyCharts();
   sessionDetailSection.classList.add('hidden');
   analyticsSection.classList.remove('hidden');
   viewingSessionCode = null;
@@ -652,6 +657,218 @@ async function loadSessionsList() {
   }
 }
 
+// Destroy existing charts to prevent memory leaks
+function destroyCharts() {
+  if (scoreDistributionChart) {
+    scoreDistributionChart.destroy();
+    scoreDistributionChart = null;
+  }
+  if (questionDifficultyChart) {
+    questionDifficultyChart.destroy();
+    questionDifficultyChart = null;
+  }
+}
+
+// Render score distribution histogram
+function renderScoreDistribution(participants, totalQuestions) {
+  const buckets = [0, 0, 0, 0, 0]; // 0-20, 20-40, 40-60, 60-80, 80-100
+  participants.forEach(p => {
+    const pct = totalQuestions > 0 ? (p.correctCount / totalQuestions) * 100 : 0;
+    if (pct >= 80) buckets[4]++;
+    else if (pct >= 60) buckets[3]++;
+    else if (pct >= 40) buckets[2]++;
+    else if (pct >= 20) buckets[1]++;
+    else buckets[0]++;
+  });
+
+  const ctx = document.getElementById('score-distribution-chart').getContext('2d');
+  scoreDistributionChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'],
+      datasets: [{
+        label: 'Participants',
+        data: buckets,
+        backgroundColor: [
+          'rgba(239, 68, 68, 0.7)',
+          'rgba(239, 68, 68, 0.7)',
+          'rgba(239, 68, 68, 0.7)',
+          'rgba(34, 197, 94, 0.7)',
+          'rgba(34, 197, 94, 0.7)'
+        ],
+        borderColor: [
+          'rgba(239, 68, 68, 1)',
+          'rgba(239, 68, 68, 1)',
+          'rgba(239, 68, 68, 1)',
+          'rgba(34, 197, 94, 1)',
+          'rgba(34, 197, 94, 1)'
+        ],
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.raw} participant${ctx.raw !== 1 ? 's' : ''}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, color: '#94a3b8' },
+          grid: { color: 'rgba(71, 85, 105, 0.3)' }
+        },
+        x: {
+          ticks: { color: '#94a3b8' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+// Render question difficulty horizontal bar chart
+function renderQuestionDifficultyChart(questions) {
+  const sorted = [...questions].sort((a, b) => a.index - b.index);
+  const labels = sorted.map(q => `Q${q.index + 1}`);
+  const percents = sorted.map(q => Math.round(q.correctPercent));
+  const colors = sorted.map(q => {
+    if (q.difficulty === 'easy') return 'rgba(34, 197, 94, 0.7)';
+    if (q.difficulty === 'medium') return 'rgba(245, 158, 11, 0.7)';
+    return 'rgba(239, 68, 68, 0.7)';
+  });
+  const borderColors = sorted.map(q => {
+    if (q.difficulty === 'easy') return 'rgba(34, 197, 94, 1)';
+    if (q.difficulty === 'medium') return 'rgba(245, 158, 11, 1)';
+    return 'rgba(239, 68, 68, 1)';
+  });
+
+  const ctx = document.getElementById('question-difficulty-chart').getContext('2d');
+  questionDifficultyChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Correct %',
+        data: percents,
+        backgroundColor: colors,
+        borderColor: borderColors,
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.raw}% correct`
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          max: 100,
+          ticks: { color: '#94a3b8', callback: v => `${v}%` },
+          grid: { color: 'rgba(71, 85, 105, 0.3)' }
+        },
+        y: {
+          ticks: { color: '#94a3b8' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+// Detect and render tricky questions
+function renderTrickyQuestions(questions) {
+  const container = document.getElementById('tricky-questions-container');
+  const section = document.getElementById('tricky-questions-section');
+  container.innerHTML = '';
+
+  const trickyOnes = [];
+  questions.forEach(q => {
+    if (!q.optionDistribution || q.optionDistribution.length === 0) return;
+    if (!q.options || q.options.length === 0) return;
+
+    // Find the most-picked option
+    let maxCount = 0;
+    let maxOptionIndex = -1;
+    q.optionDistribution.forEach(d => {
+      if (d.count > maxCount) {
+        maxCount = d.count;
+        maxOptionIndex = d.optionIndex;
+      }
+    });
+
+    // Check if the most-picked option is wrong
+    if (maxOptionIndex >= 0 && !q.correctIndices.includes(maxOptionIndex)) {
+      const totalAnswers = q.totalAnswers || q.optionDistribution.reduce((s, d) => s + parseInt(d.count), 0);
+      const pct = totalAnswers > 0 ? Math.round((maxCount / totalAnswers) * 100) : 0;
+      const correctText = q.correctIndices.map(i => q.options[i]).filter(Boolean).join(', ');
+      trickyOnes.push({
+        question: q,
+        wrongOption: q.options[maxOptionIndex],
+        wrongPct: pct,
+        correctAnswer: correctText
+      });
+    }
+  });
+
+  if (trickyOnes.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  trickyOnes.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'tricky-alert';
+    div.innerHTML = `
+      <div class="tricky-alert-header">Q${t.question.index + 1}: ${escapeHtml(t.question.text)}</div>
+      <div class="tricky-alert-detail">
+        <span class="wrong-pick">${t.wrongPct}% picked "${escapeHtml(t.wrongOption)}"</span> (wrong)
+        &mdash; Correct answer: <span class="correct-pick">"${escapeHtml(t.correctAnswer)}"</span>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// Render engagement / completion rate
+function renderEngagement(participants, totalQuestions) {
+  const completionEl = document.getElementById('detail-completion-rate');
+  const noteEl = document.getElementById('detail-dropoff-note');
+
+  if (participants.length === 0 || totalQuestions === 0) {
+    completionEl.textContent = 'N/A';
+    noteEl.textContent = '';
+    return;
+  }
+
+  const completed = participants.filter(p => parseInt(p.questionsAnswered) >= totalQuestions).length;
+  const rate = Math.round((completed / participants.length) * 100);
+  completionEl.textContent = `${rate}%`;
+
+  const dropped = participants.length - completed;
+  if (dropped > 0) {
+    noteEl.textContent = `${dropped} didn't finish`;
+  } else {
+    noteEl.textContent = '';
+  }
+}
+
 // Load session detail
 async function loadSessionDetail(code) {
   try {
@@ -662,6 +879,9 @@ async function loadSessionDetail(code) {
       alert('Failed to load session details');
       return;
     }
+
+    // Destroy previous charts
+    destroyCharts();
 
     viewingSessionCode = code;
 
@@ -680,6 +900,15 @@ async function loadSessionDetail(code) {
       : 0;
     detailAvgScore.textContent = `${Math.round(avgScore)}%`;
 
+    // Feature 4: Engagement / Completion Rate
+    renderEngagement(data.participants, data.session.totalQuestions);
+
+    // Feature 1: Score Distribution Histogram
+    renderScoreDistribution(data.participants, data.session.totalQuestions);
+
+    // Feature 2: Question Difficulty Bar Chart
+    renderQuestionDifficultyChart(data.questions);
+
     // Populate question difficulty table (sorted by difficulty - hardest first)
     questionBreakdownBody.innerHTML = '';
     data.questionsByDifficulty.forEach(q => {
@@ -689,7 +918,7 @@ async function loadSessionDetail(code) {
 
       tr.innerHTML = `
         <td>Q${q.index + 1}</td>
-        <td class="question-text-cell">${escapeHtml(truncateText(q.text, 50))}</td>
+        <td class="question-text-cell" title="${escapeHtml(q.text)}">${escapeHtml(truncateText(q.text, 50))}</td>
         <td>${Math.round(q.correctPercent)}%</td>
         <td>${avgTime}</td>
         <td><span class="difficulty-badge ${difficultyClass}">${q.difficulty}</span></td>
@@ -697,18 +926,54 @@ async function loadSessionDetail(code) {
       questionBreakdownBody.appendChild(tr);
     });
 
-    // Populate participant performance table
+    // Feature 3: Tricky Questions
+    renderTrickyQuestions(data.questions);
+
+    // Populate participant performance table (with streak column)
     participantPerformanceBody.innerHTML = '';
     data.participants.forEach((p, i) => {
       const tr = document.createElement('tr');
       const avgTime = p.avgResponseTimeMs ? `${(p.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
+      const rank = i + 1;
+      const scorePercent = data.session.totalQuestions > 0
+        ? (p.correctCount / data.session.totalQuestions) * 100
+        : 0;
+      const passed = scorePercent >= 65;
+
+      // Rank display with trophy icons for top 5
+      let rankHtml;
+      if (rank === 1) {
+        rankHtml = `<span class="rank-trophy rank-gold"><span class="trophy-icon">&#127942;</span>${rank}</span>`;
+      } else if (rank === 2) {
+        rankHtml = `<span class="rank-trophy rank-silver"><span class="trophy-icon">&#129352;</span>${rank}</span>`;
+      } else if (rank === 3) {
+        rankHtml = `<span class="rank-trophy rank-bronze"><span class="trophy-icon">&#129353;</span>${rank}</span>`;
+      } else if (rank <= 5 && passed) {
+        rankHtml = `<span class="rank-trophy rank-top5"><span class="trophy-icon">&#127941;</span>${rank}</span>`;
+      } else {
+        rankHtml = `${rank}`;
+      }
+
+      // Pass/fail badge
+      const statusHtml = passed
+        ? `<span class="pass-badge pass-badge-passed">Passed</span>`
+        : `<span class="pass-badge pass-badge-failed">Failed</span>`;
+
+      // Feature 5: Streak badge
+      const streak = p.bestStreak || 0;
+      const streakClass = streak >= Math.ceil(data.session.totalQuestions / 2) ? 'high' : '';
+      const streakHtml = streak > 0
+        ? `<span class="streak-badge ${streakClass}">${streak}</span>`
+        : '0';
 
       tr.innerHTML = `
-        <td>${i + 1}</td>
+        <td>${rankHtml}</td>
         <td>${escapeHtml(p.name)}</td>
         <td>${p.correctCount} / ${data.session.totalQuestions}</td>
         <td>${p.score}</td>
         <td>${avgTime}</td>
+        <td>${streakHtml}</td>
+        <td>${statusHtml}</td>
       `;
       participantPerformanceBody.appendChild(tr);
     });

@@ -203,12 +203,29 @@
             <span class="stat-value" id="detail-questions">0</span>
             <span class="stat-label">Questions</span>
           </div>
+          <div class="stat-card" id="engagement-stat-card">
+            <span class="stat-value" id="detail-completion-rate">0%</span>
+            <span class="stat-label">Completion Rate</span>
+            <span class="stat-note" id="detail-dropoff-note"></span>
+          </div>
+        </div>
+
+        <!-- Score Distribution Chart -->
+        <div class="detail-card mt-4">
+          <h3>Score Distribution</h3>
+          <p class="text-muted">How participants scored across the quiz</p>
+          <div class="chart-wrapper mt-4">
+            <canvas id="score-distribution-chart"></canvas>
+          </div>
         </div>
 
         <!-- Question Difficulty -->
         <div class="detail-card mt-4">
           <h3>Question Difficulty</h3>
           <p class="text-muted">Questions ranked by difficulty (lowest correct % = hardest)</p>
+          <div class="chart-wrapper mt-4">
+            <canvas id="question-difficulty-chart"></canvas>
+          </div>
           <table class="results-table mt-4" id="question-breakdown-table">
             <thead>
               <tr>
@@ -223,6 +240,13 @@
           </table>
         </div>
 
+        <!-- Tricky Questions -->
+        <div class="detail-card mt-4 hidden" id="tricky-questions-section">
+          <h3>Tricky Questions</h3>
+          <p class="text-muted">Questions where most participants picked a wrong answer</p>
+          <div id="tricky-questions-container" class="mt-4"></div>
+        </div>
+
         <!-- Participant Performance -->
         <div class="detail-card mt-4">
           <h3>Participant Performance</h3>
@@ -234,6 +258,8 @@
                 <th>Correct</th>
                 <th>Score</th>
                 <th>Avg Response</th>
+                <th>Best Streak</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody id="participant-performance-body"></tbody>
