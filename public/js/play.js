@@ -47,6 +47,7 @@ let timerInterval = null;
 let timerDuration = 20;
 let currentScore = 0;
 let chart = null;
+let isFirstConnect = true; // Tracks whether this is the initial connection or a reconnect
 
 // Motivating messages
 const motivatingMessages = [
@@ -132,23 +133,31 @@ joinForm.addEventListener('submit', async (e) => {
 // Initialize Socket.IO
 function initSocket() {
   socket = io();
+  isFirstConnect = true; // Reset on each new initSocket call
 
   socket.on('connect', () => {
     socket.emit('participant_join', {
       participantId,
       sessionCode
     });
+    isFirstConnect = false;
   });
 
   socket.on('session_invalid', (data) => {
-    // Clear stored credentials
-    localStorage.removeItem('markdownMashId');
-    localStorage.removeItem('markdownMashSession');
+    if (isFirstConnect) {
+      // True first connection — session genuinely doesn't exist, clear credentials
+      localStorage.removeItem('markdownMashId');
+      localStorage.removeItem('markdownMashSession');
 
-    // Show session ended screen
-    hideAllSections();
-    sessionEndedMessage.textContent = data.message || 'This session is no longer available.';
-    sessionEndedSection.classList.remove('hidden');
+      hideAllSections();
+      sessionEndedMessage.textContent = data.message || 'This session is no longer available.';
+      sessionEndedSection.classList.remove('hidden');
+    } else {
+      // This is a reconnect after a server restart.
+      // Don't wipe credentials — show a retry banner so student can rejoin
+      // once the teacher restarts the quiz (or navigate back to join form).
+      showReconnectBanner(data.message);
+    }
   });
 
   socket.on('clear_participant_id', () => {
@@ -290,6 +299,31 @@ function initSocket() {
   socket.on('disconnect', () => {
     console.log('Disconnected');
   });
+}
+
+// Show a non-destructive reconnection banner when connection drops mid-quiz.
+// Preserves stored credentials so the student can try again when the server is back.
+function showReconnectBanner(reason) {
+  if (document.getElementById('reconnect-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'reconnect-banner';
+  banner.style.cssText = [
+    'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+    'background:#b45309', 'color:#fff', 'padding:12px 16px',
+    'font-size:14px', 'text-align:center',
+    'box-shadow:0 2px 8px rgba(0,0,0,0.4)'
+  ].join(';');
+
+  const msg = reason || 'Connection to quiz server was interrupted.';
+  banner.innerHTML = `
+    ⚠️ <strong>Connection interrupted.</strong> ${msg}
+    <br><small>Wait for your teacher to let you know if the quiz will continue.
+    <a href="javascript:location.reload()" style="color:#fde68a;text-decoration:underline">Refresh</a>
+    to try reconnecting.</small>
+  `;
+
+  document.body.prepend(banner);
 }
 
 // Render options

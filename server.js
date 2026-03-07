@@ -433,6 +433,12 @@ app.get('/api/admin/sessions', async (req, res) => {
   res.json({ success: true, sessions });
 });
 
+// Keep-alive ping — prevents Render free-tier from sleeping mid-quiz.
+// The admin client calls this every 10 minutes while a session is active.
+app.get('/api/admin/ping', (req, res) => {
+  res.json({ ok: true, ts: Date.now() });
+});
+
 // Get participants for a session
 app.get('/api/admin/session/:code/participants', (req, res) => {
   const { code } = req.params;
@@ -835,6 +841,71 @@ app.get('/api/admin/activity-log', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// SESSION RECOVERY ENDPOINT
+// ============================================
+
+// Recover an interrupted session by recomputing scores from raw DB answers.
+// Called when the server crashed mid-quiz and the in-memory session was lost.
+// The session must exist in the DB with status 'active' or 'created'.
+app.post('/api/admin/session/:code/recover', authenticateToken, async (req, res) => {
+  const { code } = req.params;
+  try {
+    // Look up session in DB (may not be in activeSessions since server crashed)
+    const dbSession = await db.getSession(code);
+    if (!dbSession) {
+      return res.status(404).json({ success: false, error: 'Session not found in database' });
+    }
+
+    if (dbSession.status === 'ended') {
+      return res.status(400).json({ success: false, error: 'Session already ended — view it in Analytics normally' });
+    }
+
+    const quizData = dbSession.quiz_data;
+    if (!quizData || !quizData.questions) {
+      return res.status(400).json({ success: false, error: 'Session has no quiz data to recover' });
+    }
+
+    // Fetch all participants and their answers from DB
+    const participants = await db.getParticipantsBySession(dbSession.id);
+    const answers = await db.getAnswersBySession(dbSession.id);
+
+    const pointsPerQuestion = quizData.totalScore / quizData.questions.length;
+
+    // Recompute scores per participant from their DB answer rows
+    for (const participant of participants) {
+      const participantAnswers = answers.filter(a => a.participant_id === participant.id);
+      let correctCount = 0;
+
+      for (const answer of participantAnswers) {
+        const question = quizData.questions[answer.question_index];
+        if (question && question.correctIndices.includes(answer.answer_index)) {
+          correctCount++;
+        }
+      }
+
+      const finalScore = Math.round(correctCount * pointsPerQuestion);
+      await db.updateParticipantScore(participant.id, finalScore, correctCount);
+    }
+
+    // Mark session as ended in DB
+    await db.updateSessionStatus(code, 'ended');
+    await db.logActivity(req.admin.id, 'session_recovered', { sessionCode: code }, req.ip);
+
+    console.log(`[RECOVERY] Session ${code} recovered: ${participants.length} participants, ${answers.length} answers`);
+
+    res.json({
+      success: true,
+      message: `Session ${code} recovered successfully`,
+      participantsRecovered: participants.length,
+      answersFound: answers.length
+    });
+  } catch (err) {
+    console.error('Session recovery error:', err);
+    res.status(500).json({ success: false, error: 'Recovery failed: ' + err.message });
+  }
+});
+
+// ============================================
 // ANALYTICS API ENDPOINTS
 // ============================================
 
@@ -872,7 +943,8 @@ app.get('/api/admin/analytics/overview', async (req, res) => {
 // List completed sessions with analytics
 app.get('/api/admin/analytics/sessions', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
-  const sessions = await db.getSessionAnalytics(limit);
+  const filter = req.query.filter || null; // 'ended', 'incomplete', or null
+  const sessions = await db.getSessionAnalytics(limit, filter);
   res.json({
     success: true,
     sessions: sessions.map(s => ({

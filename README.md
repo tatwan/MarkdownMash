@@ -420,7 +420,6 @@ All data includes proper foreign keys and indexes for performance.
 
 - No persistent user accounts (participants join per-session)
 - No image/media support in questions (text only)
-- Active session state is in-memory (historical data persists in database)
 
 ## License
 

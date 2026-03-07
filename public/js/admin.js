@@ -96,10 +96,31 @@ let currentQuestion = null;
 let timerInterval = null;
 let sessionCode = null;
 let viewingSessionCode = null; // For analytics detail view
+let currentSessionsFilter = 'all'; // For sessions list filtering ('all', 'ended', 'incomplete')
 
 // Chart instances (for cleanup on re-render)
 let scoreDistributionChart = null;
 let questionDifficultyChart = null;
+
+// Keep-alive: prevents Render free-tier from sleeping the dyno mid-quiz.
+// HTTP requests every 10 minutes while a session is active.
+let keepAliveInterval = null;
+
+function startKeepAlive() {
+  stopKeepAlive();
+  keepAliveInterval = setInterval(() => {
+    if (sessionCode) {
+      fetch('/api/admin/ping').catch(() => { });
+    }
+  }, 10 * 60 * 1000); // 10 minutes
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+}
 
 // Login
 loginForm.addEventListener('submit', async (e) => {
@@ -212,9 +233,24 @@ function initSocket(code) {
   }
 
   socket = io();
+  let isFirstConnect = true;
 
   socket.on('connect', () => {
     socket.emit('admin_join', code);
+
+    if (!isFirstConnect) {
+      // Reconnected after a drop — verify the session is still alive on the server.
+      // If the server restarted (Render sleep), the in-memory session will be gone.
+      fetch(`/api/admin/session/${code}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) {
+            showSessionLostBanner(code);
+          }
+        })
+        .catch(() => { });
+    }
+    isFirstConnect = false;
   });
 
   socket.on('participant_joined', (data) => {
@@ -281,9 +317,69 @@ function initSocket(code) {
   });
 
   socket.on('session_ended', (data) => {
+    // Only show alert and reset if it's an intentional end (has a code field)
+    // or if we're not mid-quiz (avoids false positives on reconnections)
     alert(data.message || 'Session has ended');
-    // Reset UI to allow creating a new session
     resetToUploadState();
+  });
+}
+
+// Show a non-destructive warning banner when the server lost the session in memory
+function showSessionLostBanner(code) {
+  // Don't show duplicate banners
+  if (document.getElementById('session-lost-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'session-lost-banner';
+  banner.style.cssText = [
+    'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+    'background:#dc2626', 'color:#fff', 'padding:12px 20px',
+    'font-size:15px', 'display:flex', 'align-items:center', 'gap:12px',
+    'box-shadow:0 2px 8px rgba(0,0,0,0.4)'
+  ].join(';');
+
+  banner.innerHTML = `
+    <span>⚠️ <strong>Server restarted — session state was lost.</strong>
+    Participants have been disconnected. Your quiz answers are saved in the database.</span>
+    <button id="recover-session-btn" style="
+      margin-left:auto; background:#fff; color:#dc2626;
+      border:none; border-radius:6px; padding:6px 14px;
+      font-weight:bold; cursor:pointer; font-size:14px;
+    ">Recover Stats</button>
+    <button id="dismiss-banner-btn" style="
+      background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.5);
+      border-radius:6px; padding:6px 12px; cursor:pointer; font-size:14px;
+    ">Dismiss</button>
+  `;
+
+  document.body.prepend(banner);
+
+  document.getElementById('dismiss-banner-btn').addEventListener('click', () => banner.remove());
+
+  document.getElementById('recover-session-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('recover-session-btn');
+    btn.disabled = true;
+    btn.textContent = 'Recovering...';
+    try {
+      const res = await authFetch(`/api/admin/session/${code}/recover`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        banner.style.background = '#16a34a';
+        banner.querySelector('span').innerHTML = `
+          ✅ <strong>Session recovered!</strong>
+          ${data.participantsRecovered} participants, ${data.answersFound} answers restored.
+          Check Analytics → Sessions to view results.
+        `;
+        document.getElementById('dismiss-banner-btn').textContent = 'OK';
+        btn.remove();
+      } else {
+        btn.textContent = 'Recovery Failed';
+        alert('Recovery failed: ' + data.error);
+      }
+    } catch (err) {
+      btn.textContent = 'Recovery Failed';
+      alert('Network error during recovery');
+    }
   });
 }
 
@@ -309,6 +405,9 @@ uploadBtn.addEventListener('click', async () => {
 
       // Initialize socket for this session
       initSocket(sessionCode);
+
+      // Start keep-alive pings to prevent Render free-tier from sleeping mid-quiz
+      startKeepAlive();
 
       uploadStatus.innerHTML = '<span class="badge badge-success">Session created!</span>';
       uploadStatus.classList.remove('hidden');
@@ -369,6 +468,8 @@ function resetToUploadState() {
   sessionCode = null;
   currentQuiz = null;
 
+  stopKeepAlive(); // Stop pinging — session is over
+
   sessionInfoSection.classList.add('hidden');
   participantsSection.classList.add('hidden');
   controlsSection.classList.add('hidden');
@@ -377,6 +478,10 @@ function resetToUploadState() {
   uploadStatus.classList.add('hidden');
 
   participantList.innerHTML = '';
+
+  // Remove session-lost banner if present
+  const banner = document.getElementById('session-lost-banner');
+  if (banner) banner.remove();
 
   if (socket) {
     socket.disconnect();
@@ -621,7 +726,11 @@ async function loadPlatformStats() {
 // Load sessions list
 async function loadSessionsList() {
   try {
-    const res = await fetch('/api/admin/analytics/sessions');
+    const url = currentSessionsFilter === 'all'
+      ? '/api/admin/analytics/sessions'
+      : `/api/admin/analytics/sessions?filter=${currentSessionsFilter}`;
+
+    const res = await fetch(url);
     const data = await res.json();
 
     analyticsSessionsBody.innerHTML = '';
@@ -631,22 +740,75 @@ async function loadSessionsList() {
 
       data.sessions.forEach(session => {
         const tr = document.createElement('tr');
-        const date = session.endedAt ? new Date(session.endedAt).toLocaleDateString() : 'N/A';
+        const isInterrupted = session.status === 'active';
+        const isCreated = session.status === 'created';
+
+        let dateDisplay = 'N/A';
+        if (session.endedAt) {
+          dateDisplay = new Date(session.endedAt).toLocaleDateString();
+        } else if (session.startedAt) {
+          dateDisplay = new Date(session.startedAt).toLocaleDateString() + ' (interrupted)';
+        } else if (session.createdAt) {
+          dateDisplay = new Date(session.createdAt).toLocaleDateString() + ' (never started)';
+        }
+
+        let statusBadge = '';
+        if (isInterrupted) {
+          statusBadge = `<span style="background:#b45309;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;">⚠️ Interrupted</span>`;
+        } else if (isCreated) {
+          statusBadge = `<span style="background:#4b5563;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;">Trial</span>`;
+        }
+
+        let actionBtn = '';
+        if (isInterrupted) {
+          actionBtn = `<button class="btn btn-small recover-btn" data-code="${escapeHtml(session.code)}"
+               style="background:#dc2626;color:#fff;">Recover</button>`;
+        } else if (isCreated) {
+          actionBtn = `<span style="color:#6b7280;font-size:12px;">No stats</span>`;
+        } else {
+          actionBtn = `<button class="btn btn-small view-btn" data-code="${escapeHtml(session.code)}">View</button>`;
+        }
 
         tr.innerHTML = `
-          <td><code>${escapeHtml(session.code)}</code></td>
+          <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
           <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
           <td>${session.participantCount}</td>
-          <td>${Math.round(session.avgScorePercent || 0)}%</td>
-          <td>${date}</td>
-          <td><button class="btn btn-small" data-code="${escapeHtml(session.code)}">View</button></td>
+          <td>${(isInterrupted || isCreated) ? '—' : Math.round(session.avgScorePercent || 0) + '%'}</td>
+          <td>${dateDisplay}</td>
+          <td>${actionBtn}</td>
         `;
 
-        // Add click handler for view button
-        const viewBtn = tr.querySelector('button');
-        viewBtn.addEventListener('click', () => {
-          loadSessionDetail(session.code);
-        });
+        if (isInterrupted) {
+          // Recover button: calls recovery endpoint, then reloads list
+          const recoverBtn = tr.querySelector('.recover-btn');
+          recoverBtn.addEventListener('click', async () => {
+            if (!confirm(`Recover interrupted session ${session.code}? This will compute scores from saved answers and mark it as ended.`)) return;
+            recoverBtn.disabled = true;
+            recoverBtn.textContent = 'Recovering...';
+            try {
+              const res = await authFetch(`/api/admin/session/${session.code}/recover`, { method: 'POST' });
+              const result = await res.json();
+              if (result.success) {
+                alert(`✅ Recovered: ${result.participantsRecovered} participants, ${result.answersFound} answers. Session is now viewable in Analytics.`);
+                loadSessionsList(); // Reload to show it as ended now
+              } else {
+                alert('Recovery failed: ' + result.error);
+                recoverBtn.disabled = false;
+                recoverBtn.textContent = 'Recover';
+              }
+            } catch (err) {
+              alert('Network error during recovery');
+              recoverBtn.disabled = false;
+              recoverBtn.textContent = 'Recover';
+            }
+          });
+        } else if (!isCreated) {
+          // Normal view button
+          const viewBtn = tr.querySelector('.view-btn');
+          viewBtn.addEventListener('click', () => {
+            loadSessionDetail(session.code);
+          });
+        }
 
         analyticsSessionsBody.appendChild(tr);
       });
@@ -657,6 +819,7 @@ async function loadSessionsList() {
     console.error('Failed to load sessions list', err);
   }
 }
+
 
 // Destroy existing charts to prevent memory leaks
 function destroyCharts() {

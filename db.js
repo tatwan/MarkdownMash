@@ -315,7 +315,17 @@ const dbApi = {
   },
 
   // Analytics operations
-  async getSessionAnalytics(limit = 50) {
+  async getSessionAnalytics(limit = 50, statusFilter = null) {
+    let whereClause = '';
+    const params = [limit];
+
+    if (statusFilter === 'ended') {
+      whereClause = "WHERE s.status = 'ended'";
+    } else if (statusFilter === 'incomplete') {
+      // incomplete = active (interrupted) or created (never started / trial runs)
+      whereClause = "WHERE s.status IN ('active', 'created')";
+    }
+
     const result = await pool.query(
       `SELECT
         s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at,
@@ -324,11 +334,11 @@ const dbApi = {
         ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1) as avg_score_percent
       FROM sessions s
       LEFT JOIN participants p ON p.session_id = s.id
-      WHERE s.status = 'ended'
+      ${whereClause}
       GROUP BY s.id
-      ORDER BY s.ended_at DESC
+      ORDER BY COALESCE(s.ended_at, s.started_at, s.created_at) DESC
       LIMIT $1`,
-      [limit]
+      params
     );
     return result.rows;
   },
