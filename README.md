@@ -86,7 +86,7 @@ npm install
 Create a `.env` file:
 
 ```env
-DATABASE_URL=postgresql://user:password@host:port/database
+DATABASE_URL=postgresql://user:password@host:port/your_db_name
 ADMIN_PASSWORD=your_secure_password
 ```
 
@@ -362,6 +362,14 @@ pm2 save
 
 ## Development
 
+### Local Database Setup
+If you are running a local PostgreSQL instance (e.g., via Docker), the default database is usually named `postgres`. You can connect to it using:
+\`\`\`env
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/postgres
+\`\`\`
+
+*Note: The app is configured to automatically disable SSL for local development and enable it for production environments (like Render or Supabase) based on the `NODE_ENV` variable or the connection string.*
+
 ```bash
 # Run with auto-reload
 npm run dev
@@ -370,7 +378,6 @@ npm run dev
 npm run simulate      # 3 participants
 npm run simulate 10   # 10 participants
 ```
-
 ## Analytics Dashboard
 
 View detailed insights from completed quiz sessions:

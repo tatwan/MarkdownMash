@@ -6,11 +6,19 @@ const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
 // Create connection pool
+// const pool = new Pool({
+//   connectionString: process.env.DATABASE_URL,
+//   ssl: {
+//     rejectUnauthorized: false
+//   }
+// });
+// Only use SSL if we are in production OR if explicitly requested
+const isProduction = process.env.NODE_ENV === 'production';
+const useSSL = isProduction || process.env.DATABASE_URL.includes('supabase.co') || process.env.DATABASE_URL.includes('render.com');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ...(useSSL && { ssl: { rejectUnauthorized: false } })
 });
 
 // Test connection
