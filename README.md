@@ -53,15 +53,23 @@ A final score will be presented for each user
 
 ![image-20260118134105576](images/image-20260118134105576.png)
 
-#### Admin Screen 
+#### Admin Screen (setup)
 
 Loading Questions using a Markdown Template 
 
 ![image-20260118133922012](images/image-20260118133922012.png)
 
+#### Admin Screen (Analytics)
+
 View progress, control flow (start, end early ..etc), and finally when done you can view summary 
 
-![image-20260118133941230](images/image-20260118133941230.png)
+![image-20260421164332984](images/image-20260421164332984.png)
+
+![image-20260421164346428](images/image-20260421164346428.png)
+
+![image-20260421164424044](images/image-20260421164424044.png)
+
+![image-20260421164439692](images/image-20260421164439692.png)
 
 ## Tech Stack
 
