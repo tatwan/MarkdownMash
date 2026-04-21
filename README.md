@@ -1,22 +1,27 @@
 # Markdown Mash
 
+![Version](https://img.shields.io/github/v/release/yourusername/markdown-mash?include_prereleases&style=flat-square)
+![Node.js](https://img.shields.io/badge/Node.js-18+-success?logo=nodedotjs&style=flat-square)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-336791?logo=postgresql&style=flat-square)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-Real--time-black?logo=socketdotio&style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
 ## Features
 
-- **Real-time synchronization** - Questions, timers, and results sync instantly via WebSockets
-- **Markdown-based quizzes** - Write questions in simple Markdown format
-- **Scoring system** - Set total points, track progress, and show pass/fail results
-- **Speed-based ranking** - Ties are broken by response time (faster players rank higher)
-- **Live response charts** - Players and presenters see answer distribution after each question
-- **Analytics dashboard** - Track question difficulty, participant performance, and export data as CSV
-- **Presenter mode** - Beautiful full-screen view optimized for projection/screen sharing
-- **Premium design** - Gradient backgrounds, circular timers, and smooth animations
-- **Mobile-optimized** - Smart mobile UI hides redundant info when watching shared screen
-- **Multi-session support** - Run multiple concurrent quiz sessions with unique codes
-- **PostgreSQL persistence** - Session history and analytics survive server restarts
-- **Zero setup for participants** - Students just enter their name and play
-- **Self-hosted** - Deploy on Render with Supabase (free tiers available)
+- **Real-time Synchronization** - Questions, timers, and results sync instantly via WebSockets.
+- **Markdown-based Quizzes** - Write and upload questions in a simple, portable Markdown format.
+- **Comprehensive Scoring & Leaderboards** - Captures both correctness and speed. Automatically ranks winners, utilizing response times as tie-breakers.
+- **Post-Quiz Analytics & Dashboard** - Dive deep into session data, review question difficulty (automatically identifying the hardest questions), and analyze participant performance.
+- **Live Response Charts** - Players and presenters see beautiful chart distributions of answers after each question.
+- **Presenter Mode** - A dedicated, full-screen view optimized for classroom projectors or remote screen sharing.
+- **Premium, Mobile-Optimized UI** - Gradient backgrounds, circular timers, smooth animations, and a smart mobile interface for participants.
+- **Multi-session Support** - Host multiple concurrent quiz sessions seamlessly with unique Kahoot-style 6-character codes.
+- **Exportable Data** - Export full session results and analytics to CSV for external grading or record-keeping.
+- **PostgreSQL Persistence** - Session histories, answers, and analytics survive server restarts. 
+- **Frictionless Onboarding** - Zero setup for participants; students just enter their name and jump right in.
+- **Self-hosted & Free-Tier Friendly** - Easily deployable to services like Render and Supabase for free.
 
 
 
@@ -89,6 +94,8 @@ Create a `.env` file:
 DATABASE_URL=postgresql://user:password@host:port/your_db_name
 ADMIN_PASSWORD=your_secure_password
 ```
+
+**Admin Password Setup:** The `ADMIN_PASSWORD` in your `.env` file acts as a one-time bootstrap password. During your first login to the Admin Dashboard, the system will use this variable to permanently create your Master Admin account in the PostgreSQL database. **Note:** Changing the `.env` variable after your first login will not change your password.
 
 **Get your DATABASE_URL from Supabase:**
 1. Create a free account at [supabase.com](https://supabase.com)
@@ -357,7 +364,7 @@ pm2 save
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | **Yes** | - | PostgreSQL connection string (Supabase pooler) |
-| `ADMIN_PASSWORD` | No | `admin123` | Admin login password |
+| `ADMIN_PASSWORD` | No | `admin123` | Admin login password (used for initial setup only) |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
 ## Development
