@@ -1,5 +1,7 @@
 # Markdown Mash
 
+![Markdown Mash Time](images/Markdown Mash Time.png)
+
 ![Version](https://img.shields.io/github/v/release/tatwan/MarkdownMash?include_prereleases&style=flat-square)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-success?logo=nodedotjs&style=flat-square)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-336791?logo=postgresql&style=flat-square)
