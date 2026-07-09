@@ -1006,17 +1006,21 @@ async function loadSessionsList() {
           statusBadge += `<span style="background:#4b5563;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Trial</span>`;
         }
 
-        let actionBtn = '';
+        let primaryAction = '';
         if (isInterrupted) {
-          actionBtn += `<button class="btn btn-small recover-btn" data-code="${escapeHtml(session.code)}"
-               style="background:#dc2626;color:#fff;margin-right:5px;">Recover</button>`;
+          primaryAction = `<button class="btn btn-small recover-btn" data-code="${escapeHtml(session.code)}"
+               style="background:#dc2626;color:#fff;margin:0;width:100%;">Recover</button>`;
         } else if (isCreated) {
-          actionBtn += `<span style="color:#6b7280;font-size:12px;margin-right:5px;">No stats</span>`;
+          primaryAction = `<span style="color:#6b7280;font-size:12px;display:inline-block;padding:6px 0;width:100%;text-align:center;">No stats</span>`;
         } else {
-          actionBtn += `<button class="btn btn-small view-btn" data-code="${escapeHtml(session.code)}" style="margin-right:5px;">View</button>`;
+          primaryAction = `<button class="btn btn-small view-btn" data-code="${escapeHtml(session.code)}" style="margin:0;width:100%;">View</button>`;
         }
-        actionBtn += `<button class="btn btn-small edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.courseName || '')}" data-test="${session.isTest}" style="margin-right:5px;">Edit</button>`;
-        actionBtn += `<button class="btn btn-small delete-btn" data-code="${escapeHtml(session.code)}" style="background:#dc2626;color:#fff;">Delete</button>`;
+
+        let actionBtn = `
+          <div style="display:inline-block;width:80px;vertical-align:middle;margin-right:8px;">${primaryAction}</div>
+          <button class="btn btn-small edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.courseName || '')}" data-test="${session.isTest}" style="margin-right:8px;vertical-align:middle;">Edit</button>
+          <button class="btn btn-small delete-btn" data-code="${escapeHtml(session.code)}" style="background:#dc2626;color:#fff;vertical-align:middle;">Delete</button>
+        `;
 
         tr.innerHTML = `
           <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
@@ -1132,6 +1136,16 @@ closeEditMetadataBtn.addEventListener('click', () => {
 // Update the filter logic to re-render using local data, or just re-fetch
 document.getElementById('course-filter-select')?.addEventListener('change', () => {
   loadSessionsList();
+});
+
+// Wire up the session status filter buttons (All, Completed, Incomplete, Tests Only)
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSessionsFilter = btn.getAttribute('data-filter') || 'all';
+    loadSessionsList();
+  });
 });
 
 
