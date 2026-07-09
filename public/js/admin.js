@@ -1,3 +1,14 @@
+// Configure marked to use highlight.js
+if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
+  marked.setOptions({
+    highlight: function(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+      return hljs.highlight(code, { language }).value;
+    },
+    breaks: true
+  });
+}
+
 // DOM Elements
 const loginSection = document.getElementById('login-section');
 const dashboardSection = document.getElementById('dashboard-section');
@@ -27,7 +38,30 @@ let currentAdmin = JSON.parse(localStorage.getItem('currentAdmin') || 'null');
 const uploadSection = document.getElementById('upload-section');
 const quizMarkdown = document.getElementById('quiz-markdown');
 const uploadBtn = document.getElementById('upload-btn');
+const previewBtn = document.getElementById('preview-btn');
+const courseNameInput = document.getElementById('course-name-input');
 const uploadStatus = document.getElementById('upload-status');
+
+// Edit Metadata Elements
+const editMetadataModal = document.getElementById('edit-metadata-modal');
+const closeEditMetadataBtn = document.getElementById('close-edit-metadata-btn');
+const editMetadataForm = document.getElementById('edit-metadata-form');
+const editSessionCode = document.getElementById('edit-session-code');
+const editCourseName = document.getElementById('edit-course-name');
+const editIsTest = document.getElementById('edit-is-test');
+
+// Preview Modal Elements
+const previewModal = document.getElementById('preview-modal');
+const closePreviewBtn = document.getElementById('close-preview-btn');
+const previewQNum = document.getElementById('preview-q-num');
+const previewTotalQNum = document.getElementById('preview-total-q-num');
+const previewQuestionText = document.getElementById('preview-question-text');
+const previewOptionsContainer = document.getElementById('preview-options-container');
+const previewPrevBtn = document.getElementById('preview-prev-btn');
+const previewNextBtn = document.getElementById('preview-next-btn');
+
+let previewQuizData = null;
+let previewCurrentQuestionIndex = 0;
 
 const sessionInfoSection = document.getElementById('session-info-section');
 const quizTitle = document.getElementById('quiz-title');
@@ -386,13 +420,14 @@ function showSessionLostBanner(code) {
 // Upload Quiz - Now creates a session
 uploadBtn.addEventListener('click', async () => {
   const markdown = quizMarkdown.value.trim();
+  const courseName = courseNameInput.value.trim();
   if (!markdown) return;
 
   try {
     const res = await fetch('/api/admin/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown })
+      body: JSON.stringify({ markdown, courseName })
     });
 
     const data = await res.json();
@@ -415,11 +450,126 @@ uploadBtn.addEventListener('click', async () => {
       uploadStatus.innerHTML = `<span style="color: var(--danger);">${data.error}</span>`;
       uploadStatus.classList.remove('hidden');
     }
+    }
   } catch (err) {
     uploadStatus.innerHTML = '<span style="color: var(--danger);">Connection error</span>';
     uploadStatus.classList.remove('hidden');
   }
 });
+
+// Preview Logic
+previewBtn.addEventListener('click', () => {
+  const markdown = quizMarkdown.value.trim();
+  if (!markdown) {
+    alert('Please enter some markdown to preview');
+    return;
+  }
+  
+  // Reuse the parseQuizMarkdown logic if possible, or just parse locally
+  // Since we want to preview it, we should use the same logic
+  // Let's implement a lightweight local parser
+  previewQuizData = parseQuizMarkdownLocal(markdown);
+  
+  if (previewQuizData.questions.length === 0) {
+    alert('No valid questions found in markdown.');
+    return;
+  }
+  
+  previewCurrentQuestionIndex = 0;
+  previewModal.classList.remove('hidden');
+  renderPreviewQuestion();
+});
+
+closePreviewBtn.addEventListener('click', () => {
+  previewModal.classList.add('hidden');
+});
+
+previewNextBtn.addEventListener('click', () => {
+  if (previewCurrentQuestionIndex < previewQuizData.questions.length - 1) {
+    previewCurrentQuestionIndex++;
+    renderPreviewQuestion();
+  }
+});
+
+previewPrevBtn.addEventListener('click', () => {
+  if (previewCurrentQuestionIndex > 0) {
+    previewCurrentQuestionIndex--;
+    renderPreviewQuestion();
+  }
+});
+
+function renderPreviewQuestion() {
+  const q = previewQuizData.questions[previewCurrentQuestionIndex];
+  previewQNum.textContent = previewCurrentQuestionIndex + 1;
+  previewTotalQNum.textContent = previewQuizData.questions.length;
+  
+  previewQuestionText.innerHTML = marked.parse(q.text);
+  
+  previewOptionsContainer.innerHTML = '';
+  q.options.forEach((opt, idx) => {
+    const div = document.createElement('div');
+    div.className = 'option';
+    // Style as a preview option
+    div.style.padding = '15px';
+    div.style.border = '2px solid var(--border)';
+    div.style.borderRadius = '8px';
+    div.style.marginBottom = '10px';
+    div.style.backgroundColor = q.correctIndices.includes(idx) ? 'var(--success)' : 'var(--bg-card)';
+    div.style.color = q.correctIndices.includes(idx) ? 'white' : 'var(--text)';
+    div.innerHTML = marked.parseInline(opt);
+    previewOptionsContainer.appendChild(div);
+  });
+  
+  previewPrevBtn.disabled = previewCurrentQuestionIndex === 0;
+  previewNextBtn.disabled = previewCurrentQuestionIndex === previewQuizData.questions.length - 1;
+}
+
+// Local markdown parser for preview
+function parseQuizMarkdownLocal(markdown) {
+  const lines = markdown.split('\\n');
+  const quiz = { title: '', questions: [] };
+  let currentQuestion = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('# ') && !trimmed.startsWith('## ') && !trimmed.toLowerCase().startsWith('# score')) {
+      quiz.title = trimmed.slice(2).trim();
+      continue;
+    }
+
+    if (trimmed.startsWith('## ')) {
+      if (currentQuestion) {
+        quiz.questions.push(currentQuestion);
+      }
+      const questionText = trimmed.slice(3).replace(/^Q\\d+:\\s*/, '').trim();
+      currentQuestion = {
+        id: quiz.questions.length + 1,
+        text: questionText,
+        options: [],
+        correctIndices: []
+      };
+      continue;
+    }
+
+    const optionMatch = trimmed.match(/^-\\s*\\[([ xX])\\]\\s*(.+)$/);
+    if (optionMatch && currentQuestion) {
+      const isCorrect = optionMatch[1].toLowerCase() === 'x';
+      const optionText = optionMatch[2].trim();
+      const optionIndex = currentQuestion.options.length;
+      currentQuestion.options.push(optionText);
+      if (isCorrect) {
+        currentQuestion.correctIndices.push(optionIndex);
+      }
+    }
+  }
+
+  if (currentQuestion) {
+    quiz.questions.push(currentQuestion);
+  }
+
+  return quiz;
+}
 
 // Show session info after creation
 function showSessionInfo(session) {
@@ -561,13 +711,13 @@ showResultsBtn.addEventListener('click', async () => {
 // Show current question
 function showQuestion(data) {
   currentQNum.textContent = data.questionNumber;
-  currentQuestionText.textContent = data.question.text;
-
-  optionsDisplay.innerHTML = '';
+  currentQuestionText.innerHTML = marked.parse(data.question.text);
+  answersReceived.textContent = '0';
   data.question.options.forEach((opt, i) => {
     const btn = document.createElement('div');
     btn.className = 'option-btn';
-    btn.textContent = `${String.fromCharCode(65 + i)}. ${opt}`;
+    btn.innerHTML = `${String.fromCharCode(65 + i)}. ${marked.parseInline(opt)}`;
+    
     if (data.question.correctIndices && data.question.correctIndices.includes(i)) {
       btn.classList.add('correct');
     }
@@ -730,52 +880,86 @@ async function loadSessionsList() {
       ? '/api/admin/analytics/sessions'
       : `/api/admin/analytics/sessions?filter=${currentSessionsFilter}`;
 
-    const res = await fetch(url);
+    const res = await authFetch(url);
     const data = await res.json();
 
     analyticsSessionsBody.innerHTML = '';
+    
+    // Populate Course Filter dropdown if not populated yet
+    const courseFilterSelect = document.getElementById('course-filter-select');
+    if (courseFilterSelect.options.length <= 1 && data.success) {
+      const courses = new Set();
+      data.sessions.forEach(s => {
+        if (s.course_name) courses.add(s.course_name);
+      });
+      courses.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        courseFilterSelect.appendChild(opt);
+      });
+    }
 
     if (data.success && data.sessions.length > 0) {
       noSessionsMsg.classList.add('hidden');
+      
+      const selectedCourse = courseFilterSelect.value;
+      const filteredSessions = data.sessions.filter(s => {
+        if (selectedCourse !== 'all' && s.course_name !== selectedCourse) return false;
+        if (currentSessionsFilter === 'test' && !s.is_test) return false;
+        if (currentSessionsFilter === 'ended' && s.status !== 'ended') return false;
+        if (currentSessionsFilter === 'incomplete' && (s.status === 'ended' || s.is_test)) return false;
+        return true;
+      });
+      
+      if (filteredSessions.length === 0) {
+        noSessionsMsg.classList.remove('hidden');
+      }
 
-      data.sessions.forEach(session => {
+      filteredSessions.forEach(session => {
         const tr = document.createElement('tr');
         const isInterrupted = session.status === 'active';
         const isCreated = session.status === 'created';
 
         let dateDisplay = 'N/A';
-        if (session.endedAt) {
-          dateDisplay = new Date(session.endedAt).toLocaleDateString();
-        } else if (session.startedAt) {
-          dateDisplay = new Date(session.startedAt).toLocaleDateString() + ' (interrupted)';
-        } else if (session.createdAt) {
-          dateDisplay = new Date(session.createdAt).toLocaleDateString() + ' (never started)';
+        if (session.ended_at) {
+          dateDisplay = new Date(session.ended_at).toLocaleDateString();
+        } else if (session.started_at) {
+          dateDisplay = new Date(session.started_at).toLocaleDateString() + ' (interrupted)';
+        } else if (session.created_at) {
+          dateDisplay = new Date(session.created_at).toLocaleDateString() + ' (never started)';
         }
 
         let statusBadge = '';
+        if (session.is_test) {
+          statusBadge += `<span style="background:#9333ea;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Test</span>`;
+        }
         if (isInterrupted) {
-          statusBadge = `<span style="background:#b45309;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;">⚠️ Interrupted</span>`;
+          statusBadge += `<span style="background:#b45309;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">⚠️ Interrupted</span>`;
         } else if (isCreated) {
-          statusBadge = `<span style="background:#4b5563;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;">Trial</span>`;
+          statusBadge += `<span style="background:#4b5563;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Trial</span>`;
         }
 
         let actionBtn = '';
         if (isInterrupted) {
-          actionBtn = `<button class="btn btn-small recover-btn" data-code="${escapeHtml(session.code)}"
-               style="background:#dc2626;color:#fff;">Recover</button>`;
+          actionBtn += `<button class="btn btn-small recover-btn" data-code="${escapeHtml(session.code)}"
+               style="background:#dc2626;color:#fff;margin-right:5px;">Recover</button>`;
         } else if (isCreated) {
-          actionBtn = `<span style="color:#6b7280;font-size:12px;">No stats</span>`;
+          actionBtn += `<span style="color:#6b7280;font-size:12px;margin-right:5px;">No stats</span>`;
         } else {
-          actionBtn = `<button class="btn btn-small view-btn" data-code="${escapeHtml(session.code)}">View</button>`;
+          actionBtn += `<button class="btn btn-small view-btn" data-code="${escapeHtml(session.code)}" style="margin-right:5px;">View</button>`;
         }
+        actionBtn += `<button class="btn btn-small edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.course_name || '')}" data-test="${session.is_test}" style="margin-right:5px;">Edit</button>`;
+        actionBtn += `<button class="btn btn-small delete-btn" data-code="${escapeHtml(session.code)}" style="background:#dc2626;color:#fff;">Delete</button>`;
 
         tr.innerHTML = `
           <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
-          <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
-          <td>${session.participantCount}</td>
+          <td>${escapeHtml(session.course_name || '-')}</td>
+          <td>${escapeHtml(session.quiz_title || 'Untitled')}</td>
+          <td>${session.participant_count}</td>
           <td>${(isInterrupted || isCreated) ? '—' : Math.round(session.avgScorePercent || 0) + '%'}</td>
           <td>${dateDisplay}</td>
-          <td>${actionBtn}</td>
+          <td style="white-space: nowrap;">${actionBtn}</td>
         `;
 
         if (isInterrupted) {
@@ -810,6 +994,36 @@ async function loadSessionsList() {
           });
         }
 
+        // Edit Metadata Button
+        const editBtn = tr.querySelector('.edit-meta-btn');
+        if (editBtn) {
+          editBtn.addEventListener('click', () => {
+            editSessionCode.value = session.code;
+            editCourseName.value = session.course_name || '';
+            editIsTest.checked = session.is_test;
+            editMetadataModal.classList.remove('hidden');
+          });
+        }
+        
+        // Delete Session Button
+        const delBtn = tr.querySelector('.delete-btn');
+        if (delBtn) {
+          delBtn.addEventListener('click', async () => {
+            if (!confirm(`Are you sure you want to permanently delete session ${session.code}?`)) return;
+            try {
+              const res = await authFetch(`/api/admin/session/${session.code}`, { method: 'DELETE' });
+              const result = await res.json();
+              if (result.success) {
+                loadSessionsList();
+              } else {
+                alert('Delete failed: ' + result.error);
+              }
+            } catch (err) {
+              alert('Network error');
+            }
+          });
+        }
+
         analyticsSessionsBody.appendChild(tr);
       });
     } else {
@@ -819,6 +1033,40 @@ async function loadSessionsList() {
     console.error('Failed to load sessions list', err);
   }
 }
+
+// Handle Edit Metadata Submission
+editMetadataForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = editSessionCode.value;
+  const courseName = editCourseName.value.trim();
+  const isTest = editIsTest.checked;
+  
+  try {
+    const res = await authFetch(`/api/admin/session/${code}/metadata`, {
+      method: 'POST',
+      body: JSON.stringify({ courseName, isTest })
+    });
+    const result = await res.json();
+    if (result.success) {
+      editMetadataModal.classList.add('hidden');
+      loadSessionsList();
+    } else {
+      alert('Update failed: ' + result.error);
+    }
+  } catch (err) {
+    alert('Network error');
+  }
+});
+
+closeEditMetadataBtn.addEventListener('click', () => {
+  editMetadataModal.classList.add('hidden');
+});
+
+// Update the filter logic to re-render using local data, or just re-fetch
+document.getElementById('course-filter-select')?.addEventListener('change', () => {
+  loadSessionsList();
+});
+
 
 
 // Destroy existing charts to prevent memory leaks

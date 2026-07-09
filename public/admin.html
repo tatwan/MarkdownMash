@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -52,7 +55,13 @@
 - [ ] True
 - [x] False
 ::time=10"></textarea>
-        <button id="upload-btn" class="btn btn-primary">Load Quiz</button>
+        <div style="margin-top: 1rem; margin-bottom: 1rem;">
+          <input type="text" id="course-name-input" placeholder="Course Name (Optional)" style="width: 100%; max-width: 300px; padding: 0.75rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text);">
+        </div>
+        <div style="display: flex; gap: 1rem;">
+          <button id="upload-btn" class="btn btn-primary">Load Quiz</button>
+          <button id="preview-btn" class="btn btn-secondary">Preview Quiz</button>
+        </div>
         <div id="upload-status" class="mt-4 hidden"></div>
       </div>
 
@@ -164,15 +173,20 @@
 
         <!-- Sessions List Tab -->
         <div id="analytics-sessions" class="analytics-tab-content hidden">
-          <div class="analytics-filter-controls" style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
+          <div class="analytics-filter-controls" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <select id="course-filter-select" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text);">
+              <option value="all">All Courses</option>
+            </select>
             <button class="btn btn-small filter-btn active" data-filter="all">All</button>
             <button class="btn btn-small filter-btn" data-filter="ended">Completed</button>
             <button class="btn btn-small filter-btn" data-filter="incomplete">Incomplete / Trial</button>
+            <button class="btn btn-small filter-btn" data-filter="test">Tests Only</button>
           </div>
           <table class="results-table">
             <thead>
               <tr>
                 <th>Session</th>
+                <th>Course</th>
                 <th>Quiz Title</th>
                 <th>Participants</th>
                 <th>Avg Score</th>
@@ -408,6 +422,54 @@
           <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
         </form>
         <p id="recovery-status" class="status-message hidden"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div id="preview-modal" class="modal hidden">
+    <div class="modal-content" style="max-width: 400px; padding: 0; background: transparent; box-shadow: none;">
+      <div style="background: var(--bg-card); border-radius: 20px; overflow: hidden; border: 4px solid #333; height: 600px; display: flex; flex-direction: column;">
+        <div style="background: #333; color: white; padding: 10px; text-align: center; font-weight: bold; position: relative;">
+          Preview Mode
+          <button id="close-preview-btn" style="position: absolute; right: 10px; top: 10px; background: none; border: none; color: white; cursor: pointer;">&times;</button>
+        </div>
+        <div style="padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
+          <div class="player-header" style="margin-bottom: 20px;">
+            <span class="player-qnum">Q<span id="preview-q-num">1</span>/<span id="preview-total-q-num">10</span></span>
+            <span class="player-score">0 pts</span>
+          </div>
+          <h1 class="player-question" id="preview-question-text" style="font-size: 1.5rem; margin-bottom: 20px;">Question?</h1>
+          <div class="player-options" id="preview-options-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
+          <div style="margin-top: auto; display: flex; justify-content: space-between; padding-top: 20px;">
+            <button id="preview-prev-btn" class="btn btn-secondary">Previous</button>
+            <button id="preview-next-btn" class="btn btn-primary">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Metadata Modal -->
+  <div id="edit-metadata-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Edit Session</h2>
+        <button id="close-edit-metadata-btn" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-metadata-form">
+          <input type="hidden" id="edit-session-code">
+          <div class="form-group">
+            <label for="edit-course-name">Course Name</label>
+            <input type="text" id="edit-course-name" placeholder="Leave blank for none">
+          </div>
+          <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="edit-is-test" style="width: auto;">
+            <label for="edit-is-test" style="margin: 0;">Mark as Test Run</label>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Save Changes</button>
+        </form>
       </div>
     </div>
   </div>

@@ -133,6 +133,18 @@ joinForm.addEventListener('submit', async (e) => {
 // Initialize Socket.IO
 function initSocket() {
   socket = io();
+
+// Configure marked to use highlight.js
+if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
+  marked.setOptions({
+    highlight: function(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+      return hljs.highlight(code, { language }).value;
+    },
+    breaks: true
+  });
+}
+
   isFirstConnect = true; // Reset on each new initSocket call
 
   socket.on('connect', () => {
@@ -212,7 +224,7 @@ function initSocket() {
 
     currentQNum.textContent = data.questionNumber;
     totalQNum.textContent = data.totalQuestions;
-    questionText.textContent = data.question.text;
+    questionText.innerHTML = marked.parse(data.question.text);
     answerStatus.classList.add('hidden');
 
     renderOptions(data.question.options);
@@ -248,14 +260,15 @@ function initSocket() {
     } else if (isCorrect) {
       resultIcon.className = 'result-icon correct';
       resultText.textContent = 'Correct!';
-      yourAnswer.textContent = `${String.fromCharCode(65 + yourAnswerIdx)}. ${currentQuestion.options[yourAnswerIdx]}`;
+      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${marked.parseInline(currentQuestion.options[yourAnswerIdx])}`;
     } else {
       resultIcon.className = 'result-icon incorrect';
       resultText.textContent = 'Incorrect';
-      yourAnswer.textContent = `${String.fromCharCode(65 + yourAnswerIdx)}. ${currentQuestion.options[yourAnswerIdx]}`;
+      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${marked.parseInline(currentQuestion.options[yourAnswerIdx])}`;
     }
 
-    correctAnswer.textContent = `${String.fromCharCode(65 + correctIdx)}. ${currentQuestion.options[correctIdx]}`;
+    correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${marked.parseInline(currentQuestion.options[correctIdx])}`;
+    document.querySelector('.result-detail-row.correct').style.display = isCorrect ? 'none' : 'flex';
 
     // Show results chart
     showResultsChart(data);
@@ -335,7 +348,7 @@ function renderOptions(options) {
     btn.className = 'player-option';
     btn.innerHTML = `
       <span class="option-letter">${String.fromCharCode(65 + i)}</span>
-      <span class="option-text">${opt}</span>
+      <span class="option-text">${marked.parseInline(opt)}</span>
     `;
     btn.addEventListener('click', () => selectAnswer(i, btn));
     optionsContainer.appendChild(btn);

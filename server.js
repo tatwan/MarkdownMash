@@ -301,12 +301,12 @@ app.post('/api/admin/login', async (req, res) => {
 
 // Create a new session (upload quiz, get session code + QR)
 app.post('/api/admin/session', async (req, res) => {
-  const { markdown } = req.body;
+  const { markdown, courseName } = req.body;
   try {
     const quiz = parseQuizMarkdown(markdown);
 
     // Create session in database
-    const { id, code, quizData } = await db.createSession(quiz);
+    const { id, code, quizData } = await db.createSession(quiz, courseName);
 
     // Create in-memory session state
     const sessionState = {
@@ -431,6 +431,35 @@ app.get('/api/admin/sessions', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const sessions = await db.listSessions(limit);
   res.json({ success: true, sessions });
+});
+
+// Update session metadata
+app.post('/api/admin/session/:code/metadata', async (req, res) => {
+  const { code } = req.params;
+  const { courseName, isTest } = req.body;
+  try {
+    await db.updateSessionMetadata(code, courseName, isTest);
+    res.json({ success: true, message: 'Metadata updated' });
+  } catch (err) {
+    console.error('Update metadata error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Delete a session permanently
+app.delete('/api/admin/session/:code', async (req, res) => {
+  const { code } = req.params;
+  try {
+    // If it's active, remove it from memory too
+    if (activeSessions.has(code)) {
+      activeSessions.delete(code);
+    }
+    await db.deleteSession(code);
+    res.json({ success: true, message: 'Session deleted' });
+  } catch (err) {
+    console.error('Delete session error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
 });
 
 // Keep-alive ping — prevents Render free-tier from sleeping mid-quiz.

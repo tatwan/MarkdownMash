@@ -77,7 +77,9 @@ async function initializeDatabase(retries = 5, delay = 3000) {
         ended_at TIMESTAMP,
         total_questions INTEGER DEFAULT 0,
         passing_percent INTEGER DEFAULT 70,
-        total_score INTEGER DEFAULT 100
+        total_score INTEGER DEFAULT 100,
+        course_name TEXT,
+        is_test BOOLEAN DEFAULT false
       );
 
       -- Participants: Track who joined each session
@@ -139,6 +141,16 @@ async function runMigrations(client) {
       check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'owner_id'",
       migrate: "ALTER TABLE sessions ADD COLUMN owner_id INTEGER REFERENCES admins(id)"
     },
+    // Add course_name to sessions
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'course_name'",
+      migrate: "ALTER TABLE sessions ADD COLUMN course_name TEXT"
+    },
+    // Add is_test to sessions
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'is_test'",
+      migrate: "ALTER TABLE sessions ADD COLUMN is_test BOOLEAN DEFAULT false"
+    },
     // Add is_kicked to participants
     {
       check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'participants' AND column_name = 'is_kicked'",
@@ -192,7 +204,7 @@ function generateParticipantId() {
 // Database API
 const dbApi = {
   // Session operations
-  async createSession(quizData) {
+  async createSession(quizData, courseName = null) {
     let code;
     let attempts = 0;
 
@@ -208,8 +220,8 @@ const dbApi = {
     }
 
     const result = await pool.query(
-      `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score, course_name, is_test)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false)
        RETURNING id`,
       [
         code,
@@ -217,7 +229,8 @@ const dbApi = {
         JSON.stringify(quizData),
         quizData.questions.length,
         quizData.passingPercent || 70,
-        quizData.totalScore || 100
+        quizData.totalScore || 100,
+        courseName
       ]
     );
 
@@ -262,7 +275,7 @@ const dbApi = {
 
   async listSessions(limit = 50) {
     const result = await pool.query(
-      `SELECT s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at, s.total_questions,
+      `SELECT s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at, s.total_questions, s.course_name, s.is_test,
               (SELECT COUNT(*) FROM participants WHERE session_id = s.id) as participant_count
        FROM sessions s
        ORDER BY s.created_at DESC
@@ -270,6 +283,17 @@ const dbApi = {
       [limit]
     );
     return result.rows;
+  },
+
+  async deleteSession(code) {
+    return pool.query('DELETE FROM sessions WHERE code = $1', [code]);
+  },
+
+  async updateSessionMetadata(code, courseName, isTest) {
+    return pool.query(
+      'UPDATE sessions SET course_name = $1, is_test = $2 WHERE code = $3 RETURNING *',
+      [courseName, isTest, code]
+    );
   },
 
   // Participant operations
@@ -337,7 +361,7 @@ const dbApi = {
     const result = await pool.query(
       `SELECT
         s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at,
-        s.total_questions, s.total_score,
+        s.total_questions, s.total_score, s.course_name, s.is_test,
         COUNT(DISTINCT p.id) as participant_count,
         ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1) as avg_score_percent
       FROM sessions s

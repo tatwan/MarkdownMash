@@ -98,7 +98,18 @@ async function joinSession(code) {
 
 // Initialize Socket.IO
 function initSocket() {
-  socket = io();
+ // Configure marked to use highlight.js
+if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
+  marked.setOptions({
+    highlight: function(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+      return hljs.highlight(code, { language }).value;
+    },
+    breaks: true
+  });
+}
+
+const socket = io();
 
   socket.on('connect', () => {
     socket.emit('presenter_join', sessionCode);
@@ -145,7 +156,7 @@ function initSocket() {
     // Update UI
     currentQNum.textContent = data.questionNumber;
     totalQNum.textContent = data.totalQuestions;
-    questionText.textContent = data.question.text;
+    questionText.innerHTML = marked.parse(data.question.text);
     answeredCount.textContent = '0';
 
     // Render options (no correct highlighting yet)
@@ -169,7 +180,7 @@ function initSocket() {
 
     // Update result section
     resultQNum.textContent = currentQNum.textContent;
-    resultQuestionText.textContent = currentQuestion.text;
+    resultQuestionText.innerHTML = marked.parse(currentQuestion.text);
 
     // Calculate correct answers
     const correctAnswers = data.stats.counts.reduce((sum, count, i) => {
@@ -202,7 +213,7 @@ function renderOptions(options) {
     div.className = 'presenter-option';
     div.innerHTML = `
       <span class="option-letter">${String.fromCharCode(65 + i)}</span>
-      <span class="option-text">${opt}</span>
+      <span class="option-text">${marked.parseInline(opt)}</span>
     `;
     optionsContainer.appendChild(div);
   });
