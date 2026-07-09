@@ -525,7 +525,7 @@ function renderPreviewQuestion() {
 
 // Local markdown parser for preview
 function parseQuizMarkdownLocal(markdown) {
-  const lines = markdown.split('\\n');
+  const lines = markdown.split('\n');
   const quiz = { title: '', questions: [] };
   let currentQuestion = null;
 
@@ -541,7 +541,7 @@ function parseQuizMarkdownLocal(markdown) {
       if (currentQuestion) {
         quiz.questions.push(currentQuestion);
       }
-      const questionText = trimmed.slice(3).replace(/^Q\\d+:\\s*/, '').trim();
+      const questionText = trimmed.slice(3).replace(/^Q\d+:\s*/, '').trim();
       currentQuestion = {
         id: quiz.questions.length + 1,
         text: questionText,
@@ -551,7 +551,7 @@ function parseQuizMarkdownLocal(markdown) {
       continue;
     }
 
-    const optionMatch = trimmed.match(/^-\\s*\\[([ xX])\\]\\s*(.+)$/);
+    const optionMatch = trimmed.match(/^-\s*\[([ xX])\]\s*(.+)$/);
     if (optionMatch && currentQuestion) {
       const isCorrect = optionMatch[1].toLowerCase() === 'x';
       const optionText = optionMatch[2].trim();
