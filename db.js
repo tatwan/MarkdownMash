@@ -431,12 +431,28 @@ const dbApi = {
         (SELECT COUNT(*) FROM sessions) as total_sessions,
         (SELECT COUNT(*) FROM sessions WHERE status = 'ended') as completed_sessions,
         (SELECT COUNT(*) FROM participants) as total_participants,
+        (SELECT COUNT(DISTINCT course_name) FROM sessions WHERE course_name IS NOT NULL AND course_name != '') as total_courses,
         (SELECT ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1)
          FROM participants p
          JOIN sessions s ON s.id = p.session_id
          WHERE s.status = 'ended') as overall_avg_score`
     );
     return result.rows[0];
+  },
+
+  async getCourseStats() {
+    const result = await pool.query(
+      `SELECT
+        COALESCE(NULLIF(TRIM(s.course_name), ''), 'No Course') as course_name,
+        COUNT(DISTINCT s.id) as session_count,
+        COUNT(DISTINCT p.id) as participant_count
+       FROM sessions s
+       LEFT JOIN participants p ON p.session_id = s.id
+       WHERE s.is_test = false
+       GROUP BY COALESCE(NULLIF(TRIM(s.course_name), ''), 'No Course')
+       ORDER BY session_count DESC`
+    );
+    return result.rows;
   },
 
   async getParticipantAnswers(sessionId) {

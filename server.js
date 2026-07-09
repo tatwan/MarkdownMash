@@ -964,13 +964,16 @@ function getDifficultyRating(correctPercent) {
 // Platform overview statistics
 app.get('/api/admin/analytics/overview', async (req, res) => {
   const stats = await db.getPlatformStats();
+  const courseStats = await db.getCourseStats();
   res.json({
     success: true,
     stats: {
       totalSessions: stats.total_sessions || 0,
       completedSessions: stats.completed_sessions || 0,
       totalParticipants: stats.total_participants || 0,
-      overallAvgScore: stats.overall_avg_score || 0
+      overallAvgScore: stats.overall_avg_score || 0,
+      totalCourses: stats.total_courses || 0,
+      courseBreakdown: courseStats
     }
   });
 });

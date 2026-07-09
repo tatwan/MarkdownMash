@@ -110,6 +110,7 @@ const totalSessionsStat = document.getElementById('total-sessions-stat');
 const completedSessionsStat = document.getElementById('completed-sessions-stat');
 const totalParticipantsStat = document.getElementById('total-participants-stat');
 const avgScoreStat = document.getElementById('avg-score-stat');
+const totalCoursesStat = document.getElementById('total-courses-stat');
 
 // Session detail elements
 const sessionDetailSection = document.getElementById('session-detail-section');
@@ -863,6 +864,7 @@ function hideAnalytics() {
 }
 
 // Load platform overview stats
+let overviewChartInstance = null;
 async function loadPlatformStats() {
   try {
     const res = await fetch('/api/admin/analytics/overview');
@@ -873,6 +875,55 @@ async function loadPlatformStats() {
       completedSessionsStat.textContent = data.stats.completedSessions;
       totalParticipantsStat.textContent = data.stats.totalParticipants;
       avgScoreStat.textContent = `${Math.round(data.stats.overallAvgScore || 0)}%`;
+      if (totalCoursesStat) {
+        totalCoursesStat.textContent = data.stats.totalCourses;
+      }
+      
+      // Render Course Overview Chart
+      const ctx = document.getElementById('course-overview-chart');
+      if (ctx && data.stats.courseBreakdown) {
+        const breakdown = data.stats.courseBreakdown;
+        const labels = breakdown.map(b => b.course_name);
+        const sessionData = breakdown.map(b => parseInt(b.session_count, 10));
+        const participantData = breakdown.map(b => parseInt(b.participant_count, 10));
+
+        if (overviewChartInstance) {
+          overviewChartInstance.destroy();
+        }
+
+        overviewChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Total Sessions',
+                data: sessionData,
+                backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                borderColor: '#6366f1',
+                borderWidth: 1
+              },
+              {
+                label: 'Total Participants',
+                data: participantData,
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderColor: '#10b981',
+                borderWidth: 1
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: { beginAtZero: true, ticks: { precision: 0, color: '#e2e8f0' } },
+              x: { ticks: { color: '#e2e8f0' } }
+            },
+            plugins: {
+              legend: { labels: { color: '#e2e8f0' } }
+            }
+          }
+        });
+      }
     }
   } catch (err) {
     console.error('Failed to load platform stats', err);
@@ -1050,6 +1101,7 @@ editMetadataForm.addEventListener('submit', async (e) => {
   try {
     const res = await authFetch(`/api/admin/session/${code}/metadata`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ courseName, isTest })
     });
     const result = await res.json();
