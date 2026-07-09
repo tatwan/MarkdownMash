@@ -173,10 +173,15 @@
               <span class="stat-label">Total Courses</span>
             </div>
           </div>
-          
-          <div class="chart-container" style="margin-top: 2rem; background: var(--bg-card); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
-            <h3>Course Overview</h3>
-            <canvas id="course-overview-chart" width="400" height="150"></canvas>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+            <div class="chart-container" style="background: var(--bg-card); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+              <h3>Sessions per Course</h3>
+              <canvas id="course-sessions-chart" width="400" height="200"></canvas>
+            </div>
+            <div class="chart-container" style="background: var(--bg-card); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
+              <h3>Participants per Course</h3>
+              <canvas id="course-participants-chart" width="400" height="200"></canvas>
+            </div>
           </div>
         </div>
 

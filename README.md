@@ -20,6 +20,10 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 - **Presenter Mode** - A dedicated, full-screen view optimized for classroom projectors or remote screen sharing.
 - **Premium, Mobile-Optimized UI** - Gradient backgrounds, circular timers, smooth animations, and a smart mobile interface for participants.
 - **Multi-session Support** - Host multiple concurrent quiz sessions seamlessly with unique Kahoot-style 6-character codes.
+- **Rich Markdown & Code Highlighting** - Format questions and answers with bold, italics, lists, and syntax-highlighted code blocks (`highlight.js`).
+- **Inline Quiz Previews** - Test and preview your markdown formatting directly in the Admin Dashboard with a built-in mobile simulator.
+- **Course Metadata & Grouping** - Assign course tags to sessions to easily organize and filter your Analytics dashboard.
+- **Test/Dry Runs** - Flag sessions as test runs to exclude them from your primary analytics, or permanently delete unwanted sessions.
 - **Exportable Data** - Export full session results and analytics to CSV for external grading or record-keeping.
 - **PostgreSQL Persistence** - Session histories, answers, and analytics survive server restarts. 
 - **Frictionless Onboarding** - Zero setup for participants; students just enter their name and jump right in.
@@ -139,24 +143,30 @@ Default admin password: `admin123` (change via `.env`)
 Create quizzes in Markdown format:
 
 ```markdown
-# My Quiz Title
+# Intro to Python
 # Score 100
 
-## Q1: What is the capital of France?
-- [ ] London
-- [x] Paris
-- [ ] Berlin
-- [ ] Madrid
-::time=20
+## Q1: What does the following code print?
+```python
+def greet(name):
+    print(f"Hello, {name}!")
 
-## Q2: Which language runs in web browsers?
-- [ ] Java
-- [ ] Python
-- [x] JavaScript
-- [ ] C++
+greet("Alice")
+```
+- [ ] Hello, name!
+- [x] Hello, Alice!
+- [ ] Error
+::time=30
+
+## Q2: Which of the following are **mutable** data types in Python? (Select one)
+- [ ] Tuple
+- [x] List
+- [ ] String
+- [ ] Integer
 ::time=15
 
 ## Q3: Is the Earth flat?
+> "The Earth is a sphere." - Science
 - [ ] True
 - [x] False
 ::time=10
@@ -168,7 +178,7 @@ Create quizzes in Markdown format:
 |---------|--------|-------------|
 | Quiz title | `# Title` | Single `#` at the start |
 | Total score | `# Score 100` | Points distributed across questions (default: 100) |
-| Question | `## Q1: Text` | The `Q1:` prefix is optional |
+| Question | `## Q1: Text` | The `Q1:` prefix is optional. Any unmatched lines below this will be appended as multi-line text (e.g., code blocks) |
 | Wrong answer | `- [ ] Option` | Unchecked checkbox |
 | Correct answer | `- [x] Option` | Checked checkbox |
 | Time limit | `::time=20` | Seconds per question (default: 20) |
@@ -443,7 +453,7 @@ All data includes proper foreign keys and indexes for performance.
 ## Limitations
 
 - No persistent user accounts (participants join per-session)
-- No image/media support in questions (text only)
+- No native image uploading (images must be hosted via external URL using standard Markdown `![alt](url)`)
 
 ## License
 

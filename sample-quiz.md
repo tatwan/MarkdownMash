@@ -1,37 +1,41 @@
-# Sample Programming Quiz
+# Intro to Python & Data Analysis
 # Score 100
 
-## Q1: What does HTML stand for?
-- [ ] Hyper Text Makeup Language
-- [x] Hyper Text Markup Language
-- [ ] Home Tool Markup Language
-- [ ] Hyperlinks and Text Markup Language
-::time=20
+## Q1: What does the following code print?
+```python
+def greet(name):
+    print(f"Hello, {name}!")
 
-## Q2: Which language runs in a web browser?
-- [ ] Java
-- [ ] C
-- [ ] Python
-- [x] JavaScript
+greet("Alice")
+```
+- [ ] Hello, name!
+- [x] Hello, Alice!
+- [ ] Error
+::time=30
+
+## Q2: Which of the following are **mutable** data types in Python? (Select one)
+- [ ] Tuple
+- [x] List
+- [ ] String
+- [ ] Integer
 ::time=15
 
-## Q3: What does CSS stand for?
-- [ ] Creative Style Sheets
-- [x] Cascading Style Sheets
-- [ ] Computer Style Sheets
-- [ ] Colorful Style Sheets
-::time=15
-
-## Q4: Which is NOT a JavaScript framework?
-- [ ] React
-- [ ] Angular
-- [x] Django
-- [ ] Vue
+## Q3: What is the primary purpose of the `pandas` library?
+> "Pandas is a fast, powerful, flexible and easy to use open source data analysis and manipulation tool"
+- [ ] Web Development
+- [ ] Game Development
+- [x] Data Analysis and Manipulation
+- [ ] Image Processing
 ::time=20
 
-## Q5: What symbol is used for single-line comments in JavaScript?
-- [x] //
-- [ ] /* */
-- [ ] #
-- [ ] --
+## Q4: How do you read a CSV file into a Pandas DataFrame?
+- [ ] `pd.open("file.csv")`
+- [ ] `pd.load_csv("file.csv")`
+- [x] `pd.read_csv("file.csv")`
+- [ ] `pd.get_csv("file.csv")`
+::time=15
+
+## Q5: Is Python a statically typed language?
+- [ ] True
+- [x] False
 ::time=10

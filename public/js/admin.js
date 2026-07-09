@@ -720,6 +720,7 @@ function showQuestion(data) {
   currentQNum.textContent = data.questionNumber;
   currentQuestionText.innerHTML = marked.parse(data.question.text);
   answersReceived.textContent = '0';
+  optionsDisplay.innerHTML = ''; // Clear previous options
   data.question.options.forEach((opt, i) => {
     const btn = document.createElement('div');
     btn.className = 'option-btn';
@@ -879,49 +880,57 @@ async function loadPlatformStats() {
         totalCoursesStat.textContent = data.stats.totalCourses;
       }
       
-      // Render Course Overview Chart
-      const ctx = document.getElementById('course-overview-chart');
-      if (ctx && data.stats.courseBreakdown) {
+      // Render Course Overview Charts
+      const ctxSessions = document.getElementById('course-sessions-chart');
+      const ctxParticipants = document.getElementById('course-participants-chart');
+      
+      if (ctxSessions && ctxParticipants && data.stats.courseBreakdown) {
         const breakdown = data.stats.courseBreakdown;
         const labels = breakdown.map(b => b.course_name);
         const sessionData = breakdown.map(b => parseInt(b.session_count, 10));
         const participantData = breakdown.map(b => parseInt(b.participant_count, 10));
 
-        if (overviewChartInstance) {
-          overviewChartInstance.destroy();
-        }
+        if (window.courseSessionsChart) window.courseSessionsChart.destroy();
+        if (window.courseParticipantsChart) window.courseParticipantsChart.destroy();
 
-        overviewChartInstance = new Chart(ctx, {
+        const commonOptions = {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, ticks: { precision: 0, color: '#e2e8f0' } },
+            x: { ticks: { color: '#e2e8f0' } }
+          },
+          plugins: { legend: { display: false } }
+        };
+
+        window.courseSessionsChart = new Chart(ctxSessions, {
           type: 'bar',
           data: {
             labels: labels,
-            datasets: [
-              {
-                label: 'Total Sessions',
-                data: sessionData,
-                backgroundColor: 'rgba(99, 102, 241, 0.7)',
-                borderColor: '#6366f1',
-                borderWidth: 1
-              },
-              {
-                label: 'Total Participants',
-                data: participantData,
-                backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                borderColor: '#10b981',
-                borderWidth: 1
-              }
-            ]
+            datasets: [{
+              label: 'Total Sessions',
+              data: sessionData,
+              backgroundColor: 'rgba(99, 102, 241, 0.7)',
+              borderColor: '#6366f1',
+              borderWidth: 1
+            }]
           },
-          options: {
-            responsive: true,
-            scales: {
-              y: { beginAtZero: true, ticks: { precision: 0, color: '#e2e8f0' } },
-              x: { ticks: { color: '#e2e8f0' } }
-            },
-            plugins: {
-              legend: { labels: { color: '#e2e8f0' } }
-            }
-          }
+          options: commonOptions
+        });
+
+        window.courseParticipantsChart = new Chart(ctxParticipants, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Total Participants',
+              data: participantData,
+              backgroundColor: 'rgba(16, 185, 129, 0.7)',
+              borderColor: '#10b981',
+              borderWidth: 1
+            }]
+          },
+          options: commonOptions
         });
       }
     }
