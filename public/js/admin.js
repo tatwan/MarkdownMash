@@ -450,7 +450,6 @@ uploadBtn.addEventListener('click', async () => {
       uploadStatus.innerHTML = `<span style="color: var(--danger);">${data.error}</span>`;
       uploadStatus.classList.remove('hidden');
     }
-    }
   } catch (err) {
     uploadStatus.innerHTML = '<span style="color: var(--danger);">Connection error</span>';
     uploadStatus.classList.remove('hidden');
