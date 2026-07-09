@@ -2009,3 +2009,20 @@ select option {
     align-items: center;
   }
 }
+
+/* Filter button active styles */
+.filter-btn {
+  background: var(--bg-card) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.filter-btn:hover {
+  background: var(--border) !important;
+}
+
+.filter-btn.active {
+  background: var(--primary) !important;
+  color: white !important;
+  border-color: var(--primary) !important;
+}

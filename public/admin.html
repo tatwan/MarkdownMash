@@ -200,20 +200,22 @@
             <button class="btn btn-small filter-btn" data-filter="incomplete">Incomplete / Trial</button>
             <button class="btn btn-small filter-btn" data-filter="test">Tests Only</button>
           </div>
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th>Session</th>
-                <th>Course</th>
-                <th>Quiz Title</th>
-                <th>Participants</th>
-                <th>Avg Score</th>
-                <th>Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="analytics-sessions-body"></tbody>
-          </table>
+          <div style="overflow-x: auto; width: 100%; margin-top: 1rem;">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>Course</th>
+                  <th>Quiz Title</th>
+                  <th>Participants</th>
+                  <th>Avg Score</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-sessions-body"></tbody>
+            </table>
+          </div>
           <p id="no-sessions-msg" class="text-muted text-center mt-4 hidden">No completed sessions yet.</p>
         </div>
       </div>
