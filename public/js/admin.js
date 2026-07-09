@@ -560,6 +560,13 @@ function parseQuizMarkdownLocal(markdown) {
       if (isCorrect) {
         currentQuestion.correctIndices.push(optionIndex);
       }
+      continue;
+    }
+
+    // If it doesn't match any directive, append it to the current question's text
+    // We use the original 'line' to preserve indentation
+    if (currentQuestion) {
+      currentQuestion.text += '\n' + line;
     }
   }
 
@@ -889,7 +896,7 @@ async function loadSessionsList() {
     if (courseFilterSelect.options.length <= 1 && data.success) {
       const courses = new Set();
       data.sessions.forEach(s => {
-        if (s.course_name) courses.add(s.course_name);
+        if (s.courseName) courses.add(s.courseName);
       });
       courses.forEach(c => {
         const opt = document.createElement('option');
@@ -904,10 +911,10 @@ async function loadSessionsList() {
       
       const selectedCourse = courseFilterSelect.value;
       const filteredSessions = data.sessions.filter(s => {
-        if (selectedCourse !== 'all' && s.course_name !== selectedCourse) return false;
-        if (currentSessionsFilter === 'test' && !s.is_test) return false;
+        if (selectedCourse !== 'all' && s.courseName !== selectedCourse) return false;
+        if (currentSessionsFilter === 'test' && !s.isTest) return false;
         if (currentSessionsFilter === 'ended' && s.status !== 'ended') return false;
-        if (currentSessionsFilter === 'incomplete' && (s.status === 'ended' || s.is_test)) return false;
+        if (currentSessionsFilter === 'incomplete' && (s.status === 'ended' || s.isTest)) return false;
         return true;
       });
       
@@ -921,16 +928,16 @@ async function loadSessionsList() {
         const isCreated = session.status === 'created';
 
         let dateDisplay = 'N/A';
-        if (session.ended_at) {
-          dateDisplay = new Date(session.ended_at).toLocaleDateString();
-        } else if (session.started_at) {
-          dateDisplay = new Date(session.started_at).toLocaleDateString() + ' (interrupted)';
-        } else if (session.created_at) {
-          dateDisplay = new Date(session.created_at).toLocaleDateString() + ' (never started)';
+        if (session.endedAt) {
+          dateDisplay = new Date(session.endedAt).toLocaleDateString();
+        } else if (session.startedAt) {
+          dateDisplay = new Date(session.startedAt).toLocaleDateString() + ' (interrupted)';
+        } else if (session.createdAt) {
+          dateDisplay = new Date(session.createdAt).toLocaleDateString() + ' (never started)';
         }
 
         let statusBadge = '';
-        if (session.is_test) {
+        if (session.isTest) {
           statusBadge += `<span style="background:#9333ea;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Test</span>`;
         }
         if (isInterrupted) {
@@ -948,14 +955,14 @@ async function loadSessionsList() {
         } else {
           actionBtn += `<button class="btn btn-small view-btn" data-code="${escapeHtml(session.code)}" style="margin-right:5px;">View</button>`;
         }
-        actionBtn += `<button class="btn btn-small edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.course_name || '')}" data-test="${session.is_test}" style="margin-right:5px;">Edit</button>`;
+        actionBtn += `<button class="btn btn-small edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.courseName || '')}" data-test="${session.isTest}" style="margin-right:5px;">Edit</button>`;
         actionBtn += `<button class="btn btn-small delete-btn" data-code="${escapeHtml(session.code)}" style="background:#dc2626;color:#fff;">Delete</button>`;
 
         tr.innerHTML = `
           <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
-          <td>${escapeHtml(session.course_name || '-')}</td>
-          <td>${escapeHtml(session.quiz_title || 'Untitled')}</td>
-          <td>${session.participant_count}</td>
+          <td>${escapeHtml(session.courseName || '-')}</td>
+          <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
+          <td>${session.participantCount}</td>
           <td>${(isInterrupted || isCreated) ? '—' : Math.round(session.avgScorePercent || 0) + '%'}</td>
           <td>${dateDisplay}</td>
           <td style="white-space: nowrap;">${actionBtn}</td>
@@ -998,8 +1005,8 @@ async function loadSessionsList() {
         if (editBtn) {
           editBtn.addEventListener('click', () => {
             editSessionCode.value = session.code;
-            editCourseName.value = session.course_name || '';
-            editIsTest.checked = session.is_test;
+            editCourseName.value = session.courseName || '';
+            editIsTest.checked = session.isTest;
             editMetadataModal.classList.remove('hidden');
           });
         }

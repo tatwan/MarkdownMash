@@ -133,6 +133,12 @@ function parseQuizMarkdown(markdown) {
       currentQuestion.timeLimit = parseInt(timeMatch[1], 10);
       continue;
     }
+
+    // If it doesn't match any directive, append it to the current question's text
+    // We use the original 'line' to preserve indentation (important for code blocks)
+    if (currentQuestion) {
+      currentQuestion.text += '\n' + line;
+    }
   }
 
   // Push last question
@@ -986,7 +992,9 @@ app.get('/api/admin/analytics/sessions', async (req, res) => {
       endedAt: s.ended_at,
       totalQuestions: s.total_questions,
       participantCount: s.participant_count || 0,
-      avgScorePercent: s.avg_score_percent || 0
+      avgScorePercent: s.avg_score_percent || 0,
+      courseName: s.course_name,
+      isTest: s.is_test
     }))
   });
 });
