@@ -134,23 +134,29 @@ DATABASE_URL=postgresql://user:password@host:port/your_db_name
 ADMIN_PASSWORD=your_secure_password
 JWT_SECRET=replace-with-a-long-random-value
 GUEST_TRIAL_JWT_SECRET=replace-with-a-different-long-random-value
+GUEST_TRIAL_ENABLED=true
 ```
 
 **Admin Password Setup:** The `ADMIN_PASSWORD` in your `.env` file acts as a one-time bootstrap password. During your first login to the Admin Dashboard, the system will use this variable to permanently create your Master Admin account in the PostgreSQL database. **Note:** Changing the `.env` variable after your first login will not change your password.
 
-Guest trials are enabled by default in `render.yaml`. They last 20 minutes, allow up to eight participants, live only in server memory, and disappear on expiration or server restart. Set `GUEST_TRIAL_ENABLED=false` to disable the public **Try It Out** entry point.
+Generate the two secrets independently:
+
+```bash
+openssl rand -hex 32
+```
+
+Guest trials are enabled when `GUEST_TRIAL_ENABLED` is `true`. By default they last 20 minutes, allow up to eight participants, live only in server memory, and disappear on expiration or server restart. Set the value to `false` to remove the public **Try It Out** entry point.
 
 **Get your DATABASE_URL from Supabase:**
 1. Create a free account at [supabase.com](https://supabase.com)
 2. Create a new project
-3. Go to **Project Settings** → **Database**
-4. Copy the **"Connection pooling"** URI (uses port 6543, recommended for serverless)
+3. Open the project and select **Connect**
+4. For a persistent Render web service, copy the **Session pooler** connection string (port 5432). This is compatible with IPv4 networks.
 5. Replace `[YOUR-PASSWORD]` with your actual database password
 
 > **💡 Alternative PostgreSQL Providers:**
 > - **Neon**: [neon.tech](https://neon.tech) - Serverless Postgres with generous free tier
 > - **Railway**: [railway.app](https://railway.app) - Simple deployment with built-in Postgres
-> - **ElephantSQL**: [elephantsql.com](https://elephantsql.com) - Managed PostgreSQL
 > - **Self-hosted**: Any PostgreSQL 12+ instance
 
 ### Run
@@ -166,7 +172,7 @@ Open `http://localhost:3000` in your browser.
 - **Participant Join:** `http://localhost:3000/play.html`
 - **Presenter View:** `http://localhost:3000/present.html`
 
-Default admin password: `admin123` (change via `.env`)
+For local development only, the application falls back to `admin123` if `ADMIN_PASSWORD` is omitted. Always set a strong value in a deployed environment.
 
 ## Quiz Format
 
@@ -257,11 +263,13 @@ This app requires a PostgreSQL database. Choose one of these options:
 
 1. Create account at [supabase.com](https://supabase.com)
 2. Create new project (choose region closest to your users)
-3. Go to **Project Settings** → **Database** → **Connection pooling**
-4. Copy the connection string (port 6543)
+3. Select **Connect** in the project dashboard
+4. Copy the **Session pooler** connection string (port 5432) for a persistent Render web service
 5. Note your database password
 
-**Free tier includes:** 500MB database, 2GB bandwidth, unlimited API requests
+Supabase plan limits change over time, so review the current [Supabase pricing](https://supabase.com/pricing) before deploying.
+
+> Markdown Mash connects directly to PostgreSQL. It does not require a Supabase anon key, service-role key, or Supabase Auth. Keep the application tables out of the public Data API unless you intentionally configure API access and Row Level Security.
 
 #### Option 2: Neon (Serverless Postgres)
 
@@ -269,7 +277,7 @@ This app requires a PostgreSQL database. Choose one of these options:
 2. Create new project
 3. Copy the connection string from dashboard
 
-**Free tier includes:** 512MB storage, auto-suspend after inactivity
+Review the current [Neon pricing](https://neon.com/pricing) for plan limits.
 
 #### Option 3: Railway (Integrated Platform)
 
@@ -277,7 +285,7 @@ This app requires a PostgreSQL database. Choose one of these options:
 2. Create new Postgres database
 3. Copy the connection URL
 
-**Free tier includes:** $5/month credit
+Review the current [Railway pricing](https://railway.com/pricing) for plan limits.
 
 #### Option 4: Self-Hosted PostgreSQL
 
@@ -288,13 +296,15 @@ Any PostgreSQL 12+ instance will work. You'll need:
 
 ---
 
-### Deploy to Render.com
+### Deploy to Render
 
 **Prerequisites:**
 - GitHub account with this repository forked/cloned
 - PostgreSQL database from one of the options above
 
-**Steps:**
+#### Option A: Existing GitHub Web Service
+
+Use this method if, like the hosted Markdown Mash instance, you redeploy directly from a connected GitHub repository.
 
 1. **Push your code to GitHub** (if you haven't already)
 
@@ -314,15 +324,20 @@ Any PostgreSQL 12+ instance will work. You'll need:
    - **Start Command**: `npm start`
    - **Plan**: Free (or upgrade for better performance)
 
-   The included `render.yaml` also provisions separate generated secrets for admin and guest tokens and configures conservative guest-trial limits.
-
 5. **Add Environment Variables**
    
    Click **Advanced** → **Add Environment Variable**:
-   
-   **Variable 1: DATABASE_URL**
-   - Key: `DATABASE_URL`
-   - Value: Your PostgreSQL connection string from database setup
+
+   | Variable | Value |
+   |----------|-------|
+   | `DATABASE_URL` | Your PostgreSQL connection string |
+   | `ADMIN_PASSWORD` | A strong initial instructor password |
+   | `JWT_SECRET` | A long random value |
+   | `GUEST_TRIAL_JWT_SECRET` | A different long random value |
+   | `GUEST_TRIAL_ENABLED` | `true` to show **Try It Out**, otherwise `false` |
+   | `NODE_ENV` | `production` |
+
+   Generate each secret separately with `openssl rand -hex 32`.
    
    > ⚠️ **CRITICAL - Password Encoding**:
    > If your database password contains special characters (`!`, `@`, `#`, `$`, `%`, `&`, etc.), you MUST URL-encode them:
@@ -337,10 +352,6 @@ Any PostgreSQL 12+ instance will work. You'll need:
    > 
    > **Tool:** Use [urlencoder.org](https://www.urlencoder.org/) to encode your password
    
-   **Variable 2: ADMIN_PASSWORD** (Optional)
-   - Key: `ADMIN_PASSWORD`
-   - Value: Your custom admin password (default is `admin123`)
-
 6. **Deploy**
    - Click **Create Web Service**
    - Wait for build to complete (~2-3 minutes)
@@ -349,12 +360,27 @@ Any PostgreSQL 12+ instance will work. You'll need:
    
    Check the deployment logs for:
 ```
-   ✅ Connected to PostgreSQL database
-   ✅ Database tables initialized
-   ✅ Markdown Mash server running
+Connected to PostgreSQL database
+Database tables initialized
+Markdown Mash server running on http://localhost:<port>
 ```
 
    Visit your app at the provided URL (e.g., `https://yourapp.onrender.com`)
+
+#### Option B: Render Blueprint
+
+The included `render.yaml` can create a new Blueprint-managed web service with generated admin/JWT secrets and conservative guest-trial limits. In Render, choose **New** → **Blueprint**, connect the repository, and provide `DATABASE_URL` when prompted.
+
+`render.yaml` does not automatically update environment variables on a separately created GitHub Web Service; use Option A for that setup.
+
+### Post-Deployment Checklist
+
+1. Open `/admin.html` and confirm instructor sign-in works.
+2. Select **Try It Out**, preview the sample quiz, and launch the temporary room.
+3. Open the join page in another browser or private window and answer at least one question.
+4. Open the presenter view and confirm live updates, results, and the finale work.
+5. Confirm the trial does not appear in instructor history or analytics.
+6. Run one signed-in session, redeploy the service, and confirm its history remains available from PostgreSQL.
 
 ---
 
@@ -366,12 +392,13 @@ Railway can host both your app and database:
 
 1. Connect GitHub repository
 2. Add PostgreSQL service
-3. Deploy automatically links DATABASE_URL
+3. Add the environment variables listed below
+4. Deploy; Railway automatically provides the PostgreSQL connection URL
 
 #### Heroku
 
 1. Install Heroku Postgres add-on
-2. Set `ADMIN_PASSWORD` config var
+2. Set the environment variables listed below
 3. Deploy from GitHub
 
 #### Self-Hosted / VPS
@@ -384,12 +411,9 @@ cd MarkdownMash
 # Install dependencies
 npm install
 
-# Create .env file
-cat > .env << EOF
-DATABASE_URL=postgresql://user:password@localhost:5432/markdownmash
-ADMIN_PASSWORD=your_secure_password
-PORT=3000
-EOF
+# Create and edit the environment file
+cp .env.example .env
+# Add your database URL, admin password, and two independent random secrets.
 
 # Run with PM2 (process manager)
 npm install -g pm2
@@ -403,7 +427,8 @@ pm2 save
 
 **Render Free Tier:**
 - Spins down after 15 minutes of inactivity
-- First request after sleep takes ~30 seconds to wake up
+- A service can take about a minute to wake after it spins down
+- Its local filesystem is ephemeral; persistent classroom data belongs in PostgreSQL
 - Perfect for classroom use, demos, and low-traffic deployments
 
 **Database Persistence:**
@@ -415,8 +440,16 @@ pm2 save
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | **Yes** | - | PostgreSQL connection string (Supabase pooler) |
-| `ADMIN_PASSWORD` | No | `admin123` | Admin login password (used for initial setup only) |
+| `DATABASE_URL` | **Yes** | - | PostgreSQL connection string; use Supabase Session pooler for Render |
+| `ADMIN_PASSWORD` | **Yes in production** | `admin123` | Bootstrap instructor password, used for initial setup only |
+| `JWT_SECRET` | **Yes in production** | Development fallback | Signs instructor sessions; use a long random value |
+| `GUEST_TRIAL_JWT_SECRET` | **Yes in production** | Derived from `JWT_SECRET` | Separately signs guest-trial access |
+| `GUEST_TRIAL_ENABLED` | No | `true` | Enables or disables public **Try It Out** |
+| `GUEST_TRIAL_TTL_MINUTES` | No | `20` | Trial lifetime in minutes |
+| `GUEST_TRIAL_MAX_PARTICIPANTS` | No | `8` | Participant limit per trial |
+| `GUEST_TRIAL_MAX_CONCURRENT` | No | `25` | Maximum active trials per app instance |
+| `GUEST_TRIAL_STARTS_PER_IP_HOUR` | No | `5` | Trial starts allowed per IP each hour |
+| `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
 ## Development
