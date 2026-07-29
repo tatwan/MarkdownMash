@@ -6,26 +6,61 @@
   <title>Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-  <div class="container">
-    <header class="header">
-      <h1>Markdown Mash</h1>
-      <p>Real-time quiz platform for interactive learning</p>
-    </header>
+<body class="brand-body landing-body">
+  <main class="landing-shell">
+    <div class="brand-orbit brand-orbit-one" aria-hidden="true"></div>
+    <div class="brand-orbit brand-orbit-two" aria-hidden="true"></div>
 
-    <div class="landing-options">
-      <div class="card landing-card">
-        <h2>Host a Quiz</h2>
-        <p>Upload questions, manage participants, and control the quiz flow</p>
-        <a href="/admin.html" class="btn btn-primary btn-block">Admin Dashboard</a>
+    <section class="landing-hero">
+      <a class="brand-lockup" href="/" aria-label="Markdown Mash home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg><use href="/assets/icons.svg#brand-bolt"></use></svg>
+        </span>
+        <span class="brand-name">Markdown <strong>Mash</strong></span>
+      </a>
+
+      <div class="landing-copy">
+        <p class="brand-kicker">
+          <svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>
+          Live classroom quizzes
+        </p>
+        <h1>Turn quick questions into <span>Mash Time.</span></h1>
+        <p class="landing-lede">Fast feedback, friendly competition, and a room full of learners thinking together.</p>
       </div>
 
-      <div class="card landing-card">
-        <h2>Join a Quiz</h2>
-        <p>Enter your name and participate in the live quiz</p>
-        <a href="/play.html" class="btn btn-success btn-block">Join as Participant</a>
+      <div class="landing-art" aria-hidden="true">
+        <span class="art-bolt"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
+        <span class="art-play"><svg><use href="/assets/icons.svg#play"></use></svg></span>
+        <span class="art-plus">+</span>
+        <span class="art-star"><svg><use href="/assets/icons.svg#spark"></use></svg></span>
+        <span class="mash-stamp">MASH<br><strong>TIME!</strong></span>
       </div>
-    </div>
-  </div>
+    </section>
+
+    <section class="landing-action-panel" aria-labelledby="join-heading">
+      <div class="landing-action-icon">
+        <svg aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>
+      </div>
+      <p class="section-eyebrow">Ready to play?</p>
+      <h2 id="join-heading">Join a Mash</h2>
+      <p>Enter the six-character code from your instructor.</p>
+      <form class="landing-join-form" action="/play.html" method="get">
+        <label class="sr-only" for="landing-session-code">Session code</label>
+        <input id="landing-session-code" name="session" class="code-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" minlength="6" maxlength="6" pattern="[A-Za-z0-9]{6}" placeholder="ABC123" aria-describedby="join-code-help" required>
+        <span id="join-code-help" class="input-hint">Six letters or numbers</span>
+        <button class="btn btn-primary btn-block btn-lg" type="submit">
+          Join the quiz
+          <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
+        </button>
+      </form>
+      <div class="host-entry">
+        <span>Running the room?</span>
+        <a href="/admin.html">
+          <svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg>
+          Instructor sign in
+        </a>
+      </div>
+    </section>
+  </main>
 </body>
 </html>

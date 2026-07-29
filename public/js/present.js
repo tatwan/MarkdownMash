@@ -1,9 +1,17 @@
-// DOM Elements
+if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
+  marked.setOptions({
+    highlight(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+      return hljs.highlight(code, { language }).value;
+    },
+    breaks: true
+  });
+}
+
 const sessionInputSection = document.getElementById('session-input-section');
 const sessionForm = document.getElementById('session-form');
 const sessionCodeInput = document.getElementById('session-code-input');
 const sessionError = document.getElementById('session-error');
-
 const waitingSection = document.getElementById('waiting-section');
 const sessionEndedSection = document.getElementById('session-ended-section');
 const sessionEndedMessage = document.getElementById('session-ended-message');
@@ -11,13 +19,11 @@ const getreadySection = document.getElementById('getready-section');
 const questionSection = document.getElementById('question-section');
 const resultsSection = document.getElementById('results-section');
 const endedSection = document.getElementById('ended-section');
-
 const quizTitle = document.getElementById('quiz-title');
 const sessionCodeDisplay = document.getElementById('session-code-display');
 const participantCount = document.getElementById('participant-count');
 const joinUrl = document.getElementById('join-url');
 const qrCodeImg = document.getElementById('qr-code');
-
 const currentQNum = document.getElementById('current-q-num');
 const totalQNum = document.getElementById('total-q-num');
 const answeredCount = document.getElementById('answered-count');
@@ -26,287 +32,437 @@ const timer = document.getElementById('timer');
 const timerProgress = document.getElementById('timer-progress');
 const questionText = document.getElementById('question-text');
 const optionsContainer = document.getElementById('options-container');
-
 const resultQNum = document.getElementById('result-q-num');
 const resultQuestionText = document.getElementById('result-question-text');
 const correctCount = document.getElementById('correct-count');
 const totalAnswered = document.getElementById('total-answered');
-const resultsChart = document.getElementById('results-chart');
+const answerDistribution = document.getElementById('answer-distribution');
+const correctResponders = document.getElementById('correct-responders');
+const momentCard = document.getElementById('moment-card');
+const momentIconUse = document.getElementById('moment-icon-use');
+const momentEyebrow = document.getElementById('moment-eyebrow');
+const momentMessage = document.getElementById('moment-message');
+const podiumScene = document.getElementById('podium-scene');
+const hardestScene = document.getElementById('hardest-scene');
+const podiumStage = document.getElementById('podium-stage');
+const runnersUp = document.getElementById('runners-up');
+const hardestQuestions = document.getElementById('hardest-questions');
+const confettiField = document.getElementById('confetti-field');
+const finaleSubtitle = document.getElementById('finale-subtitle');
+const finaleReplayBtn = document.getElementById('finale-replay-btn');
+const finaleNextBtn = document.getElementById('finale-next-btn');
+const finaleProgress = document.getElementById('finale-progress');
 
-// State
 let socket = null;
 let sessionCode = null;
 let currentQuestion = null;
 let timerInterval = null;
+let highlightInterval = null;
 let timerDuration = 20;
-let chart = null;
+let finaleData = null;
+let finaleTimeouts = [];
 
-// Initialize - check for session code in URL
+function iconHref(icon) {
+  return `/assets/icons.svg#${icon}`;
+}
+
 function init() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlSessionCode = urlParams.get('session');
-
+  createConfetti();
+  const urlSessionCode = new URLSearchParams(window.location.search).get('session');
   if (urlSessionCode) {
     sessionCodeInput.value = urlSessionCode.toUpperCase();
-    // Auto-join if session code is provided
     joinSession(urlSessionCode.toUpperCase());
   }
 }
 
-// Session form submission
-sessionForm.addEventListener('submit', (e) => {
-  e.preventDefault();
+sessionForm.addEventListener('submit', event => {
+  event.preventDefault();
   const code = sessionCodeInput.value.trim().toUpperCase();
-  if (code && code.length === 6) {
+  if (code.length === 6) {
     joinSession(code);
   } else {
     showSessionError('Please enter a valid 6-character session code');
   }
 });
 
-// Join session
 async function joinSession(code) {
   sessionCode = code;
 
-  // Fetch QR code and session info
   try {
-    const res = await fetch(`/api/admin/session/${code}/qr`);
-    const data = await res.json();
+    const response = await fetch(`/api/admin/session/${code}/qr`);
+    const data = await response.json();
 
-    if (data.success) {
-      // Show waiting section with QR code
-      sessionCodeDisplay.textContent = code;
-      joinUrl.textContent = data.joinUrl;
-
-      if (data.qrCode) {
-        qrCodeImg.src = data.qrCode;
-        qrCodeImg.style.display = 'block';
-      }
-
-      hideAllSections();
-      waitingSection.classList.remove('hidden');
-
-      // Initialize socket connection
-      initSocket();
-    } else {
+    if (!data.success) {
       showSessionError(data.error || 'Session not found');
+      return;
     }
-  } catch (err) {
+
+    sessionCodeDisplay.textContent = code;
+    joinUrl.textContent = data.joinUrl;
+    if (data.qrCode) {
+      qrCodeImg.src = data.qrCode;
+      qrCodeImg.style.display = 'block';
+    }
+
+    hideAllSections();
+    waitingSection.classList.remove('hidden');
+    initSocket();
+  } catch (error) {
     showSessionError('Connection error. Please try again.');
   }
 }
 
-// Initialize Socket.IO
 function initSocket() {
- // Configure marked to use highlight.js
-if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
-  marked.setOptions({
-    highlight: function(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    },
-    breaks: true
-  });
-}
-
-const socket = io();
+  if (socket) socket.disconnect();
+  socket = io();
 
   socket.on('connect', () => {
     socket.emit('presenter_join', sessionCode);
   });
 
-  socket.on('session_invalid', (data) => {
+  socket.on('session_invalid', data => {
     hideAllSections();
     sessionEndedMessage.textContent = data.message || 'Session not found';
     sessionEndedSection.classList.remove('hidden');
   });
 
-  socket.on('session_ended', (data) => {
-    clearInterval(timerInterval);
+  socket.on('session_ended', data => {
+    clearPresenterTimers();
     hideAllSections();
     sessionEndedMessage.textContent = data.message || 'This session has ended.';
     sessionEndedSection.classList.remove('hidden');
   });
 
-  socket.on('participant_joined', (data) => {
+  socket.on('participant_joined', data => {
     participantCount.textContent = data.count;
     totalParticipants.textContent = data.count;
   });
 
-  socket.on('quiz_loaded', (data) => {
+  socket.on('quiz_loaded', data => {
     quizTitle.textContent = data.title;
-    if (data.sessionCode) {
-      sessionCodeDisplay.textContent = data.sessionCode;
-    }
+    if (data.sessionCode) sessionCodeDisplay.textContent = data.sessionCode;
   });
 
-  socket.on('quiz_started', (data) => {
+  socket.on('quiz_started', data => {
     quizTitle.textContent = data.title;
     totalQNum.textContent = data.totalQuestions;
-
-    // Show "Get Ready" briefly
     hideAllSections();
     getreadySection.classList.remove('hidden');
   });
 
-  socket.on('question_started', (data) => {
+  socket.on('question_started', data => {
+    clearPresenterTimers();
     currentQuestion = data.question;
-    timerDuration = data.timeRemaining;
-
-    // Update UI
+    timerDuration = Math.max(1, data.timeRemaining);
     currentQNum.textContent = data.questionNumber;
     totalQNum.textContent = data.totalQuestions;
     questionText.innerHTML = marked.parse(data.question.text);
     answeredCount.textContent = '0';
-
-    // Render options (no correct highlighting yet)
     renderOptions(data.question.options);
-
-    // Start timer
     startTimer(data.timeRemaining);
-
-    // Show question section
     hideAllSections();
     questionSection.classList.remove('hidden');
   });
 
-  socket.on('answer_received', (data) => {
+  socket.on('answer_received', data => {
     answeredCount.textContent = data.answeredCount;
     totalParticipants.textContent = data.totalParticipants;
   });
 
-  socket.on('question_ended', (data) => {
-    clearInterval(timerInterval);
+  socket.on('question_ended', data => {
+    clearPresenterTimers();
+    if (data.question) currentQuestion = data.question;
+    if (!currentQuestion) return;
 
-    // Update result section
-    resultQNum.textContent = currentQNum.textContent;
+    resultQNum.textContent = data.questionNumber || currentQNum.textContent;
     resultQuestionText.innerHTML = marked.parse(currentQuestion.text);
 
-    // Calculate correct answers
-    const correctAnswers = data.stats.counts.reduce((sum, count, i) => {
-      return data.correctIndices.includes(i) ? sum + count : sum;
-    }, 0);
+    const correctAnswers = data.stats.counts.reduce(
+      (sum, count, index) => sum + (data.correctIndices.includes(index) ? count : 0),
+      0
+    );
     correctCount.textContent = correctAnswers;
     totalAnswered.textContent = data.stats.totalAnswered;
 
-    // Show chart with correct answer highlighted
-    showResultsChart(data);
+    renderAnswerDistribution(data);
+    renderCorrectResponders(data.presentation?.correctParticipants || []);
+    startHighlightRotation(data.presentation?.highlights || []);
 
-    // Show results section
     hideAllSections();
     resultsSection.classList.remove('hidden');
   });
 
-  socket.on('quiz_ended', () => {
-    clearInterval(timerInterval);
-    hideAllSections();
-    endedSection.classList.remove('hidden');
+  socket.on('quiz_ended', data => {
+    clearPresenterTimers();
+    showFinale(data);
   });
 }
 
-// Render options (no highlighting during question)
 function renderOptions(options) {
   optionsContainer.innerHTML = '';
-
-  options.forEach((opt, i) => {
-    const div = document.createElement('div');
-    div.className = 'presenter-option';
-    div.innerHTML = `
-      <span class="option-letter">${String.fromCharCode(65 + i)}</span>
-      <span class="option-text">${marked.parseInline(opt)}</span>
+  options.forEach((option, index) => {
+    const item = document.createElement('div');
+    item.className = 'presenter-option';
+    item.innerHTML = `
+      <span class="option-letter">${String.fromCharCode(65 + index)}</span>
+      <span class="option-text">${marked.parseInline(option)}</span>
     `;
-    optionsContainer.appendChild(div);
+    optionsContainer.appendChild(item);
   });
 }
 
-// Timer with circular progress
 function startTimer(seconds) {
-  clearInterval(timerInterval);
-  let remaining = seconds;
+  let remaining = Math.max(0, seconds);
   const circumference = 2 * Math.PI * 45;
-
   timerProgress.style.strokeDasharray = circumference;
   timerProgress.style.strokeDashoffset = 0;
-
   timer.textContent = remaining;
   timer.classList.remove('urgent');
+  timerProgress.classList.remove('urgent');
 
   timerInterval = setInterval(() => {
     remaining--;
-    timer.textContent = remaining;
-
-    // Update circular progress
-    const progress = remaining / timerDuration;
-    const offset = circumference * (1 - progress);
-    timerProgress.style.strokeDashoffset = offset;
+    timer.textContent = Math.max(0, remaining);
+    const progress = Math.max(0, remaining) / timerDuration;
+    timerProgress.style.strokeDashoffset = circumference * (1 - progress);
 
     if (remaining <= 5) {
       timer.classList.add('urgent');
       timerProgress.classList.add('urgent');
     }
-
-    if (remaining <= 0) {
-      clearInterval(timerInterval);
-    }
+    if (remaining <= 0) clearInterval(timerInterval);
   }, 1000);
 }
 
-// Show results chart
-function showResultsChart(data) {
-  const labels = currentQuestion.options.map((opt, i) => {
-    const letter = String.fromCharCode(65 + i);
-    return `${letter}. ${opt.length > 30 ? opt.substring(0, 27) + '...' : opt}`;
-  });
+function renderAnswerDistribution(data) {
+  answerDistribution.innerHTML = '';
   const counts = data.stats.counts;
-  const colors = currentQuestion.options.map((_, i) =>
-    data.correctIndices.includes(i) ? 'rgba(34, 197, 94, 0.9)' : 'rgba(99, 102, 241, 0.7)'
-  );
+  const total = Math.max(1, data.stats.totalParticipants || data.stats.totalAnswered);
+  const maxCount = Math.max(1, ...counts);
 
-  if (chart) {
-    chart.destroy();
-  }
+  currentQuestion.options.forEach((option, index) => {
+    const count = counts[index] || 0;
+    const percent = Math.round((count / total) * 100);
+    const isCorrect = data.correctIndices.includes(index);
+    const row = document.createElement('div');
+    row.className = `answer-bar-row${isCorrect ? ' correct' : ''}`;
 
-  chart = new Chart(resultsChart, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Responses',
-        data: counts,
-        backgroundColor: colors,
-        borderRadius: 8
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          ticks: {
-            stepSize: 1,
-            color: '#f1f5f9',
-            font: { size: 16 }
-          },
-          grid: { color: 'rgba(71, 85, 105, 0.5)' }
-        },
-        y: {
-          ticks: {
-            color: '#f1f5f9',
-            font: { size: 18 }
-          },
-          grid: { display: false }
-        }
-      }
-    }
+    row.innerHTML = `
+      <div class="answer-bar-label">
+        <span class="answer-letter">${String.fromCharCode(65 + index)}</span>
+        <span class="answer-copy">${marked.parseInline(option)}</span>
+        ${isCorrect ? `
+          <svg class="answer-check" aria-label="Correct answer">
+            <use href="/assets/icons.svg#check-circle"></use>
+          </svg>
+        ` : ''}
+      </div>
+      <div class="answer-bar-track">
+        <div class="answer-bar-fill" style="--bar-width: ${(count / maxCount) * 100}%"></div>
+        <span class="answer-bar-value">${count} · ${percent}%</span>
+      </div>
+    `;
+    answerDistribution.appendChild(row);
   });
 }
 
-// Hide all sections
+function renderCorrectResponders(participants) {
+  correctResponders.innerHTML = '';
+  if (participants.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'responders-empty';
+    empty.textContent = 'No correct answers this round';
+    correctResponders.appendChild(empty);
+    return;
+  }
+
+  const visibleParticipants = participants.slice(0, 5);
+  visibleParticipants.forEach(participant => {
+    const chip = document.createElement('span');
+    chip.className = 'responder-chip';
+    chip.textContent = participant.name;
+    correctResponders.appendChild(chip);
+  });
+
+  if (participants.length > visibleParticipants.length) {
+    const more = document.createElement('span');
+    more.className = 'responder-chip more';
+    more.textContent = `+${participants.length - visibleParticipants.length} more`;
+    correctResponders.appendChild(more);
+  }
+}
+
+function startHighlightRotation(highlights) {
+  clearInterval(highlightInterval);
+  const items = highlights.length > 0 ? highlights : [{
+    type: 'steady',
+    icon: 'check-circle',
+    eyebrow: 'Question complete',
+    message: 'Ready for the next one'
+  }];
+  let index = 0;
+
+  const showHighlight = () => {
+    const highlight = items[index % items.length];
+    momentCard.className = `result-insight-card moment-card ${highlight.type}`;
+    momentIconUse.setAttribute('href', iconHref(highlight.icon));
+    momentEyebrow.textContent = highlight.eyebrow;
+    momentMessage.textContent = highlight.message;
+    momentCard.classList.remove('moment-enter');
+    void momentCard.offsetWidth;
+    momentCard.classList.add('moment-enter');
+    index++;
+  };
+
+  showHighlight();
+  if (items.length > 1) highlightInterval = setInterval(showHighlight, 3500);
+}
+
+function showFinale(data) {
+  finaleData = data || { leaderboard: [], hardestQuestions: [] };
+  hideAllSections();
+  endedSection.classList.remove('hidden');
+  populateFinale();
+  replayPodium();
+}
+
+function populateFinale() {
+  const leaderboard = finaleData.leaderboard || [];
+  finaleSubtitle.textContent = leaderboard.length > 0
+    ? `${leaderboard.length} ${leaderboard.length === 1 ? 'participant' : 'participants'} completed the mash`
+    : 'Quiz complete';
+
+  podiumStage.querySelectorAll('.podium-place').forEach(place => {
+    const rank = Number(place.dataset.rank);
+    const participant = leaderboard[rank - 1];
+    place.classList.toggle('absent', !participant);
+    place.querySelector('[data-podium-name]').textContent = participant?.name || '';
+    place.querySelector('[data-podium-score]').textContent = participant
+      ? `${participant.correctCount} correct · ${participant.score} pts`
+      : '';
+  });
+
+  runnersUp.innerHTML = '';
+  leaderboard.slice(3, 5).forEach(participant => {
+    const card = document.createElement('article');
+    card.className = 'runner-up-card';
+    card.innerHTML = `
+      <span class="runner-rank">${participant.rank}</span>
+      <div>
+        <strong></strong>
+        <span>${participant.correctCount} correct · ${participant.score} pts</span>
+      </div>
+    `;
+    card.querySelector('strong').textContent = participant.name;
+    runnersUp.appendChild(card);
+  });
+
+  renderHardestQuestions(finaleData.hardestQuestions || []);
+}
+
+function replayPodium() {
+  clearFinaleTimeouts();
+  podiumScene.classList.remove('hidden');
+  hardestScene.classList.add('hidden');
+  finaleProgress.textContent = 'Podium';
+  setFinaleNextButton('Insights');
+  runnersUp.classList.remove('revealed');
+  confettiField.classList.remove('active');
+
+  podiumStage.querySelectorAll('.podium-place').forEach(place => {
+    place.classList.remove('revealed');
+  });
+
+  scheduleFinale(() => revealRank(3), 700);
+  scheduleFinale(() => revealRank(2), 1700);
+  scheduleFinale(() => {
+    revealRank(1);
+    confettiField.classList.add('active');
+  }, 2900);
+  scheduleFinale(() => runnersUp.classList.add('revealed'), 4200);
+
+  if ((finaleData.hardestQuestions || []).length > 0) {
+    scheduleFinale(showHardestScene, 8500);
+  }
+}
+
+function revealRank(rank) {
+  const place = podiumStage.querySelector(`[data-rank="${rank}"]`);
+  if (place && !place.classList.contains('absent')) {
+    place.classList.add('revealed');
+  }
+}
+
+function showHardestScene() {
+  clearFinaleTimeouts();
+  podiumScene.classList.add('hidden');
+  hardestScene.classList.remove('hidden');
+  finaleProgress.textContent = 'Class insights';
+  setFinaleNextButton('Podium');
+}
+
+function renderHardestQuestions(questions) {
+  hardestQuestions.innerHTML = '';
+  questions.forEach((question, index) => {
+    const card = document.createElement('article');
+    card.className = 'hard-question-card';
+    const commonWrong = question.commonWrongAnswer
+      ? `<div class="common-wrong"><span>Most common miss</span>${marked.parseInline(question.commonWrongAnswer)}</div>`
+      : '<div class="common-wrong"><span>Most common miss</span>No single wrong answer</div>';
+
+    card.innerHTML = `
+      <div class="hard-question-rank">
+        <svg aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg>
+        <span>${index + 1}</span>
+      </div>
+      <div class="hard-question-copy">
+        <div class="hard-question-label">Question ${question.index + 1}</div>
+        <h3>${marked.parse(question.text)}</h3>
+        ${commonWrong}
+      </div>
+      <div class="difficulty-ring" style="--difficulty: ${question.correctPercent}">
+        <strong>${question.correctPercent}%</strong>
+        <span>correct</span>
+      </div>
+    `;
+    hardestQuestions.appendChild(card);
+  });
+}
+
+function setFinaleNextButton(label) {
+  finaleNextBtn.innerHTML = `
+    ${label}
+    <svg aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
+  `;
+}
+
+function createConfetti() {
+  for (let index = 0; index < 42; index++) {
+    const piece = document.createElement('span');
+    piece.style.setProperty('--x', `${(index * 37) % 100}%`);
+    piece.style.setProperty('--delay', `${(index % 9) * 0.08}s`);
+    piece.style.setProperty('--fall', `${2.4 + (index % 6) * 0.22}s`);
+    piece.style.setProperty('--spin', `${180 + (index % 5) * 90}deg`);
+    piece.dataset.color = String((index % 5) + 1);
+    confettiField.appendChild(piece);
+  }
+}
+
+function scheduleFinale(callback, delay) {
+  finaleTimeouts.push(setTimeout(callback, delay));
+}
+
+function clearFinaleTimeouts() {
+  finaleTimeouts.forEach(timeout => clearTimeout(timeout));
+  finaleTimeouts = [];
+}
+
+function clearPresenterTimers() {
+  clearInterval(timerInterval);
+  clearInterval(highlightInterval);
+  clearFinaleTimeouts();
+}
+
 function hideAllSections() {
   sessionInputSection.classList.add('hidden');
   waitingSection.classList.add('hidden');
@@ -317,12 +473,29 @@ function hideAllSections() {
   endedSection.classList.add('hidden');
 }
 
-// Show session error
 function showSessionError(message) {
   sessionError.textContent = message;
   sessionError.classList.remove('hidden');
   setTimeout(() => sessionError.classList.add('hidden'), 5000);
 }
 
-// Start
+finaleReplayBtn.addEventListener('click', replayPodium);
+finaleNextBtn.addEventListener('click', () => {
+  if (hardestScene.classList.contains('hidden')) {
+    showHardestScene();
+  } else {
+    replayPodium();
+  }
+});
+
+document.addEventListener('keydown', event => {
+  if (endedSection.classList.contains('hidden')) return;
+  if (event.key.toLowerCase() === 'r') replayPodium();
+  if (event.key === 'ArrowRight' || event.key === ' ') {
+    event.preventDefault();
+    if (hardestScene.classList.contains('hidden')) showHardestScene();
+    else replayPodium();
+  }
+});
+
 init();

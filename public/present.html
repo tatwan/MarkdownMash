@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="presenter-body">
   <div class="presenter-container">
@@ -86,25 +85,99 @@
     <div id="results-section" class="presenter-section hidden">
       <div class="presenter-header">
         <span class="presenter-qnum">Question <span id="result-q-num">1</span> Results</span>
+        <div class="presenter-stats">
+          <span><strong id="correct-count">0</strong> correct</span>
+          <span><strong id="total-answered">0</strong> answered</span>
+        </div>
       </div>
 
       <h2 class="presenter-question smaller" id="result-question-text">Question text?</h2>
 
-      <div class="presenter-chart-container">
-        <canvas id="results-chart"></canvas>
-      </div>
+      <div class="presenter-results-layout">
+        <div class="answer-distribution" id="answer-distribution" aria-label="Answer distribution"></div>
 
-      <div class="presenter-stats">
-        <span><span id="correct-count">0</span> correct</span>
-        <span><span id="total-answered">0</span> answered</span>
+        <aside class="results-sidebar">
+          <section class="result-insight-card correct-crew-card">
+            <div class="insight-heading">
+              <svg class="insight-icon" aria-hidden="true">
+                <use href="/assets/icons.svg#check-circle"></use>
+              </svg>
+              <div>
+                <span class="insight-eyebrow">Correct crew</span>
+                <h3>Who got it right</h3>
+              </div>
+            </div>
+            <div class="correct-responders" id="correct-responders"></div>
+          </section>
+
+          <section class="result-insight-card moment-card steady" id="moment-card">
+            <div class="moment-icon-wrap">
+              <svg class="moment-icon" aria-hidden="true">
+                <use id="moment-icon-use" href="/assets/icons.svg#check-circle"></use>
+              </svg>
+            </div>
+            <div>
+              <span class="insight-eyebrow" id="moment-eyebrow">Question complete</span>
+              <p id="moment-message">Ready for the next one.</p>
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
 
-    <!-- Quiz Ended -->
-    <div id="ended-section" class="presenter-section hidden">
-      <div class="presenter-logo">Markdown Mash</div>
-      <h1 class="presenter-ended-title">Quiz Complete!</h1>
-      <p class="presenter-ended-sub">Check admin dashboard for final results</p>
+    <!-- Animated Finale -->
+    <div id="ended-section" class="presenter-section finale-section hidden">
+      <section id="podium-scene" class="finale-scene">
+        <div class="finale-kicker">Final standings</div>
+        <h1 class="finale-title">The Markdown Mash podium</h1>
+        <p class="finale-subtitle" id="finale-subtitle">Celebrating the top performers</p>
+
+        <div class="confetti-field" id="confetti-field" aria-hidden="true"></div>
+
+        <div class="podium-stage" id="podium-stage">
+          <article class="podium-place podium-second" data-rank="2">
+            <svg class="podium-medal" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>
+            <div class="podium-name" data-podium-name>Second place</div>
+            <div class="podium-score" data-podium-score></div>
+            <div class="podium-block"><span>2</span></div>
+          </article>
+
+          <article class="podium-place podium-first" data-rank="1">
+            <svg class="podium-trophy" aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg>
+            <div class="podium-name" data-podium-name>Winner</div>
+            <div class="podium-score" data-podium-score></div>
+            <div class="podium-block"><span>1</span></div>
+          </article>
+
+          <article class="podium-place podium-third" data-rank="3">
+            <svg class="podium-medal" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>
+            <div class="podium-name" data-podium-name>Third place</div>
+            <div class="podium-score" data-podium-score></div>
+            <div class="podium-block"><span>3</span></div>
+          </article>
+        </div>
+
+        <div class="runners-up" id="runners-up" aria-label="Fourth and fifth place"></div>
+      </section>
+
+      <section id="hardest-scene" class="finale-scene hidden">
+        <div class="finale-kicker">Class insights</div>
+        <h1 class="finale-title">The toughest questions</h1>
+        <p class="finale-subtitle">These are worth revisiting together</p>
+        <div class="hardest-questions" id="hardest-questions"></div>
+      </section>
+
+      <div class="finale-controls">
+        <button type="button" class="finale-control" id="finale-replay-btn">
+          <svg aria-hidden="true"><use href="/assets/icons.svg#replay"></use></svg>
+          Replay
+        </button>
+        <span class="finale-progress" id="finale-progress">Podium</span>
+        <button type="button" class="finale-control primary" id="finale-next-btn">
+          Insights
+          <svg aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
+        </button>
+      </div>
     </div>
 
   </div>

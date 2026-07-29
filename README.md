@@ -1,6 +1,6 @@
 # Markdown Mash
 
-![markdownmash](images/markdownmash.png)
+![Markdown Mash Time](images/Markdown%20Mash%20Time.png)
 
 ![Version](https://img.shields.io/github/v/release/tatwan/MarkdownMash?include_prereleases&style=flat-square)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-success?logo=nodedotjs&style=flat-square)
@@ -10,13 +10,40 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
+## What's New in v1.2.0
+
+### The Mash Time & Classroom Momentum Update
+
+Version 1.2.0 turns Markdown Mash into a more complete live classroom experience, adding the energy and feedback of game-based quiz platforms while preserving its lightweight Markdown workflow.
+
+#### Key Highlights
+
+- **Live Classroom Momentum** - Between questions, the presenter celebrates correct responders, fastest answers, winning streaks, rank movement, and close contests.
+- **Animated Podium Finale** - End each quiz with a projector-ready reveal of third, second, and first place, followed by fourth and fifth place and a recap of the hardest questions.
+- **Mash Time Visual Redesign** - A cohesive new visual system now spans the landing page, instructor login, live admin studio, analytics, participant screens, and presenter.
+- **Instructor Control Room** - Monitor the room, participant count, response progress, session links, QR code, presenter, and contextual quiz controls from one responsive workspace.
+- **Personal Participant Feedback** - Participants now see their current rank, rank movement, answer streak, full answer distribution, final placement, correct-answer count, and best streak.
+- **Smarter Analytics Workspace** - Search and filter sessions, compare course activity, review difficult questions, and see one accurate overall participant ranking.
+- **SVG Icon System** - Interface emoji have been replaced with a consistent, accessible SVG icon library.
+
+#### Fixes & Reliability
+
+- Fixed clipped answer labels by replacing participant result charts with responsive HTML response bars.
+- Fixed analytics using a hard-coded 60% passing threshold instead of the threshold saved with the quiz.
+- Fixed failed-participant rankings restarting at first place instead of preserving the true overall rank.
+- Fixed session-code placeholder clipping and restored browser zoom for participant accessibility.
+- Improved refresh and reconnect recovery during question results and after the final leaderboard.
+- Improved script loading so branded page content can render without waiting for external libraries.
+
 ## Features
 
 - **Real-time Synchronization** - Questions, timers, and results sync instantly via WebSockets.
 - **Markdown-based Quizzes** - Write and upload questions in a simple, portable Markdown format.
 - **Comprehensive Scoring & Leaderboards** - Captures both correctness and speed. Automatically ranks winners, utilizing response times as tie-breakers.
+- **Live Momentum Highlights** - Celebrates correct responders, fastest answers, winning streaks, and participants moving up the ranking after each question.
+- **Animated Classroom Finale** - Reveals third, second, and first place on a projector-ready podium, followed by fourth/fifth place and the hardest questions.
 - **Post-Quiz Analytics & Dashboard** - Dive deep into session data, review question difficulty (automatically identifying the hardest questions), and analyze participant performance.
-- **Live Response Charts** - Players and presenters see beautiful chart distributions of answers after each question.
+- **Readable Response Boards** - Full answer text, response counts, and percentages remain visible without clipped chart labels.
 - **Presenter Mode** - A dedicated, full-screen view optimized for classroom projectors or remote screen sharing.
 - **Premium, Mobile-Optimized UI** - Gradient backgrounds, circular timers, smooth animations, and a smart mobile interface for participants.
 - **Multi-session Support** - Host multiple concurrent quiz sessions seamlessly with unique Kahoot-style 6-character codes.
@@ -31,7 +58,7 @@ A lightweight, real-time quiz application for classrooms and events. Host intera
 
 
 
-## Screen Shots
+## Screenshots
 
 #### Presenter Screen
 
@@ -213,8 +240,8 @@ greet("Alice")
    - Participants and presenter view show results after each question
 
 5. **Final results**
-   - Click "Show Final Results" after the last question
-   - Displays ranked leaderboard in admin view
+   - Keep the presenter view open for the animated podium and hardest-question recap
+   - Click "Show Final Results" to inspect the instructor ranking table
    - Participants see their individual scores and pass/fail status
 
 ## Deployment

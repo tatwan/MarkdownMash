@@ -6,43 +6,85 @@
   <title>Admin Dashboard - Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="/socket.io/socket.io.js"></script>
+  <script defer src="/js/admin.js"></script>
 </head>
-<body>
-  <div class="container">
-    <header class="header">
-      <h1>Admin Dashboard</h1>
-      <p>Manage and control your quiz</p>
-      <div class="header-actions">
-        <a href="/" class="btn btn-secondary">Home</a>
-        <button id="analytics-btn" class="btn btn-secondary hidden">View Analytics</button>
-        <button id="settings-btn" class="btn hidden" title="Settings">Settings</button>
-        <button id="logout-btn" class="btn btn-danger hidden" title="Logout">Logout</button>
+<body class="admin-body">
+  <div class="admin-shell">
+    <header class="app-topbar">
+      <a class="brand-lockup brand-lockup-compact" href="/" aria-label="Markdown Mash home">
+        <span class="brand-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
+        <span class="brand-name">Markdown <strong>Mash</strong></span>
+      </a>
+      <div class="admin-title">
+        <span class="live-dot" aria-hidden="true"></span>
+        Instructor studio
       </div>
+      <nav class="header-actions" aria-label="Instructor navigation">
+        <a href="/" class="topbar-action">
+          <svg aria-hidden="true"><use href="/assets/icons.svg#home"></use></svg>
+          <span>Home</span>
+        </a>
+        <button id="analytics-btn" class="topbar-action hidden">
+          <svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg>
+          <span>Analytics</span>
+        </button>
+        <button id="settings-btn" class="topbar-action hidden" title="Settings">
+          <svg aria-hidden="true"><use href="/assets/icons.svg#settings"></use></svg>
+          <span>Settings</span>
+        </button>
+        <button id="logout-btn" class="topbar-action topbar-action-danger hidden" title="Logout">
+          <svg aria-hidden="true"><use href="/assets/icons.svg#logout"></use></svg>
+          <span>Logout</span>
+        </button>
+      </nav>
     </header>
 
-    <!-- Login Section -->
-    <div id="login-section" class="card">
-      <h2>Admin Login</h2>
-      <form id="login-form">
-        <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter admin password" required>
-        <button type="submit" class="btn btn-primary btn-block">Login</button>
-      </form>
-      <p id="login-error" class="text-center mt-4 hidden" style="color: var(--danger);"></p>
-      <p class="text-center mt-4"><a href="#" id="forgot-password-link" style="color: var(--primary);">Forgot Password?</a></p>
-    </div>
+    <main class="admin-main">
+      <!-- Login Section -->
+      <section id="login-section" class="admin-login-wrap">
+        <div class="admin-login-intro">
+          <p class="brand-kicker"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Instructor access</p>
+          <h1>Run the room with confidence.</h1>
+          <p>Load your quiz, watch responses arrive, and keep the energy moving from one question to the next.</p>
+        </div>
+        <div class="card admin-login-card">
+          <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg></div>
+          <p class="section-eyebrow">Welcome back</p>
+          <h2>Instructor sign in</h2>
+          <form id="login-form">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+            <button type="submit" class="btn btn-primary btn-block btn-lg">Open instructor studio</button>
+          </form>
+          <p id="login-error" class="form-message error-text hidden" role="alert"></p>
+          <p class="login-help"><a href="#" id="forgot-password-link">Forgot password?</a></p>
+        </div>
+      </section>
 
-    <!-- Dashboard Section (hidden until login) -->
-    <div id="dashboard-section" class="hidden">
-
-      <!-- Upload Quiz -->
-      <div id="upload-section" class="card">
-        <h2>Upload Quiz</h2>
-        <p class="text-muted mb-4">Paste your quiz in Markdown format</p>
-        <textarea id="quiz-markdown" placeholder="# Quiz Title
+      <!-- Dashboard Section (hidden until login) -->
+      <div id="dashboard-section" class="hidden">
+        <section id="upload-section" class="quiz-builder">
+          <div class="workspace-heading">
+            <div>
+              <p class="section-eyebrow">New live session</p>
+              <h1>Build your next Mash</h1>
+              <p>Paste a Markdown quiz, preview it, then open the room.</p>
+            </div>
+            <div class="workspace-heading-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></div>
+          </div>
+          <div class="card builder-card">
+            <div class="builder-toolbar">
+              <div>
+                <h2>Quiz Markdown</h2>
+                <p class="text-muted">Questions, options, timers and scoring stay in one readable file.</p>
+              </div>
+              <input type="text" id="course-name-input" class="course-name-input" placeholder="Course name (optional)" aria-label="Course name">
+            </div>
+            <textarea id="quiz-markdown" aria-label="Quiz Markdown" placeholder="# Quiz Title
 
 ## Q1: What is the capital of France?
 - [ ] London
@@ -55,277 +97,238 @@
 - [ ] True
 - [x] False
 ::time=10"></textarea>
-        <div style="margin-top: 1rem; margin-bottom: 1rem;">
-          <input type="text" id="course-name-input" placeholder="Course Name (Optional)" style="width: 100%; max-width: 300px; padding: 0.75rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text);">
-        </div>
-        <div style="display: flex; gap: 1rem;">
-          <button id="upload-btn" class="btn btn-primary">Load Quiz</button>
-          <button id="preview-btn" class="btn btn-secondary">Preview Quiz</button>
-        </div>
-        <div id="upload-status" class="mt-4 hidden"></div>
-      </div>
-
-      <!-- Session Info -->
-      <div id="session-info-section" class="card hidden">
-        <div class="flex gap-4" style="justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
-          <div style="flex: 1;">
-            <h2 id="quiz-title">Quiz Title</h2>
-            <p class="text-muted"><span id="question-count">0</span> questions</p>
-            <div class="session-code-display mt-4">
-              <span class="text-muted">Session Code:</span>
-              <span id="session-code" class="session-code">------</span>
+            <div class="builder-actions">
+              <button id="preview-btn" class="btn btn-secondary">
+                <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#external"></use></svg>
+                Preview
+              </button>
+              <button id="upload-btn" class="btn btn-primary">
+                Load quiz
+                <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
+              </button>
             </div>
-            <p class="text-muted mt-2">Join URL: <a id="join-url-link" href="#" target="_blank" style="color: var(--primary);"></a></p>
+            <div id="upload-status" class="mt-4 hidden" role="status"></div>
           </div>
-          <div style="text-align: center;">
-            <img id="qr-code" src="" alt="QR Code" style="width: 150px; height: 150px; border-radius: 8px; display: none;">
-            <p class="text-muted mt-2" style="font-size: 0.85rem;">Scan to join</p>
-          </div>
-          <div style="text-align: right;">
-            <span id="quiz-status" class="badge badge-warning">Not Started</span>
-          </div>
-        </div>
-      </div>
+        </section>
 
-      <!-- Participants -->
-      <div id="participants-section" class="card hidden">
-        <h2>Participants <span id="participant-count" class="badge badge-info">0</span></h2>
-        <p class="text-muted">Presenter URL (for screen share): <a id="presenter-url" href="#" target="_blank" style="color: var(--primary);"></a></p>
-        <div id="participant-list" class="participant-list"></div>
-      </div>
-
-      <!-- Quiz Controls -->
-      <div id="controls-section" class="card hidden">
-        <h2>Quiz Controls</h2>
-        <div class="quiz-controls">
-          <button id="start-btn" class="btn btn-success">Start Quiz</button>
-          <button id="next-btn" class="btn btn-primary hidden">Next Question</button>
-          <button id="end-question-btn" class="btn btn-warning hidden">End Question Early</button>
-          <button id="show-results-btn" class="btn btn-primary hidden">Show Final Results</button>
-          <button id="end-session-btn" class="btn btn-danger hidden">End Session</button>
-        </div>
-      </div>
-
-      <!-- Current Question Display -->
-      <div id="question-section" class="card hidden">
-        <div class="question-container">
-          <p class="question-meta">Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></p>
-          <h2 id="current-question-text" class="question-text">Question text here</h2>
-          <div id="timer-display" class="timer">20</div>
-          <p class="text-muted">Answers received: <span id="answers-received">0</span> / <span id="total-participants">0</span></p>
-        </div>
-
-        <div id="options-display" class="options-grid"></div>
-      </div>
-
-
-
-      <!-- Final Results -->
-      <div id="results-section" class="card hidden">
-        <h2>Final Results</h2>
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Name</th>
-              <th>Score</th>
-            </tr>
-          </thead>
-          <tbody id="results-body"></tbody>
-        </table>
-      </div>
-
-      <!-- Analytics Section -->
-      <div id="analytics-section" class="card hidden">
-        <div class="analytics-header">
-          <div>
-            <h2>Analytics & Insights</h2>
-            <p class="text-muted">View performance data from completed sessions</p>
-          </div>
-          <div class="analytics-tabs">
-            <button class="tab-btn active" data-tab="overview">Overview</button>
-            <button class="tab-btn" data-tab="sessions">Sessions</button>
-          </div>
-          <button id="back-to-dashboard-btn" class="btn">Back to Dashboard</button>
-        </div>
-
-        <!-- Overview Tab -->
-        <div id="analytics-overview" class="analytics-tab-content">
-          <div class="stats-grid">
-            <div class="stat-card">
-              <span class="stat-value" id="total-sessions-stat">0</span>
-              <span class="stat-label">Total Sessions</span>
+        <section id="live-workspace" class="live-workspace hidden" aria-label="Live quiz control room">
+          <div class="live-main-column">
+            <div id="live-lobby-panel" class="card live-lobby-panel">
+              <div class="panel-icon panel-icon-success"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg></div>
+              <p id="live-lobby-eyebrow" class="section-eyebrow">Room ready</p>
+              <h1 id="live-lobby-title">Invite participants, then start when everyone is in.</h1>
+              <p id="live-lobby-copy">The participant list updates live. Open the presenter on the screen your class can see.</p>
             </div>
-            <div class="stat-card">
-              <span class="stat-value" id="completed-sessions-stat">0</span>
-              <span class="stat-label">Completed</span>
+
+            <section id="question-section" class="card live-question-card hidden">
+              <div class="question-topline">
+                <p class="question-meta">Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></p>
+                <div class="live-timer"><svg aria-hidden="true"><use href="/assets/icons.svg#clock"></use></svg><span id="timer-display">20</span>s</div>
+              </div>
+              <h2 id="current-question-text" class="question-text">Question text here</h2>
+              <div id="options-display" class="options-grid admin-options-grid"></div>
+              <div class="response-progress">
+                <div class="response-progress-label">
+                  <span>Responses received</span>
+                  <strong><span id="answers-received">0</span> / <span id="total-participants">0</span></strong>
+                </div>
+                <div class="progress-track" aria-hidden="true"><span id="answer-progress-bar"></span></div>
+              </div>
+            </section>
+
+            <section id="results-section" class="card hidden">
+              <p class="section-eyebrow">Quiz complete</p>
+              <h2>Final Results</h2>
+              <div class="table-scroll">
+                <table class="results-table">
+                  <thead><tr><th>Rank</th><th>Name</th><th>Score</th></tr></thead>
+                  <tbody id="results-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section id="controls-section" class="control-dock hidden" aria-label="Quiz controls">
+              <div class="control-dock-label">
+                <span class="live-dot"></span>
+                Live controls
+              </div>
+              <div class="quiz-controls">
+                <button id="start-btn" class="btn btn-success">Start quiz <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg></button>
+                <button id="next-btn" class="btn btn-primary hidden">Next question <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
+                <button id="end-question-btn" class="btn btn-warning hidden">End question</button>
+                <button id="show-results-btn" class="btn btn-primary hidden">Show final results</button>
+                <button id="end-session-btn" class="btn btn-danger hidden">End session</button>
+              </div>
+            </section>
+          </div>
+
+          <aside class="live-side-column">
+            <section id="session-info-section" class="card session-command-card hidden">
+              <div class="card-heading-row">
+                <div>
+                  <p class="section-eyebrow">Live room</p>
+                  <h2 id="quiz-title">Quiz Title</h2>
+                  <p class="text-muted"><span id="question-count">0</span> questions</p>
+                </div>
+                <span id="quiz-status" class="badge badge-warning">Not Started</span>
+              </div>
+              <div class="session-code-panel">
+                <span>Session code</span>
+                <strong id="session-code" class="session-code">------</strong>
+                <button id="copy-session-code-btn" class="icon-button" type="button" title="Copy session code" aria-label="Copy session code">
+                  <svg aria-hidden="true"><use href="/assets/icons.svg#copy"></use></svg>
+                </button>
+              </div>
+              <div class="session-share-grid">
+                <div class="qr-wrap">
+                  <img id="qr-code" src="" alt="QR code to join the quiz">
+                  <span><svg aria-hidden="true"><use href="/assets/icons.svg#qr"></use></svg>Scan to join</span>
+                </div>
+                <div class="session-actions">
+                  <a id="join-url-link" href="#" target="_blank" class="icon-action">
+                    <svg aria-hidden="true"><use href="/assets/icons.svg#external"></use></svg>
+                    Open join page
+                  </a>
+                  <button id="copy-join-url-btn" class="icon-action" type="button">
+                    <svg aria-hidden="true"><use href="/assets/icons.svg#link"></use></svg>
+                    Copy join link
+                  </button>
+                  <a id="presenter-url" href="#" target="_blank" class="icon-action icon-action-primary">
+                    <svg aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>
+                    Open presenter
+                  </a>
+                </div>
+              </div>
+            </section>
+
+            <section id="participants-section" class="card participants-card hidden">
+              <div class="card-heading-row">
+                <div>
+                  <p class="section-eyebrow">In the room</p>
+                  <h2>Participants</h2>
+                </div>
+                <span id="participant-count" class="participant-count-badge">0</span>
+              </div>
+              <div id="participant-list" class="participant-list"></div>
+              <p id="participant-empty-state" class="empty-state-copy">Waiting for the first participant to join…</p>
+            </section>
+          </aside>
+        </section>
+
+        <section id="analytics-section" class="analytics-workspace hidden">
+          <div class="analytics-header">
+            <div>
+              <p class="section-eyebrow">Learning signals</p>
+              <h1>Analytics &amp; Insights</h1>
+              <p class="text-muted">See what landed, where learners struggled, and who is building momentum.</p>
             </div>
-            <div class="stat-card">
-              <span class="stat-value" id="total-participants-stat">0</span>
-              <span class="stat-label">Total Participants</span>
+            <button id="back-to-dashboard-btn" class="btn btn-secondary">
+              <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>
+              Back to studio
+            </button>
+          </div>
+          <div class="analytics-tabs" role="tablist" aria-label="Analytics views">
+            <button class="tab-btn active" data-tab="overview" role="tab">Overview</button>
+            <button class="tab-btn" data-tab="sessions" role="tab">Sessions</button>
+          </div>
+
+          <div id="analytics-overview" class="analytics-tab-content">
+            <div class="stats-grid analytics-stats-grid">
+              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="stat-value" id="total-sessions-stat">0</span><span class="stat-label">Total sessions</span></div>
+              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg><span class="stat-value" id="completed-sessions-stat">0</span><span class="stat-label">Completed</span></div>
+              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#users"></use></svg><span class="stat-value" id="total-participants-stat">0</span><span class="stat-label">Participants</span></div>
+              <div class="stat-card stat-card-highlight"><svg aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg><span class="stat-value" id="avg-score-stat">0%</span><span class="stat-label">Average score</span></div>
+              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg><span class="stat-value" id="total-courses-stat">0</span><span class="stat-label">Courses</span></div>
             </div>
-            <div class="stat-card">
-              <span class="stat-value" id="avg-score-stat">0%</span>
-              <span class="stat-label">Avg Score</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-value" id="total-courses-stat">0</span>
-              <span class="stat-label">Total Courses</span>
+            <div class="analytics-chart-grid">
+              <article class="chart-card">
+                <div class="chart-card-heading"><div><p class="section-eyebrow">Activity</p><h3>Sessions per course</h3></div></div>
+                <div class="analytics-chart-canvas"><canvas id="course-sessions-chart"></canvas></div>
+              </article>
+              <article class="chart-card">
+                <div class="chart-card-heading"><div><p class="section-eyebrow">Reach</p><h3>Participants per course</h3></div></div>
+                <div class="analytics-chart-canvas"><canvas id="course-participants-chart"></canvas></div>
+              </article>
             </div>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
-            <div class="chart-container" style="background: var(--bg-card); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
-              <h3 style="margin-bottom: 1rem;">Sessions per Course</h3>
-              <div style="position: relative; height: 250px; width: 100%;">
-                <canvas id="course-sessions-chart"></canvas>
+
+          <div id="analytics-sessions" class="analytics-tab-content hidden">
+            <div class="analytics-toolbar">
+              <label class="search-field">
+                <span class="sr-only">Search sessions</span>
+                <svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg>
+                <input id="session-search-input" type="search" placeholder="Search code, quiz, or course">
+              </label>
+              <select id="course-filter-select" aria-label="Filter by course"><option value="all">All courses</option></select>
+              <div class="filter-pills">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="ended">Completed</button>
+                <button class="filter-btn" data-filter="incomplete">Incomplete</button>
+                <button class="filter-btn" data-filter="test">Tests</button>
               </div>
             </div>
-            <div class="chart-container" style="background: var(--bg-card); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border);">
-              <h3 style="margin-bottom: 1rem;">Participants per Course</h3>
-              <div style="position: relative; height: 250px; width: 100%;">
-                <canvas id="course-participants-chart"></canvas>
-              </div>
+            <div class="table-card table-scroll">
+              <table class="results-table sessions-table">
+                <thead><tr><th>Session</th><th>Course</th><th>Quiz title</th><th>Participants</th><th>Avg score</th><th>Date</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody id="analytics-sessions-body"></tbody>
+              </table>
             </div>
+            <p id="no-sessions-msg" class="empty-state-copy text-center hidden">No sessions match these filters.</p>
           </div>
-        </div>
+        </section>
 
-        <!-- Sessions List Tab -->
-        <div id="analytics-sessions" class="analytics-tab-content hidden">
-          <div class="analytics-filter-controls" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <select id="course-filter-select" style="padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text);">
-              <option value="all">All Courses</option>
-            </select>
-            <button class="btn btn-small filter-btn active" data-filter="all">All</button>
-            <button class="btn btn-small filter-btn" data-filter="ended">Completed</button>
-            <button class="btn btn-small filter-btn" data-filter="incomplete">Incomplete / Trial</button>
-            <button class="btn btn-small filter-btn" data-filter="test">Tests Only</button>
+        <section id="session-detail-section" class="analytics-workspace hidden">
+          <div class="session-detail-header">
+            <button id="back-to-analytics-btn" class="btn btn-secondary"><svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>Sessions</button>
+            <div><p class="section-eyebrow">Session report</p><h1 id="detail-quiz-title">Quiz Title</h1></div>
+            <button id="export-csv-btn" class="btn btn-secondary"><svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Export CSV</button>
           </div>
-          <div style="overflow-x: auto; width: 100%; margin-top: 1rem;">
-            <table class="results-table">
-              <thead>
-                <tr>
-                  <th>Session</th>
-                  <th>Course</th>
-                  <th>Quiz Title</th>
-                  <th>Participants</th>
-                  <th>Avg Score</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="analytics-sessions-body"></tbody>
-            </table>
+
+          <div class="stats-grid detail-stats-grid">
+            <div class="stat-card"><span class="stat-value" id="detail-participants">0</span><span class="stat-label">Participants</span></div>
+            <div class="stat-card stat-card-highlight"><span class="stat-value" id="detail-avg-score">0%</span><span class="stat-label">Average score</span></div>
+            <div class="stat-card"><span class="stat-value" id="detail-questions">0</span><span class="stat-label">Questions</span></div>
+            <div class="stat-card" id="engagement-stat-card"><span class="stat-value" id="detail-completion-rate">0%</span><span class="stat-label">Completion rate</span><span class="stat-note" id="detail-dropoff-note"></span></div>
           </div>
-          <p id="no-sessions-msg" class="text-muted text-center mt-4 hidden">No completed sessions yet.</p>
-        </div>
+
+          <div class="analytics-chart-grid detail-chart-grid">
+            <article class="chart-card"><p class="section-eyebrow">Performance</p><h3>Score distribution</h3><p class="text-muted">How scores spread across the room.</p><div class="chart-wrapper"><canvas id="score-distribution-chart"></canvas></div></article>
+            <article class="chart-card"><p class="section-eyebrow">Question quality</p><h3>Difficulty at a glance</h3><p class="text-muted">Lowest correct percentage appears first.</p><div class="chart-wrapper"><canvas id="question-difficulty-chart"></canvas></div></article>
+          </div>
+
+          <article class="detail-card mt-4">
+            <div class="card-heading-row"><div><p class="section-eyebrow">Question breakdown</p><h3>Where the room struggled</h3></div></div>
+            <div class="table-scroll">
+              <table class="results-table" id="question-breakdown-table">
+                <thead><tr><th>Question</th><th>Prompt</th><th>Correct</th><th>Avg time</th><th>Difficulty</th></tr></thead>
+                <tbody id="question-breakdown-body"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="detail-card mt-4 hidden" id="tricky-questions-section">
+            <p class="section-eyebrow">Misconceptions</p>
+            <h3>Tricky questions</h3>
+            <p class="text-muted">Questions where a wrong option attracted much of the room.</p>
+            <div id="tricky-questions-container" class="mt-4"></div>
+          </article>
+
+          <article class="detail-card mt-4" id="ranking-section">
+            <div class="card-heading-row">
+              <div><p class="section-eyebrow">Leaderboard</p><h3>Participant ranking <span class="pass-count-badge" id="ranking-count-badge"></span></h3></div>
+              <p id="ranking-threshold-note" class="text-muted"></p>
+            </div>
+            <div class="table-scroll">
+              <table class="results-table ranking-table">
+                <thead><tr><th>Rank</th><th>Name</th><th>Correct</th><th>Score</th><th>Status</th><th>Avg response</th><th>Best streak</th></tr></thead>
+                <tbody id="ranking-participants-body"></tbody>
+              </table>
+            </div>
+            <p id="no-ranking-msg" class="empty-state-copy text-center hidden">No participant results are available.</p>
+          </article>
+        </section>
       </div>
-
-      <!-- Session Detail Section -->
-      <div id="session-detail-section" class="card hidden">
-        <div class="session-detail-header">
-          <button id="back-to-analytics-btn" class="btn">&larr; Back</button>
-          <h2 id="detail-quiz-title">Quiz Title</h2>
-          <button id="export-csv-btn" class="btn btn-primary">Export CSV</button>
-        </div>
-
-        <!-- Session Summary -->
-        <div class="stats-grid mt-4">
-          <div class="stat-card">
-            <span class="stat-value" id="detail-participants">0</span>
-            <span class="stat-label">Participants</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="detail-avg-score">0%</span>
-            <span class="stat-label">Avg Score</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="detail-questions">0</span>
-            <span class="stat-label">Questions</span>
-          </div>
-          <div class="stat-card" id="engagement-stat-card">
-            <span class="stat-value" id="detail-completion-rate">0%</span>
-            <span class="stat-label">Completion Rate</span>
-            <span class="stat-note" id="detail-dropoff-note"></span>
-          </div>
-        </div>
-
-        <!-- Score Distribution Chart -->
-        <div class="detail-card mt-4">
-          <h3>Score Distribution</h3>
-          <p class="text-muted">How participants scored across the quiz</p>
-          <div class="chart-wrapper mt-4">
-            <canvas id="score-distribution-chart"></canvas>
-          </div>
-        </div>
-
-        <!-- Question Difficulty -->
-        <div class="detail-card mt-4">
-          <h3>Question Difficulty</h3>
-          <p class="text-muted">Questions ranked by difficulty (lowest correct % = hardest)</p>
-          <div class="chart-wrapper mt-4">
-            <canvas id="question-difficulty-chart"></canvas>
-          </div>
-          <table class="results-table mt-4" id="question-breakdown-table">
-            <thead>
-              <tr>
-                <th>Q#</th>
-                <th>Question</th>
-                <th>Correct %</th>
-                <th>Avg Time</th>
-                <th>Difficulty</th>
-              </tr>
-            </thead>
-            <tbody id="question-breakdown-body"></tbody>
-          </table>
-        </div>
-
-        <!-- Tricky Questions -->
-        <div class="detail-card mt-4 hidden" id="tricky-questions-section">
-          <h3>Tricky Questions</h3>
-          <p class="text-muted">Questions where most participants picked a wrong answer</p>
-          <div id="tricky-questions-container" class="mt-4"></div>
-        </div>
-
-        <!-- Top Participants -->
-        <div class="detail-card mt-4" id="passed-section">
-          <h3>Top Participants <span class="pass-count-badge" id="passed-count-badge"></span></h3>
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Name</th>
-                <th>Correct</th>
-                <th>Score</th>
-                <th>Avg Response</th>
-                <th>Best Streak</th>
-              </tr>
-            </thead>
-            <tbody id="passed-participants-body"></tbody>
-          </table>
-          <p id="no-passed-msg" class="text-muted text-center mt-4 hidden">No top participants.</p>
-        </div>
-
-        <!-- Remaining Participants -->
-        <div class="detail-card mt-4" id="failed-section">
-          <h3>Participants <span class="pass-count-badge" id="failed-count-badge"></span></h3>
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Name</th>
-                <th>Correct</th>
-                <th>Score</th>
-                <th>Avg Response</th>
-                <th>Best Streak</th>
-              </tr>
-            </thead>
-            <tbody id="failed-participants-body"></tbody>
-          </table>
-          <p id="no-failed-msg" class="text-muted text-center mt-4 hidden">Everyone made it to the top!</p>
-        </div>
-      </div>
-
-    </div>
+    </main>
   </div>
 
   <!-- Settings Modal -->
@@ -494,7 +497,5 @@
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/admin.js"></script>
 </body>
 </html>

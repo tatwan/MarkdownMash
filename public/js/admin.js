@@ -94,6 +94,15 @@ const optionsDisplay = document.getElementById('options-display');
 
 const resultsSection = document.getElementById('results-section');
 const resultsBody = document.getElementById('results-body');
+const liveWorkspace = document.getElementById('live-workspace');
+const liveLobbyPanel = document.getElementById('live-lobby-panel');
+const liveLobbyEyebrow = document.getElementById('live-lobby-eyebrow');
+const liveLobbyTitle = document.getElementById('live-lobby-title');
+const liveLobbyCopy = document.getElementById('live-lobby-copy');
+const answerProgressBar = document.getElementById('answer-progress-bar');
+const participantEmptyState = document.getElementById('participant-empty-state');
+const copySessionCodeBtn = document.getElementById('copy-session-code-btn');
+const copyJoinUrlBtn = document.getElementById('copy-join-url-btn');
 
 // Analytics elements
 const analyticsBtn = document.getElementById('analytics-btn');
@@ -104,6 +113,7 @@ const analyticsOverview = document.getElementById('analytics-overview');
 const analyticsSessions = document.getElementById('analytics-sessions');
 const analyticsSessionsBody = document.getElementById('analytics-sessions-body');
 const noSessionsMsg = document.getElementById('no-sessions-msg');
+const sessionSearchInput = document.getElementById('session-search-input');
 
 // Analytics stats elements
 const totalSessionsStat = document.getElementById('total-sessions-stat');
@@ -121,8 +131,10 @@ const detailParticipants = document.getElementById('detail-participants');
 const detailAvgScore = document.getElementById('detail-avg-score');
 const detailQuestions = document.getElementById('detail-questions');
 const questionBreakdownBody = document.getElementById('question-breakdown-body');
-const passedParticipantsBody = document.getElementById('passed-participants-body');
-const failedParticipantsBody = document.getElementById('failed-participants-body');
+const rankingParticipantsBody = document.getElementById('ranking-participants-body');
+const rankingThresholdNote = document.getElementById('ranking-threshold-note');
+const rankingCountBadge = document.getElementById('ranking-count-badge');
+const noRankingMsg = document.getElementById('no-ranking-msg');
 
 // State
 let socket = null;
@@ -140,6 +152,52 @@ let questionDifficultyChart = null;
 // Keep-alive: prevents Render free-tier from sleeping the dyno mid-quiz.
 // HTTP requests every 10 minutes while a session is active.
 let keepAliveInterval = null;
+
+function updateResponseProgress(answered = Number(answersReceived?.textContent || 0), total = Number(totalParticipants?.textContent || 0)) {
+  const safeTotal = Number.isFinite(total) ? total : 0;
+  const safeAnswered = Number.isFinite(answered) ? answered : 0;
+  const percent = safeTotal > 0 ? Math.min(100, Math.round((safeAnswered / safeTotal) * 100)) : 0;
+
+  if (answerProgressBar) {
+    answerProgressBar.style.width = `${percent}%`;
+  }
+  if (participantEmptyState) {
+    participantEmptyState.classList.toggle('hidden', safeTotal > 0);
+  }
+}
+
+function setLobbyPanel(mode = 'ready') {
+  const content = mode === 'complete'
+    ? {
+        eyebrow: 'Mash complete',
+        title: 'The presenter is revealing the final leaderboard.',
+        copy: 'Use “Show final results” for the instructor table, or keep the shared screen on the podium and hardest-question recap.'
+      }
+    : {
+        eyebrow: 'Room ready',
+        title: 'Invite participants, then start when everyone is in.',
+        copy: 'The participant list updates live. Open the presenter on the screen your class can see.'
+      };
+
+  liveLobbyEyebrow.textContent = content.eyebrow;
+  liveLobbyTitle.textContent = content.title;
+  liveLobbyCopy.textContent = content.copy;
+}
+
+async function copyText(value, button, successLabel) {
+  if (!value) return;
+
+  const originalMarkup = button.innerHTML;
+  try {
+    await navigator.clipboard.writeText(value);
+    button.innerHTML = `<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>${successLabel}`;
+    setTimeout(() => {
+      button.innerHTML = originalMarkup;
+    }, 1800);
+  } catch (err) {
+    window.prompt('Copy this value:', value);
+  }
+}
 
 function startKeepAlive() {
   stopKeepAlive();
@@ -230,6 +288,14 @@ async function checkExistingAuth() {
 // Run auth check on load
 checkExistingAuth();
 
+copySessionCodeBtn?.addEventListener('click', () => {
+  copyText(sessionCodeEl.textContent.trim(), copySessionCodeBtn, 'Copied');
+});
+
+copyJoinUrlBtn?.addEventListener('click', () => {
+  copyText(joinUrlLink.href, copyJoinUrlBtn, 'Link copied');
+});
+
 // Logout function
 function logout() {
   if (!confirm('Are you sure you want to logout?')) return;
@@ -294,6 +360,7 @@ function initSocket(code) {
     if (data.name) {
       addParticipantChip(data.name, data.id);
     }
+    updateResponseProgress(Number(answersReceived.textContent || 0), data.count);
   });
 
   socket.on('participant_kicked', (data) => {
@@ -301,6 +368,7 @@ function initSocket(code) {
     if (chip) chip.remove();
     participantCount.textContent = data.count;
     totalParticipants.textContent = data.count;
+    updateResponseProgress(Number(answersReceived.textContent || 0), data.count);
   });
 
   socket.on('quiz_started', (data) => {
@@ -310,6 +378,7 @@ function initSocket(code) {
     nextBtn.classList.remove('hidden');
     endSessionBtn.classList.add('hidden');
     questionSection.classList.add('hidden');
+    liveLobbyPanel.classList.remove('hidden');
   });
 
   socket.on('question_started', (data) => {
@@ -317,14 +386,17 @@ function initSocket(code) {
     showQuestion(data);
     startTimer(data.timeRemaining);
     answersReceived.textContent = '0';
+    updateResponseProgress(0, Number(totalParticipants.textContent || 0));
 
     nextBtn.classList.add('hidden');
     endQuestionBtn.classList.remove('hidden');
     questionSection.classList.remove('hidden');
+    liveLobbyPanel.classList.add('hidden');
   });
 
   socket.on('answer_received', (data) => {
     answersReceived.textContent = data.answeredCount;
+    updateResponseProgress(data.answeredCount, data.totalParticipants);
   });
 
   socket.on('question_ended', (data) => {
@@ -345,6 +417,8 @@ function initSocket(code) {
     quizStatus.textContent = 'Ended';
     quizStatus.className = 'badge badge-warning';
     questionSection.classList.add('hidden');
+    setLobbyPanel('complete');
+    liveLobbyPanel.classList.remove('hidden');
     nextBtn.classList.add('hidden');
     endQuestionBtn.classList.add('hidden');
     showResultsBtn.classList.remove('hidden');
@@ -374,7 +448,8 @@ function showSessionLostBanner(code) {
   ].join(';');
 
   banner.innerHTML = `
-    <span>⚠️ <strong>Server restarted — session state was lost.</strong>
+    <span><svg class="banner-icon" aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg>
+    <strong>Server restarted — session state was lost.</strong>
     Participants have been disconnected. Your quiz answers are saved in the database.</span>
     <button id="recover-session-btn" style="
       margin-left:auto; background:#fff; color:#dc2626;
@@ -401,7 +476,8 @@ function showSessionLostBanner(code) {
       if (data.success) {
         banner.style.background = '#16a34a';
         banner.querySelector('span').innerHTML = `
-          ✅ <strong>Session recovered!</strong>
+          <svg class="banner-icon" aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>
+          <strong>Session recovered!</strong>
           ${data.participantsRecovered} participants, ${data.answersFound} answers restored.
           Check Analytics → Sessions to view results.
         `;
@@ -585,7 +661,6 @@ function showSessionInfo(session) {
   totalQNum.textContent = session.quiz.questions.length;
 
   sessionCodeEl.textContent = session.code;
-  joinUrlLink.textContent = session.joinUrl;
   joinUrlLink.href = session.joinUrl;
 
   // Show QR code
@@ -596,13 +671,18 @@ function showSessionInfo(session) {
 
   // Update presenter URL with session code
   const presenterUrlWithSession = `${window.location.origin}/present.html?session=${session.code}`;
-  presenterUrl.textContent = presenterUrlWithSession;
   presenterUrl.href = presenterUrlWithSession;
 
   // Clear participant list
   participantList.innerHTML = '';
   participantCount.textContent = '0';
+  totalParticipants.textContent = '0';
+  updateResponseProgress(0, 0);
 
+  uploadSection.classList.add('hidden');
+  liveWorkspace.classList.remove('hidden');
+  setLobbyPanel('ready');
+  liveLobbyPanel.classList.remove('hidden');
   sessionInfoSection.classList.remove('hidden');
   participantsSection.classList.remove('hidden');
   controlsSection.classList.remove('hidden');
@@ -632,6 +712,10 @@ function resetToUploadState() {
   controlsSection.classList.add('hidden');
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
+  liveWorkspace.classList.add('hidden');
+  setLobbyPanel('ready');
+  liveLobbyPanel.classList.remove('hidden');
+  uploadSection.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
 
   participantList.innerHTML = '';
@@ -708,6 +792,7 @@ showResultsBtn.addEventListener('click', async () => {
     });
 
     questionSection.classList.add('hidden');
+    liveLobbyPanel.classList.add('hidden');
     resultsSection.classList.remove('hidden');
     showResultsBtn.classList.add('hidden');
   } catch (err) {
@@ -830,6 +915,7 @@ exportCsvBtn.addEventListener('click', () => {
 async function showAnalytics() {
   // Hide dashboard elements
   uploadSection.classList.add('hidden');
+  liveWorkspace.classList.add('hidden');
   sessionInfoSection.classList.add('hidden');
   participantsSection.classList.add('hidden');
   controlsSection.classList.add('hidden');
@@ -854,13 +940,15 @@ async function showAnalytics() {
 function hideAnalytics() {
   analyticsSection.classList.add('hidden');
   sessionDetailSection.classList.add('hidden');
-  uploadSection.classList.remove('hidden');
 
   // Show session info if there's an active session
   if (sessionCode) {
+    liveWorkspace.classList.remove('hidden');
     sessionInfoSection.classList.remove('hidden');
     participantsSection.classList.remove('hidden');
     controlsSection.classList.remove('hidden');
+  } else {
+    uploadSection.classList.remove('hidden');
   }
 }
 
@@ -970,11 +1058,16 @@ async function loadSessionsList() {
       noSessionsMsg.classList.add('hidden');
       
       const selectedCourse = courseFilterSelect.value;
+      const searchTerm = sessionSearchInput?.value.trim().toLowerCase() || '';
       const filteredSessions = data.sessions.filter(s => {
         if (selectedCourse !== 'all' && s.courseName !== selectedCourse) return false;
         if (currentSessionsFilter === 'test' && !s.isTest) return false;
         if (currentSessionsFilter === 'ended' && s.status !== 'ended') return false;
         if (currentSessionsFilter === 'incomplete' && (s.status === 'ended' || s.isTest)) return false;
+        if (searchTerm) {
+          const haystack = `${s.code || ''} ${s.courseName || ''} ${s.quizTitle || ''}`.toLowerCase();
+          if (!haystack.includes(searchTerm)) return false;
+        }
         return true;
       });
       
@@ -1001,25 +1094,26 @@ async function loadSessionsList() {
           statusBadge += `<span style="background:#9333ea;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Test</span>`;
         }
         if (isInterrupted) {
-          statusBadge += `<span style="background:#b45309;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">⚠️ Interrupted</span>`;
+          statusBadge += `<span style="background:#b45309;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Interrupted</span>`;
         } else if (isCreated) {
           statusBadge += `<span style="background:#4b5563;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Trial</span>`;
         }
 
         let primaryAction = '';
         if (isInterrupted) {
-          primaryAction = `<button class="btn btn-small recover-btn" data-code="${escapeHtml(session.code)}"
-               style="background:#dc2626;color:#fff;margin:0;width:100%;">Recover</button>`;
+          primaryAction = `<button class="btn btn-small btn-danger recover-btn" data-code="${escapeHtml(session.code)}">Recover</button>`;
         } else if (isCreated) {
-          primaryAction = `<span style="color:#6b7280;font-size:12px;display:inline-block;padding:6px 0;width:100%;text-align:center;">No stats</span>`;
+          primaryAction = `<span class="text-muted session-no-stats">No stats</span>`;
         } else {
-          primaryAction = `<button class="btn btn-small view-btn" data-code="${escapeHtml(session.code)}" style="margin:0;width:100%;">View</button>`;
+          primaryAction = `<button class="btn btn-small btn-primary view-btn" data-code="${escapeHtml(session.code)}">View</button>`;
         }
 
         let actionBtn = `
-          <div style="display:inline-block;width:80px;vertical-align:middle;margin-right:8px;">${primaryAction}</div>
-          <button class="btn btn-small edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.courseName || '')}" data-test="${session.isTest}" style="margin-right:8px;vertical-align:middle;">Edit</button>
-          <button class="btn btn-small delete-btn" data-code="${escapeHtml(session.code)}" style="background:#dc2626;color:#fff;vertical-align:middle;">Delete</button>
+          <div class="session-row-actions">
+            ${primaryAction}
+            <button class="btn btn-small btn-secondary edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.courseName || '')}" data-test="${session.isTest}">Edit</button>
+            <button class="btn btn-small btn-danger delete-btn" data-code="${escapeHtml(session.code)}">Delete</button>
+          </div>
         `;
 
         tr.innerHTML = `
@@ -1029,7 +1123,7 @@ async function loadSessionsList() {
           <td>${session.participantCount}</td>
           <td>${(isInterrupted || isCreated) ? '—' : Math.round(session.avgScorePercent || 0) + '%'}</td>
           <td>${dateDisplay}</td>
-          <td style="white-space: nowrap;">${actionBtn}</td>
+          <td>${actionBtn}</td>
         `;
 
         if (isInterrupted) {
@@ -1043,7 +1137,7 @@ async function loadSessionsList() {
               const res = await authFetch(`/api/admin/session/${session.code}/recover`, { method: 'POST' });
               const result = await res.json();
               if (result.success) {
-                alert(`✅ Recovered: ${result.participantsRecovered} participants, ${result.answersFound} answers. Session is now viewable in Analytics.`);
+                alert(`Recovered: ${result.participantsRecovered} participants, ${result.answersFound} answers. Session is now viewable in Analytics.`);
                 loadSessionsList(); // Reload to show it as ended now
               } else {
                 alert('Recovery failed: ' + result.error);
@@ -1136,6 +1230,12 @@ closeEditMetadataBtn.addEventListener('click', () => {
 // Update the filter logic to re-render using local data, or just re-fetch
 document.getElementById('course-filter-select')?.addEventListener('change', () => {
   loadSessionsList();
+});
+
+let sessionSearchTimer = null;
+sessionSearchInput?.addEventListener('input', () => {
+  clearTimeout(sessionSearchTimer);
+  sessionSearchTimer = setTimeout(loadSessionsList, 180);
 });
 
 // Wire up the session status filter buttons (All, Completed, Incomplete, Tests Only)
@@ -1422,20 +1522,30 @@ async function loadSessionDetail(code) {
     // Feature 3: Tricky Questions
     renderTrickyQuestions(data.questions);
 
-    // Split participants into passed / failed
-    passedParticipantsBody.innerHTML = '';
-    failedParticipantsBody.innerHTML = '';
-
-    const passedList = [];
-    const failedList = [];
-
-    data.participants.forEach((p, i) => {
-      const scorePercent = data.session.totalQuestions > 0
-        ? (p.correctCount / data.session.totalQuestions) * 100
-        : 0;
-      const passed = scorePercent >= 60;
-      (passed ? passedList : failedList).push({ ...p, overallRank: i + 1, scorePercent });
-    });
+    // Build one true overall ranking, using the passing threshold saved with the session.
+    rankingParticipantsBody.innerHTML = '';
+    const passingPercent = Number(data.session.passingPercent ?? 70);
+    const rankedParticipants = [...data.participants]
+      .sort((a, b) => {
+        if ((b.correctCount || 0) !== (a.correctCount || 0)) {
+          return (b.correctCount || 0) - (a.correctCount || 0);
+        }
+        const aTime = a.avgResponseTimeMs ?? Number.POSITIVE_INFINITY;
+        const bTime = b.avgResponseTimeMs ?? Number.POSITIVE_INFINITY;
+        if (aTime !== bTime) return aTime - bTime;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      })
+      .map((participant, index) => {
+        const scorePercent = data.session.totalQuestions > 0
+          ? ((participant.correctCount || 0) / data.session.totalQuestions) * 100
+          : 0;
+        return {
+          ...participant,
+          overallRank: index + 1,
+          scorePercent,
+          passed: scorePercent >= passingPercent
+        };
+      });
 
     const totalScore = data.session.totalScore || 100;
     const pointsPerQuestion = data.session.totalQuestions > 0 ? totalScore / data.session.totalQuestions : 0;
@@ -1448,13 +1558,13 @@ async function loadSessionDetail(code) {
       // Rank display with trophy icons for top 5
       let rankHtml;
       if (rank === 1) {
-        rankHtml = `<span class="rank-trophy rank-gold"><span class="trophy-icon">&#127942;</span>${rank}</span>`;
+        rankHtml = `<span class="rank-trophy rank-gold"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg>${rank}</span>`;
       } else if (rank === 2) {
-        rankHtml = `<span class="rank-trophy rank-silver"><span class="trophy-icon">&#129352;</span>${rank}</span>`;
+        rankHtml = `<span class="rank-trophy rank-silver"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
       } else if (rank === 3) {
-        rankHtml = `<span class="rank-trophy rank-bronze"><span class="trophy-icon">&#129353;</span>${rank}</span>`;
+        rankHtml = `<span class="rank-trophy rank-bronze"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
       } else if (rank <= 5) {
-        rankHtml = `<span class="rank-trophy rank-top5"><span class="trophy-icon">&#127941;</span>${rank}</span>`;
+        rankHtml = `<span class="rank-trophy rank-top5"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
       } else {
         rankHtml = `${rank}`;
       }
@@ -1471,34 +1581,22 @@ async function loadSessionDetail(code) {
         <td>${escapeHtml(p.name)}</td>
         <td>${p.correctCount} / ${totalQuestions}</td>
         <td>${computedScore} / ${totalScore}</td>
+        <td><span class="pass-badge ${p.passed ? 'pass-badge-passed' : 'pass-badge-failed'}">${p.passed ? 'Passed' : 'Below threshold'}</span></td>
         <td>${avgTime}</td>
         <td>${streakHtml}</td>
       `;
       return tr;
     }
 
-    // Passed table
-    passedList.forEach((p, i) => {
-      passedParticipantsBody.appendChild(
-        buildParticipantRow(p, i + 1, data.session.totalQuestions)
+    rankedParticipants.forEach(p => {
+      rankingParticipantsBody.appendChild(
+        buildParticipantRow(p, p.overallRank, data.session.totalQuestions)
       );
     });
 
-    // Failed table
-    failedList.forEach((p, i) => {
-      failedParticipantsBody.appendChild(
-        buildParticipantRow(p, i + 1, data.session.totalQuestions)
-      );
-    });
-
-    // Show/hide empty messages
-    document.getElementById('no-passed-msg').classList.toggle('hidden', passedList.length > 0);
-    document.getElementById('no-failed-msg').classList.toggle('hidden', failedList.length > 0);
-    document.getElementById('passed-count-badge').textContent = passedList.length;
-    document.getElementById('failed-count-badge').textContent = failedList.length;
-
-    // Hide the failed section entirely if nobody failed
-    document.getElementById('failed-section').classList.toggle('hidden', failedList.length === 0);
+    noRankingMsg.classList.toggle('hidden', rankedParticipants.length > 0);
+    rankingCountBadge.textContent = rankedParticipants.length;
+    rankingThresholdNote.textContent = `Passing threshold: ${passingPercent}%`;
 
   } catch (err) {
     console.error('Failed to load session detail', err);

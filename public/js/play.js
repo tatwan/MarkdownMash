@@ -11,6 +11,7 @@ const sessionEndedMessage = document.getElementById('session-ended-message');
 const waitingSection = document.getElementById('waiting-section');
 const welcomeName = document.getElementById('welcome-name');
 const quizTitleDisplay = document.getElementById('quiz-title-display');
+const waitingSessionCode = document.getElementById('waiting-session-code');
 
 const questionSection = document.getElementById('question-section');
 const currentQNum = document.getElementById('current-q-num');
@@ -28,6 +29,11 @@ const resultText = document.getElementById('result-text');
 const currentScoreEl = document.getElementById('current-score');
 const yourAnswer = document.getElementById('your-answer');
 const correctAnswer = document.getElementById('correct-answer');
+const resultRank = document.getElementById('result-rank');
+const resultStreak = document.getElementById('result-streak');
+const resultMovement = document.getElementById('result-movement');
+const resultResponseTotal = document.getElementById('result-response-total');
+const resultsDistribution = document.getElementById('results-distribution');
 
 const endedSection = document.getElementById('ended-section');
 const finalIcon = document.getElementById('final-icon');
@@ -36,6 +42,9 @@ const finalScoreValue = document.getElementById('final-score-value');
 const finalScoreMax = document.getElementById('final-score-max');
 const finalPercentage = document.getElementById('final-percentage');
 const finalMessage = document.getElementById('final-message');
+const finalRank = document.getElementById('final-rank');
+const finalCorrect = document.getElementById('final-correct');
+const finalStreak = document.getElementById('final-streak');
 
 // State
 let socket = null;
@@ -46,7 +55,6 @@ let selectedAnswer = null;
 let timerInterval = null;
 let timerDuration = 20;
 let currentScore = 0;
-let chart = null;
 let isFirstConnect = true; // Tracks whether this is the initial connection or a reconnect
 
 // Motivating messages
@@ -114,6 +122,7 @@ joinForm.addEventListener('submit', async (e) => {
       waitingSection.classList.remove('hidden');
       welcomeName.textContent = `Welcome, ${name}!`;
       quizTitleDisplay.textContent = data.quizTitle;
+      waitingSessionCode.textContent = sessionCode;
 
       initSocket();
     } else {
@@ -240,9 +249,14 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
 
   socket.on('question_ended', (data) => {
     clearInterval(timerInterval);
+    if (data.question) {
+      currentQuestion = data.question;
+    }
 
     // Get my results from participantResults
-    const myResults = data.participantResults[participantId] || {};
+    const myResults = data.participantResults?.[participantId] || {
+      yourAnswer: data.yourAnswer
+    };
     const yourAnswerIdx = myResults.yourAnswer;
     const correctIdx = data.correctIndices[0];
     const isCorrect = yourAnswerIdx !== undefined && data.correctIndices.includes(yourAnswerIdx);
@@ -255,16 +269,29 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
     // Set result display
     if (yourAnswerIdx === undefined) {
       resultIcon.className = 'result-icon timeout';
+      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#clock"></use></svg>';
       resultText.textContent = "Time's up!";
       yourAnswer.textContent = 'No answer';
     } else if (isCorrect) {
       resultIcon.className = 'result-icon correct';
+      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
       resultText.textContent = 'Correct!';
       yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${marked.parseInline(currentQuestion.options[yourAnswerIdx])}`;
     } else {
       resultIcon.className = 'result-icon incorrect';
+      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#x-circle"></use></svg>';
       resultText.textContent = 'Incorrect';
       yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${marked.parseInline(currentQuestion.options[yourAnswerIdx])}`;
+    }
+
+    resultRank.textContent = myResults.rank ? `#${myResults.rank}` : '—';
+    resultStreak.textContent = myResults.currentStreak || 0;
+    if (myResults.movement > 0) {
+      resultMovement.textContent = `+${myResults.movement}`;
+    } else if (myResults.movement < 0) {
+      resultMovement.textContent = `${myResults.movement}`;
+    } else {
+      resultMovement.textContent = myResults.previousRank ? 'Held' : 'New';
     }
 
     correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${marked.parseInline(currentQuestion.options[correctIdx])}`;
@@ -286,19 +313,28 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
     if (myResults || data.finalScore !== undefined) {
       const finalScore = data.finalScore !== undefined ? data.finalScore : (myResults?.currentScore || 0);
       const percentage = data.percentage !== undefined ? data.percentage : Math.round((myResults?.correctCount || 0) / data.totalQuestions * 100);
-      const passed = percentage >= 70;
+      const passed = typeof data.passed === 'boolean'
+        ? data.passed
+        : percentage >= (data.passingPercent || 70);
 
       finalScoreValue.textContent = finalScore;
       finalScoreMax.textContent = data.totalScore;
       finalPercentage.textContent = `${percentage}%`;
+      finalRank.textContent = data.rank
+        ? `#${data.rank}${data.participantCount ? ` of ${data.participantCount}` : ''}`
+        : '—';
+      finalCorrect.textContent = `${data.correctCount ?? myResults?.correctCount ?? 0} / ${data.totalQuestions || 0}`;
+      finalStreak.textContent = data.bestStreak ?? myResults?.bestStreak ?? 0;
 
       if (passed) {
         finalIcon.className = 'final-icon passed';
+        finalIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg>';
         finalStatus.textContent = 'Congratulations!';
         finalPercentage.className = 'final-pct passed';
-        finalMessage.textContent = `You passed!`;
+        finalMessage.textContent = `You cleared the ${data.passingPercent || 70}% mark.`;
       } else {
         finalIcon.className = 'final-icon failed';
+        finalIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg>';
         finalStatus.textContent = 'Keep Practicing!';
         finalPercentage.className = 'final-pct failed';
         finalMessage.textContent = motivatingMessages[Math.floor(Math.random() * motivatingMessages.length)];
@@ -330,7 +366,8 @@ function showReconnectBanner(reason) {
 
   const msg = reason || 'Connection to quiz server was interrupted.';
   banner.innerHTML = `
-    ⚠️ <strong>Connection interrupted.</strong> ${msg}
+    <svg class="banner-icon" aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg>
+    <strong>Connection interrupted.</strong> ${msg}
     <br><small>Wait for your teacher to let you know if the quiz will continue.
     <a href="javascript:location.reload()" style="color:#fde68a;text-decoration:underline">Refresh</a>
     to try reconnecting.</small>
@@ -376,60 +413,26 @@ function selectAnswer(index, btn) {
   });
 }
 
-// Show results chart
+// Show a readable answer distribution without canvas axis-label truncation.
 function showResultsChart(data) {
-  const resultsChart = document.getElementById('results-chart');
-
-  const labels = currentQuestion.options.map((opt, i) => {
-    const letter = String.fromCharCode(65 + i);
-    return `${letter}. ${opt.length > 30 ? opt.substring(0, 27) + '...' : opt}`;
-  });
   const counts = data.stats.counts;
-  const colors = currentQuestion.options.map((_, i) =>
-    data.correctIndices.includes(i) ? 'rgba(34, 197, 94, 0.9)' : 'rgba(99, 102, 241, 0.7)'
-  );
+  const totalResponses = counts.reduce((sum, count) => sum + Number(count || 0), 0);
+  const largestCount = Math.max(1, ...counts);
 
-  if (chart) {
-    chart.destroy();
-  }
+  resultResponseTotal.textContent = `${totalResponses} ${totalResponses === 1 ? 'response' : 'responses'}`;
+  resultsDistribution.innerHTML = '';
 
-  chart = new Chart(resultsChart, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Responses',
-        data: counts,
-        backgroundColor: colors,
-        borderRadius: 8
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          ticks: {
-            stepSize: 1,
-            color: '#f1f5f9',
-            font: { size: 16 }
-          },
-          grid: { color: 'rgba(71, 85, 105, 0.5)' }
-        },
-        y: {
-          ticks: {
-            color: '#f1f5f9',
-            font: { size: 18 }
-          },
-          grid: { display: false }
-        }
-      }
-    }
+  currentQuestion.options.forEach((option, index) => {
+    const count = Number(counts[index] || 0);
+    const width = Math.round((count / largestCount) * 100);
+    const row = document.createElement('div');
+    row.className = `distribution-row ${data.correctIndices.includes(index) ? 'correct' : ''}`;
+    row.innerHTML = `
+      <div class="distribution-answer"><strong>${String.fromCharCode(65 + index)}.</strong> ${marked.parseInline(option)}</div>
+      <div class="distribution-track" aria-hidden="true"><span style="width: ${width}%"></span></div>
+      <div class="distribution-count">${count}</div>
+    `;
+    resultsDistribution.appendChild(row);
   });
 }
 

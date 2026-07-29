@@ -6,6 +6,11 @@ const QRCode = require('qrcode');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
+const {
+  buildFinaleSummary,
+  buildQuestionPresentation,
+  rankParticipants
+} = require('./presentation');
 
 const app = express();
 const server = http.createServer(app);
@@ -69,9 +74,12 @@ const activeSessions = new Map();
 //   id: number (database id),
 //   code: string,
 //   quiz: object,
-//   participants: { participantId: { id, name, score, correctCount, answers: {}, socketId } },
+//   participants: { participantId: { id, name, score, correctCount, answers: {}, responseTimes: {}, socketId } },
 //   quizState: { isRunning, currentQuestionIndex, questionEndTime, showingResults },
-//   questionStartTime: number (for response time tracking)
+//   questionStartTime: number (for response time tracking),
+//   rankSnapshot: { participantId: rank },
+//   lastQuestionPresentation: object,
+//   finale: object
 // }
 
 // ============================================
@@ -326,7 +334,10 @@ app.post('/api/admin/session', async (req, res) => {
         questionEndTime: null,
         showingResults: false
       },
-      questionStartTime: null
+      questionStartTime: null,
+      rankSnapshot: {},
+      lastQuestionPresentation: null,
+      finale: null
     };
     activeSessions.set(code, sessionState);
 
@@ -502,47 +513,12 @@ app.get('/api/admin/session/:code/results', async (req, res) => {
     return res.json({ results: [] });
   }
 
-  // Get all answers from database with response times
-  const dbAnswers = await db.getAnswersBySession(session.id);
-
-  // Calculate results with response time consideration
-  const results = Object.values(session.participants).map(p => {
-    let correctCount = 0;
-    let totalResponseTime = 0;
-    let answeredCount = 0;
-
-    for (const question of session.quiz.questions) {
-      const answer = p.answers[question.id];
-      if (answer !== undefined && question.correctIndices.includes(answer)) {
-        correctCount++;
-      }
-
-      // Get response time for this answer from database
-      const dbAnswer = dbAnswers.find(a =>
-        a.participant_id === p.id && a.question_index === session.quiz.questions.indexOf(question)
-      );
-      if (dbAnswer && dbAnswer.response_time_ms) {
-        totalResponseTime += dbAnswer.response_time_ms;
-        answeredCount++;
-      }
-    }
-
-    const avgResponseTime = answeredCount > 0 ? totalResponseTime / answeredCount : 999999;
-
-    return {
-      name: p.name,
-      score: correctCount,
-      total: session.quiz.questions.length,
-      avgResponseTime
-    };
-  }).sort((a, b) => {
-    // Primary sort: by score (descending)
-    if (b.score !== a.score) {
-      return b.score - a.score;
-    }
-    // Secondary sort: by average response time (ascending - faster is better)
-    return a.avgResponseTime - b.avgResponseTime;
-  });
+  const results = rankParticipants(session).map(participant => ({
+    name: participant.name,
+    score: participant.correctCount,
+    total: session.quiz.questions.length,
+    avgResponseTime: participant.avgResponseTimeMs
+  }));
 
   res.json({ results });
 });
@@ -588,7 +564,10 @@ app.post('/api/session/:code/join', async (req, res) => {
     name: name.trim(),
     score: 0,
     correctCount: 0,
+    currentStreak: 0,
+    bestStreak: 0,
     answers: {},
+    responseTimes: {},
     socketId: null
   };
 
@@ -1072,6 +1051,7 @@ app.get('/api/admin/analytics/session/:code', async (req, res) => {
       status: session.status,
       totalQuestions: session.total_questions,
       totalScore: session.total_score,
+      passingPercent: session.passing_percent ?? session.quiz_data?.passingPercent ?? 70,
       createdAt: session.created_at,
       startedAt: session.started_at,
       endedAt: session.ended_at
@@ -1218,8 +1198,9 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Presenter receives the richer admin-room payloads, but has no controls.
+    // Keeping it out of the participant room avoids duplicate events.
     socket.join(`admin:${sessionCode}`);
-    socket.join(`session:${sessionCode}`);
     socket.sessionCode = sessionCode;
     console.log('Presenter joined session:', sessionCode);
 
@@ -1234,6 +1215,39 @@ io.on('connection', (socket) => {
       questionCount: session.quiz.questions.length,
       sessionCode
     });
+
+    // Restore the current presenter view after a browser refresh or reconnect.
+    if (session.finale) {
+      socket.emit('quiz_ended', session.finale);
+      return;
+    }
+
+    if (session.quizState.currentQuestionIndex >= 0
+      && session.quizState.currentQuestionIndex < session.quiz.questions.length) {
+      const question = session.quiz.questions[session.quizState.currentQuestionIndex];
+      const timeRemaining = Math.max(
+        0,
+        Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000)
+      );
+
+      if (session.quizState.showingResults && session.lastQuestionPresentation) {
+        socket.emit('question_ended', {
+          questionId: question.id,
+          question,
+          questionNumber: session.quizState.currentQuestionIndex + 1,
+          correctIndices: question.correctIndices,
+          stats: calculateStats(session, question.id),
+          presentation: session.lastQuestionPresentation
+        });
+      } else if (session.quizState.isRunning) {
+        socket.emit('question_started', {
+          question,
+          timeRemaining,
+          questionNumber: session.quizState.currentQuestionIndex + 1,
+          totalQuestions: session.quiz.questions.length
+        });
+      }
+    }
   });
 
   // Participant joins with their ID and session code
@@ -1272,17 +1286,57 @@ io.on('connection', (socket) => {
 
     console.log('Participant joined:', participant.name, 'in session:', sessionCode);
 
+    // Restore the participant's personal finale after a refresh.
+    if (session.finale) {
+      const standing = session.finale.leaderboard
+        ?.find(entry => entry.id === participant.id);
+      const percentage = session.quiz.questions.length > 0
+        ? Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100)
+        : 0;
+      socket.emit('quiz_ended', {
+        finalScore: standing?.score || 0,
+        totalScore: session.quiz.totalScore,
+        correctCount: participant.correctCount || 0,
+        totalQuestions: session.quiz.questions.length,
+        percentage,
+        passed: percentage >= session.quiz.passingPercent,
+        passingPercent: session.quiz.passingPercent,
+        rank: standing?.rank || null,
+        participantCount: session.finale.leaderboard?.length || 0,
+        bestStreak: participant.bestStreak || 0
+      });
+      return;
+    }
+
     // If quiz is in progress, send current state
     if (session.quizState.isRunning && session.quizState.currentQuestionIndex >= 0) {
       const question = session.quiz.questions[session.quizState.currentQuestionIndex];
       const timeRemaining = Math.max(0, Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000));
 
       if (session.quizState.showingResults) {
+        const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
+        const standing = session.lastQuestionPresentation?.leaderboard
+          ?.find(entry => entry.id === participant.id);
         socket.emit('question_ended', {
           questionId: question.id,
+          question: getQuestionForParticipants(question),
           correctIndices: question.correctIndices,
           stats: calculateStats(session, question.id),
-          yourAnswer: participant.answers[question.id]
+          participantResults: {
+            [participant.id]: {
+              yourAnswer: participant.answers[question.id],
+              currentScore: Math.round((participant.correctCount || 0) * pointsPerQuestion),
+              correctCount: participant.correctCount || 0,
+              currentStreak: participant.currentStreak || 0,
+              bestStreak: participant.bestStreak || 0,
+              rank: standing?.rank || null,
+              previousRank: standing?.previousRank || null,
+              movement: standing?.movement || 0
+            }
+          },
+          totalScore: session.quiz.totalScore,
+          questionsAnswered: session.quizState.currentQuestionIndex + 1,
+          totalQuestions: session.quiz.questions.length
         });
       } else if (timeRemaining > 0) {
         socket.emit('question_started', {
@@ -1303,6 +1357,9 @@ io.on('connection', (socket) => {
     session.quizState.isRunning = true;
     session.quizState.currentQuestionIndex = -1;
     session.quizState.showingResults = false;
+    session.rankSnapshot = {};
+    session.lastQuestionPresentation = null;
+    session.finale = null;
 
     // Update database status
     await db.updateSessionStatus(sessionCode, 'active');
@@ -1312,6 +1369,9 @@ io.on('connection', (socket) => {
       p.answers = {};
       p.score = 0;
       p.correctCount = 0;
+      p.currentStreak = 0;
+      p.bestStreak = 0;
+      p.responseTimes = {};
     }
 
     io.to(`session:${sessionCode}`).emit('quiz_started', {
@@ -1343,11 +1403,15 @@ io.on('connection', (socket) => {
 
       // Save final scores to database and send results to each participant
       console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
+      const finalLeaderboard = rankParticipants(session);
       for (const participant of Object.values(session.participants)) {
         const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
         const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
         const passed = percentage >= session.quiz.passingPercent;
+        const standing = finalLeaderboard.find(entry => entry.id === participant.id);
         console.log(`[FINAL SCORES] ${participant.name}: ${participant.correctCount} correct, ${finalScore}/${session.quiz.totalScore} points, ${percentage}%`);
+
+        participant.score = finalScore;
 
         // Update database
         await db.updateParticipantScore(participant.id, finalScore, participant.correctCount || 0);
@@ -1360,12 +1424,16 @@ io.on('connection', (socket) => {
             totalQuestions: session.quiz.questions.length,
             percentage,
             passed,
-            passingPercent: session.quiz.passingPercent
+            passingPercent: session.quiz.passingPercent,
+            rank: standing?.rank || null,
+            participantCount: finalLeaderboard.length,
+            bestStreak: participant.bestStreak || 0
           });
         }
       }
 
-      io.to(`admin:${sessionCode}`).emit('quiz_ended');
+      session.finale = buildFinaleSummary(session);
+      io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
       return;
     }
 
@@ -1435,6 +1503,8 @@ io.on('connection', (socket) => {
 
     // Calculate response time
     const responseTimeMs = session.questionStartTime ? Date.now() - session.questionStartTime : null;
+    participant.responseTimes = participant.responseTimes || {};
+    participant.responseTimes[questionId] = responseTimeMs;
 
     // Record answer in database
     const isCorrect = question.correctIndices.includes(answerIndex);
@@ -1510,18 +1580,39 @@ function endCurrentQuestion(sessionCode) {
     const wasCorrect = answer !== undefined && question.correctIndices.includes(answer);
     if (wasCorrect) {
       participant.correctCount = (participant.correctCount || 0) + 1;
+      participant.currentStreak = (participant.currentStreak || 0) + 1;
+      participant.bestStreak = Math.max(
+        participant.bestStreak || 0,
+        participant.currentStreak
+      );
+    } else {
+      participant.currentStreak = 0;
     }
     console.log(`[SCORING] ${participant.name}: answered ${answer}, correct: ${wasCorrect}, total correct: ${participant.correctCount}`);
   }
+
+  const presentation = buildQuestionPresentation(session, question);
+  session.rankSnapshot = presentation.rankSnapshot;
+  session.lastQuestionPresentation = {
+    correctParticipants: presentation.correctParticipants,
+    leaderboard: presentation.leaderboard,
+    highlights: presentation.highlights
+  };
 
   // Build results for each participant
   const participantResults = {};
   for (const participant of Object.values(session.participants)) {
     const currentScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
+    const standing = presentation.leaderboard.find(entry => entry.id === participant.id);
     participantResults[participant.id] = {
       yourAnswer: participant.answers[question.id],
       currentScore,
-      correctCount: participant.correctCount || 0
+      correctCount: participant.correctCount || 0,
+      currentStreak: participant.currentStreak || 0,
+      bestStreak: participant.bestStreak || 0,
+      rank: standing?.rank || null,
+      previousRank: standing?.previousRank || null,
+      movement: standing?.movement || 0
     };
   }
 
@@ -1539,8 +1630,11 @@ function endCurrentQuestion(sessionCode) {
   // Send to admin
   io.to(`admin:${sessionCode}`).emit('question_ended', {
     questionId: question.id,
+    question,
+    questionNumber: session.quizState.currentQuestionIndex + 1,
     correctIndices: question.correctIndices,
-    stats
+    stats,
+    presentation: session.lastQuestionPresentation
   });
 }
 

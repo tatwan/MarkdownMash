@@ -3,51 +3,70 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="/socket.io/socket.io.js"></script>
+  <script defer src="/js/play.js"></script>
 </head>
 
 <body class="player-body">
+  <div class="player-brand-pattern" aria-hidden="true"></div>
   <div class="player-container">
 
     <!-- Join Section -->
     <div id="join-section" class="player-section">
-      <div class="player-logo">Markdown Mash</div>
+      <a class="brand-lockup player-logo" href="/" aria-label="Markdown Mash home">
+        <span class="brand-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
+        <span class="brand-name">Markdown <strong>Mash</strong></span>
+      </a>
       <div class="join-card">
-        <h2>Join Quiz</h2>
+        <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg></div>
+        <p class="section-eyebrow">Your class is waiting</p>
+        <h2>Join a Mash</h2>
+        <p class="join-card-lede">Enter the room code and the name your instructor will recognize.</p>
         <form id="join-form">
-          <input type="text" id="session-code" placeholder="Session Code (e.g., ABC123)" required maxlength="6" style="text-transform: uppercase; text-align: center; font-size: 1.5rem; letter-spacing: 0.2em;">
-          <input type="text" id="player-name" placeholder="Enter your name" required maxlength="30">
-          <button type="submit" class="btn btn-success btn-block btn-lg">Join</button>
+          <label for="session-code">Session code</label>
+          <input type="text" id="session-code" class="code-input" placeholder="ABC123" required maxlength="6" autocomplete="off" autocapitalize="characters">
+          <label for="player-name">Your name</label>
+          <input type="text" id="player-name" placeholder="Enter your name" required maxlength="30" autocomplete="name">
+          <button type="submit" class="btn btn-primary btn-block btn-lg">Join the quiz <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
         </form>
-        <p id="join-error" class="error-text hidden"></p>
+        <p id="join-error" class="error-text hidden" role="alert"></p>
       </div>
     </div>
 
     <!-- Session Ended Section -->
     <div id="session-ended-section" class="player-section hidden">
-      <div class="player-logo">Markdown Mash</div>
+      <a class="brand-lockup player-logo" href="/" aria-label="Markdown Mash home">
+        <span class="brand-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
+        <span class="brand-name">Markdown <strong>Mash</strong></span>
+      </a>
       <div class="final-display">
-        <div class="final-icon timeout"></div>
+        <div class="final-icon timeout"><svg aria-hidden="true"><use href="/assets/icons.svg#clock"></use></svg></div>
         <h2>Session Ended</h2>
         <p id="session-ended-message" class="final-msg">This session has ended.</p>
-        <a href="/play.html" class="btn btn-primary">Join Another Session</a>
+        <a href="/play.html" class="btn btn-primary">Join another session</a>
       </div>
     </div>
 
     <!-- Waiting Section -->
     <div id="waiting-section" class="player-section hidden">
-      <div class="player-logo">Markdown Mash</div>
+      <a class="brand-lockup player-logo" href="/" aria-label="Markdown Mash home">
+        <span class="brand-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
+        <span class="brand-name">Markdown <strong>Mash</strong></span>
+      </a>
       <div class="waiting-content">
-        <div class="spinner"></div>
+        <div class="waiting-check"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg></div>
+        <p class="section-eyebrow">You’re in</p>
         <h2 id="welcome-name">Welcome!</h2>
         <p id="quiz-title-display" class="quiz-title"></p>
-        <p class="waiting-text">Waiting for host to start...</p>
+        <div class="waiting-room-code">Room <strong id="waiting-session-code">------</strong></div>
+        <div class="waiting-pulse"><span></span>Waiting for your instructor to start</div>
+        <p class="waiting-tip">Keep this screen open. The first question will appear automatically.</p>
       </div>
     </div>
 
@@ -70,7 +89,7 @@
 
       <div class="player-options" id="options-container"></div>
 
-      <div id="answer-status" class="answer-status hidden">Submitted!</div>
+      <div id="answer-status" class="answer-status hidden"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>Answer locked</div>
     </div>
 
     <!-- Results Section -->
@@ -83,8 +102,18 @@
         </div>
       </div>
 
+      <div class="personal-result-grid">
+        <div class="personal-result-card"><svg aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg><span id="result-rank">—</span><small>Current rank</small></div>
+        <div class="personal-result-card"><svg aria-hidden="true"><use href="/assets/icons.svg#flame"></use></svg><span id="result-streak">0</span><small>Answer streak</small></div>
+        <div class="personal-result-card"><svg aria-hidden="true"><use href="/assets/icons.svg#trend-up"></use></svg><span id="result-movement">—</span><small>Rank movement</small></div>
+      </div>
+
       <div class="player-chart-container">
-        <canvas id="results-chart"></canvas>
+        <div class="result-section-heading">
+          <p class="section-eyebrow">How the room answered</p>
+          <span id="result-response-total" class="text-muted"></span>
+        </div>
+        <div id="results-distribution" class="player-distribution"></div>
       </div>
 
       <div class="result-details">
@@ -98,28 +127,32 @@
         </div>
       </div>
 
-      <p class="waiting-text">Next question coming...</p>
+      <p class="waiting-pulse result-waiting"><span></span>Next question coming up</p>
     </div>
 
     <!-- Quiz Ended Section -->
     <div id="ended-section" class="player-section hidden">
       <div class="final-display">
-        <div id="final-icon" class="final-icon"></div>
+        <div id="final-icon" class="final-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg></div>
+        <p class="section-eyebrow">Mash complete</p>
         <h2 id="final-status">Quiz Complete!</h2>
         <div class="final-score-big">
           <span id="final-score-value">0</span>
           <span class="final-score-max">/ <span id="final-score-max">100</span></span>
         </div>
         <p id="final-percentage" class="final-pct">0%</p>
+        <div class="final-metrics">
+          <div><strong id="final-rank">—</strong><span>Final rank</span></div>
+          <div><strong id="final-correct">0 / 0</strong><span>Correct</span></div>
+          <div><strong id="final-streak">0</strong><span>Best streak</span></div>
+        </div>
         <p id="final-message" class="final-msg"></p>
-        <a href="/" class="btn btn-primary">Play Again</a>
+        <a href="/play.html" class="btn btn-primary">Join another Mash <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#replay"></use></svg></a>
       </div>
     </div>
 
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/js/play.js"></script>
 </body>
 
 </html>
