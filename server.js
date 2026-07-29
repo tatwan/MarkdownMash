@@ -11,6 +11,7 @@ const {
   buildQuestionPresentation,
   rankParticipants
 } = require('./presentation');
+const { canReuseParticipant } = require('./participant-identity');
 
 const app = express();
 const server = http.createServer(app);
@@ -542,10 +543,9 @@ app.post('/api/session/:code/join', async (req, res) => {
   }
 
   // Check if this is a rejoin with an existing participant ID
-  if (existingParticipantId && session.participants[existingParticipantId]) {
+  if (existingParticipantId
+    && canReuseParticipant(session.participants[existingParticipantId], name)) {
     const existing = session.participants[existingParticipantId];
-    // Update name in case it changed
-    existing.name = name.trim();
 
     return res.json({
       success: true,

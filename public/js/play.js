@@ -4,6 +4,9 @@ const joinForm = document.getElementById('join-form');
 const joinError = document.getElementById('join-error');
 const playerNameInput = document.getElementById('player-name');
 const sessionCodeInput = document.getElementById('session-code');
+const rejoinPanel = document.getElementById('rejoin-panel');
+const rejoinOptions = document.getElementById('rejoin-options');
+const joinDifferentBtn = document.getElementById('join-different-btn');
 
 const sessionEndedSection = document.getElementById('session-ended-section');
 const sessionEndedMessage = document.getElementById('session-ended-message');
@@ -45,6 +48,10 @@ const finalMessage = document.getElementById('final-message');
 const finalRank = document.getElementById('final-rank');
 const finalCorrect = document.getElementById('final-correct');
 const finalStreak = document.getElementById('final-streak');
+const participantStore = MarkdownMashParticipantStorage.createParticipantStore(
+  window.sessionStorage,
+  window.localStorage
+);
 
 // State
 let socket = null;
@@ -71,19 +78,80 @@ function init() {
   const urlParams = new URLSearchParams(window.location.search);
   const urlSessionCode = urlParams.get('session');
   if (urlSessionCode) {
-    sessionCodeInput.value = urlSessionCode.toUpperCase();
+    const code = urlSessionCode.toUpperCase();
+    sessionCodeInput.value = code;
+    const activeIdentity = participantStore.getActive(code);
+    if (activeIdentity?.name) {
+      playerNameInput.value = activeIdentity.name;
+    }
+    renderRejoinOptions(code);
   }
 }
 
 // Join quiz
 let isJoining = false;
+const joinSubmitBtn = joinForm.querySelector('button[type="submit"]');
+const joinSubmitMarkup = joinSubmitBtn.innerHTML;
 
-joinForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+function normalizeName(name) {
+  return String(name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
 
-  // Prevent double-submission
+function renderRejoinOptions(code) {
+  if (!code || code.length !== 6) {
+    rejoinPanel.classList.add('hidden');
+    return;
+  }
+
+  const saved = participantStore.getRecoveries(code);
+  const active = participantStore.getActive(code);
+  if (active && !saved.some(entry => entry.id === active.id)) {
+    saved.unshift(active);
+  }
+
+  rejoinOptions.innerHTML = '';
+  saved.forEach(identity => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'rejoin-option';
+    button.innerHTML = `
+      <span class="rejoin-avatar">${escapeText(identity.name).charAt(0).toUpperCase()}</span>
+      <span><strong>${escapeText(identity.name)}</strong><small>Continue in ${code}</small></span>
+      <svg aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
+    `;
+    button.addEventListener('click', () => {
+      sessionCodeInput.value = code;
+      playerNameInput.value = identity.name;
+      attemptJoin(identity.id);
+    });
+    rejoinOptions.appendChild(button);
+  });
+
+  rejoinPanel.classList.toggle('hidden', saved.length === 0);
+}
+
+function escapeText(value) {
+  const div = document.createElement('div');
+  div.textContent = String(value || '');
+  return div.innerHTML;
+}
+
+function clearCurrentIdentity({ forgetRecovery = false, clearSession = false } = {}) {
+  const code = sessionCode || sessionCodeInput.value.trim().toUpperCase();
+  const active = code ? participantStore.getActive(code) : null;
+  const id = participantId || active?.id;
+
+  if (code && clearSession) {
+    participantStore.clearSessionRecoveries(code);
+  } else if (code && id && forgetRecovery) {
+    participantStore.removeRecovery(code, id);
+  }
+  participantStore.clearActive(code || null);
+  participantStore.clearLegacyIdentity();
+}
+
+async function attemptJoin(requestedParticipantId = null) {
   if (isJoining) return;
-
   const name = playerNameInput.value.trim();
   const code = sessionCodeInput.value.trim().toUpperCase();
 
@@ -93,20 +161,26 @@ joinForm.addEventListener('submit', async (e) => {
     return;
   }
 
+  let existingParticipantId = requestedParticipantId;
+  if (!existingParticipantId) {
+    const active = participantStore.getActive(code);
+    if (active && normalizeName(active.name) === normalizeName(name)) {
+      existingParticipantId = active.id;
+    } else {
+      // One-time compatibility path for participants who joined before v1.2.0.
+      existingParticipantId = participantStore.getLegacyIdentity(code)?.id || null;
+    }
+  }
+
   isJoining = true;
-  const submitBtn = joinForm.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Joining...';
+  joinSubmitBtn.disabled = true;
+  joinSubmitBtn.textContent = 'Joining...';
 
   try {
-    // Check if we already have a stored participant for this session
-    const storedId = localStorage.getItem('markdownMashId');
-    const storedSession = localStorage.getItem('markdownMashSession');
-
     const res = await fetch(`/api/session/${code}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, existingParticipantId: storedSession === code ? storedId : null })
+      body: JSON.stringify({ name, existingParticipantId })
     });
 
     const data = await res.json();
@@ -114,9 +188,9 @@ joinForm.addEventListener('submit', async (e) => {
       participantId = data.participantId;
       sessionCode = data.sessionCode;
 
-      // Store both participant ID and session code
-      localStorage.setItem('markdownMashId', participantId);
-      localStorage.setItem('markdownMashSession', sessionCode);
+      participantStore.setActive(sessionCode, participantId, name);
+      participantStore.rememberRecovery(sessionCode, participantId, name);
+      participantStore.clearLegacyIdentity();
 
       hideAllSections();
       waitingSection.classList.remove('hidden');
@@ -128,15 +202,33 @@ joinForm.addEventListener('submit', async (e) => {
     } else {
       showError(data.error);
       isJoining = false;
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Join';
+      joinSubmitBtn.disabled = false;
+      joinSubmitBtn.innerHTML = joinSubmitMarkup;
     }
   } catch (err) {
     showError('Connection error. Please try again.');
     isJoining = false;
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Join';
+    joinSubmitBtn.disabled = false;
+    joinSubmitBtn.innerHTML = joinSubmitMarkup;
   }
+}
+
+joinForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  attemptJoin();
+});
+
+sessionCodeInput.addEventListener('input', () => {
+  const code = sessionCodeInput.value.trim().toUpperCase();
+  renderRejoinOptions(code);
+});
+
+joinDifferentBtn.addEventListener('click', () => {
+  const code = sessionCodeInput.value.trim().toUpperCase();
+  participantStore.clearActive(code || null);
+  playerNameInput.value = '';
+  rejoinPanel.classList.add('hidden');
+  playerNameInput.focus();
 });
 
 // Initialize Socket.IO
@@ -167,8 +259,7 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
   socket.on('session_invalid', (data) => {
     if (isFirstConnect) {
       // True first connection — session genuinely doesn't exist, clear credentials
-      localStorage.removeItem('markdownMashId');
-      localStorage.removeItem('markdownMashSession');
+      clearCurrentIdentity({ forgetRecovery: true });
 
       hideAllSections();
       sessionEndedMessage.textContent = data.message || 'This session is no longer available.';
@@ -182,16 +273,14 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
   });
 
   socket.on('clear_participant_id', () => {
-    localStorage.removeItem('markdownMashId');
-    localStorage.removeItem('markdownMashSession');
+    clearCurrentIdentity({ forgetRecovery: true });
     participantId = null;
     sessionCode = null;
   });
 
   socket.on('kicked', (data) => {
     // Clear stored credentials
-    localStorage.removeItem('markdownMashId');
-    localStorage.removeItem('markdownMashSession');
+    clearCurrentIdentity({ forgetRecovery: true });
     participantId = null;
     sessionCode = null;
 
@@ -215,8 +304,9 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
     sessionEndedSection.classList.remove('hidden');
 
     // Clear stored credentials
-    localStorage.removeItem('markdownMashId');
-    localStorage.removeItem('markdownMashSession');
+    clearCurrentIdentity({ clearSession: true });
+    participantId = null;
+    sessionCode = null;
   });
 
   socket.on('quiz_started', (data) => {

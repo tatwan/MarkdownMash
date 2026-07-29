@@ -10,6 +10,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script defer src="/socket.io/socket.io.js"></script>
+  <script defer src="/js/participant-storage.js"></script>
   <script defer src="/js/play.js"></script>
 </head>
 
@@ -28,6 +29,17 @@
         <p class="section-eyebrow">Your class is waiting</p>
         <h2>Join a Mash</h2>
         <p class="join-card-lede">Enter the room code and the name your instructor will recognize.</p>
+        <div id="rejoin-panel" class="rejoin-panel hidden">
+          <div class="rejoin-panel-heading">
+            <svg aria-hidden="true"><use href="/assets/icons.svg#replay"></use></svg>
+            <div>
+              <strong>Rejoin this room</strong>
+              <span>Choose your saved identity.</span>
+            </div>
+          </div>
+          <div id="rejoin-options" class="rejoin-options"></div>
+          <button id="join-different-btn" class="join-different-btn" type="button">Join as someone else</button>
+        </div>
         <form id="join-form">
           <label for="session-code">Session code</label>
           <input type="text" id="session-code" class="code-input" placeholder="ABC123" required maxlength="6" autocomplete="off" autocapitalize="characters">

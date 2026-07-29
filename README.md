@@ -169,7 +169,7 @@ Default admin password: `admin123` (change via `.env`)
 
 Create quizzes in Markdown format:
 
-```markdown
+````markdown
 # Intro to Python
 # Score 100
 
@@ -197,7 +197,7 @@ greet("Alice")
 - [ ] True
 - [x] False
 ::time=10
-```
+````
 
 ### Format Rules
 
@@ -347,8 +347,8 @@ Any PostgreSQL 12+ instance will work. You'll need:
    ✅ Connected to PostgreSQL database
    ✅ Database tables initialized
    ✅ Markdown Mash server running
-   ```
-   
+```
+
    Visit your app at the provided URL (e.g., `https://yourapp.onrender.com`)
 
 ---
@@ -390,7 +390,7 @@ EOF
 npm install -g pm2
 pm2 start server.js --name markdownmash
 pm2 save
-   ```
+```
 
 ---
 

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test-presentation.js",
+    "test": "node test-presentation.js && node test-participant-identity.js",
     "simulate": "node test-simulation.js",
     "simulate:help": "node test-simulation.js"
   },
