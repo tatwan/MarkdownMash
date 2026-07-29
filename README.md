@@ -60,49 +60,49 @@ Version 1.2.0 turns Markdown Mash into a more complete live classroom experience
 
 ## Screenshots
 
+![image-20260729231715630](images/image-20260729231715630.png)
+
+![image-20260729231722369](images/image-20260729231722369.png)
+
+#### Load questions 
+
+![image-20260729231743718](images/image-20260729231743718.png)
+
 #### Presenter Screen
 
 If needed to have a presenter view, there is one that you can share in class or remote setting 
 
-![image-20260122143937116](images/image-20260122143937116.png)
+![image-20260729231755155](images/image-20260729231755155.png)
 
-![image-20260118134003432](images/image-20260118134003432.png)
+![image-20260729231833097](images/image-20260729231833097.png)
 
-![image-20260118134013515](images/image-20260118134013515.png)
+![image-20260729231847314](images/image-20260729231847314.png)
 
 #### Player Screen
 
+![image-20260729231817132](images/image-20260729231817132.png)
+
 Each player will have their own view 
 
-![image-20260118134036398](images/image-20260118134036398.png)
+![image-20260729231904889](images/image-20260729231904889.png)
 
-![image-20260118134041703](images/image-20260118134041703.png)
-
-![image-20260118134054989](images/image-20260118134054989.png)
+![image-20260729231926007](images/image-20260729231926007.png)
 
 A final score will be presented for each user 
 
-![image-20260118134102050](images/image-20260118134102050.png)
+![image-20260729231958412](images/image-20260729231958412.png)
 
-![image-20260118134105576](images/image-20260118134105576.png)
+![image-20260729232006220](images/image-20260729232006220.png)
 
-#### Admin Screen (setup)
-
-Loading Questions using a Markdown Template 
-
-![image-20260118133922012](images/image-20260118133922012.png)
+![image-20260729232023418](images/image-20260729232023418.png)
 
 #### Admin Screen (Analytics)
 
 View progress, control flow (start, end early ..etc), and finally when done you can view summary 
 
-![image-20260421164332984](images/image-20260421164332984.png)
+![image-20260729232111905](images/image-20260729232111905.png)
 
-![image-20260421164346428](images/image-20260421164346428.png)
-
-![image-20260421164424044](images/image-20260421164424044.png)
-
-![image-20260421164439692](images/image-20260421164439692.png)
+![image-20260729232131647](images/image-20260729232131647.png)
 
 ## Tech Stack
 
@@ -343,7 +343,7 @@ Any PostgreSQL 12+ instance will work. You'll need:
 7. **Verify Deployment**
    
    Check the deployment logs for:
-   ```
+```
    ✅ Connected to PostgreSQL database
    ✅ Database tables initialized
    ✅ Markdown Mash server running
@@ -390,7 +390,7 @@ EOF
 npm install -g pm2
 pm2 start server.js --name markdownmash
 pm2 save
-```
+   ```
 
 ---
 
