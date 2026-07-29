@@ -1,6 +1,8 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
 const bcrypt = require('bcrypt');
@@ -12,12 +14,22 @@ const {
   rankParticipants
 } = require('./presentation');
 const { canReuseParticipant } = require('./participant-identity');
+const {
+  createPersistentSessionRepository,
+  createTransientSessionRepository
+} = require('./session-repository');
+const {
+  canAdminAccessStoredSession,
+  canControlSession
+} = require('./controller-authorization');
+const { createTrialManager } = require('./trial-manager');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 // Middleware
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -28,6 +40,35 @@ const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 const JWT_SECRET = process.env.JWT_SECRET || 'markdown-mash-secret-key-change-in-production';
 const JWT_EXPIRY = '24h';
 const SALT_ROUNDS = 10;
+const GUEST_TRIAL_ENABLED = process.env.GUEST_TRIAL_ENABLED !== 'false';
+const GUEST_TRIAL_TTL_MINUTES = Math.max(
+  5,
+  parseInt(process.env.GUEST_TRIAL_TTL_MINUTES, 10) || 20
+);
+const GUEST_TRIAL_MAX_PARTICIPANTS = Math.max(
+  1,
+  parseInt(process.env.GUEST_TRIAL_MAX_PARTICIPANTS, 10) || 8
+);
+const GUEST_TRIAL_MAX_CONCURRENT = Math.max(
+  1,
+  parseInt(process.env.GUEST_TRIAL_MAX_CONCURRENT, 10) || 25
+);
+const GUEST_TRIAL_STARTS_PER_IP_HOUR = Math.max(
+  1,
+  parseInt(process.env.GUEST_TRIAL_STARTS_PER_IP_HOUR, 10) || 5
+);
+const GUEST_TRIAL_SECRET = process.env.GUEST_TRIAL_JWT_SECRET
+  || crypto.createHash('sha256').update(`${JWT_SECRET}:guest-trial`).digest('hex');
+const guestQuizMarkdown = fs.readFileSync(
+  path.join(__dirname, 'demo-quizzes', 'quick-wins.md'),
+  'utf8'
+);
+const trialManager = createTrialManager({
+  secret: GUEST_TRIAL_SECRET,
+  ttlMs: GUEST_TRIAL_TTL_MINUTES * 60 * 1000,
+  maxConcurrent: GUEST_TRIAL_MAX_CONCURRENT,
+  startsPerIpHour: GUEST_TRIAL_STARTS_PER_IP_HOUR
+});
 
 // ============================================
 // JWT AUTHENTICATION MIDDLEWARE
@@ -41,7 +82,7 @@ function authenticateToken(req, res, next) {
   }
 
   jwt.verify(token, JWT_SECRET, (err, admin) => {
-    if (err) {
+    if (err || !admin?.id || admin.type === 'trial') {
       return res.status(403).json({ success: false, error: 'Invalid or expired token' });
     }
     req.admin = admin;
@@ -69,6 +110,39 @@ function optionalAuth(req, res, next) {
 // ============================================
 // In-memory active sessions: sessionCode -> sessionState
 const activeSessions = new Map();
+
+function createSessionState({
+  id,
+  code,
+  quiz,
+  kind,
+  controller,
+  repository,
+  expiresAt = null,
+  participantLimit = null
+}) {
+  return {
+    id,
+    code,
+    quiz,
+    kind,
+    controller,
+    repository,
+    expiresAt,
+    participantLimit,
+    participants: {},
+    quizState: {
+      isRunning: false,
+      currentQuestionIndex: -1,
+      questionEndTime: null,
+      showingResults: false
+    },
+    questionStartTime: null,
+    rankSnapshot: {},
+    lastQuestionPresentation: null,
+    finale: null
+  };
+}
 
 // Session state structure:
 // {
@@ -209,9 +283,305 @@ async function generateQRCode(url) {
   }
 }
 
+function getBearerToken(req) {
+  const authHeader = req.headers.authorization;
+  return authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : null;
+}
+
+function authenticateTrial(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Practice-room access required' });
+  }
+
+  try {
+    req.trial = trialManager.authenticate(token);
+    return next();
+  } catch (error) {
+    return res.status(403).json({
+      success: false,
+      code: error.code || 'TRIAL_TOKEN_INVALID',
+      error: error.message || 'This practice room is no longer available.'
+    });
+  }
+}
+
+function adminPrincipal(admin) {
+  return {
+    type: 'admin',
+    id: admin.id,
+    role: admin.role,
+    username: admin.username
+  };
+}
+
+function ownerFilterFor(admin) {
+  return admin.role === 'master' ? null : admin.id;
+}
+
+async function authorizeAdminSession(req, res, next) {
+  const { code } = req.params;
+  const activeSession = activeSessions.get(code);
+
+  if (activeSession) {
+    if (activeSession.kind !== 'persistent'
+      || !canControlSession(adminPrincipal(req.admin), activeSession)) {
+      return res.status(403).json({ success: false, error: 'Session access denied' });
+    }
+    req.activeSession = activeSession;
+    return next();
+  }
+
+  try {
+    const storedSession = await db.getSession(code);
+    if (!storedSession) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+    if (!canAdminAccessStoredSession(req.admin, storedSession)) {
+      return res.status(403).json({ success: false, error: 'Session access denied' });
+    }
+    req.storedSession = storedSession;
+    return next();
+  } catch (error) {
+    console.error('Session authorization error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to verify session access' });
+  }
+}
+
+function requireTrialSession(req, res, next) {
+  const { code } = req.params;
+  const session = activeSessions.get(code);
+  const principal = {
+    type: 'trial',
+    id: req.trial.id
+  };
+
+  if (!session || session.kind !== 'trial') {
+    return res.status(404).json({ success: false, error: 'Practice room not found' });
+  }
+  if (req.trial.sessionCode !== code || !canControlSession(principal, session)) {
+    return res.status(403).json({ success: false, error: 'Practice-room access denied' });
+  }
+
+  req.activeSession = session;
+  return next();
+}
+
+function generateTrialSessionCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code = 'T';
+    for (let index = 0; index < 5; index++) {
+      code += chars[crypto.randomInt(0, chars.length)];
+    }
+    if (!activeSessions.has(code)) return code;
+  }
+  throw new Error('Unable to allocate a practice-room code');
+}
+
+function sessionResponse(req, session, qrCode) {
+  return {
+    code: session.code,
+    quiz: session.quiz,
+    qrCode,
+    joinUrl: `${req.protocol}://${req.get('host')}/play.html?session=${session.code}`,
+    presenterUrl: `${req.protocol}://${req.get('host')}/present.html?session=${session.code}`,
+    kind: session.kind,
+    expiresAt: session.expiresAt
+  };
+}
+
+function expireTrial(trial) {
+  const session = activeSessions.get(trial.sessionCode);
+  if (session?.kind === 'trial' && session.controller?.id === trial.id) {
+    io.to(`session:${trial.sessionCode}`).emit('trial_expired', {
+      message: 'This temporary practice room has expired.'
+    });
+    io.to(`admin:${trial.sessionCode}`).emit('trial_expired', {
+      message: 'Your temporary practice room has expired.'
+    });
+    activeSessions.delete(trial.sessionCode);
+  }
+}
+
+const trialCleanupInterval = setInterval(() => {
+  trialManager.removeExpired().forEach(expireTrial);
+}, 60 * 1000);
+trialCleanupInterval.unref();
+
+// Every instructor route requires a real admin token except login and recovery.
+app.use('/api/admin', (req, res, next) => {
+  const publicAdminPaths = new Set([
+    '/login',
+    '/recovery/questions',
+    '/recovery/verify'
+  ]);
+  if (publicAdminPaths.has(req.path)) return next();
+  return authenticateToken(req, res, next);
+});
+
 // ============================================
 // REST API ENDPOINTS
 // ============================================
+
+app.get('/api/trial/config', (req, res) => {
+  res.json({
+    success: true,
+    enabled: GUEST_TRIAL_ENABLED,
+    ttlMinutes: GUEST_TRIAL_TTL_MINUTES,
+    participantLimit: GUEST_TRIAL_MAX_PARTICIPANTS
+  });
+});
+
+app.post('/api/trial', (req, res) => {
+  if (!GUEST_TRIAL_ENABLED) {
+    return res.status(404).json({ success: false, error: 'Guest trials are not enabled' });
+  }
+
+  try {
+    const trial = trialManager.create({
+      ipAddress: req.ip || req.connection.remoteAddress,
+      sessionCode: generateTrialSessionCode()
+    });
+    const quiz = parseQuizMarkdown(guestQuizMarkdown);
+
+    return res.status(201).json({
+      success: true,
+      token: trial.token,
+      trial: {
+        id: trial.id,
+        sessionCode: trial.sessionCode,
+        expiresAt: trial.expiresAt,
+        ttlMinutes: GUEST_TRIAL_TTL_MINUTES,
+        participantLimit: GUEST_TRIAL_MAX_PARTICIPANTS
+      },
+      template: {
+        title: quiz.title,
+        questionCount: quiz.questions.length,
+        markdown: guestQuizMarkdown
+      }
+    });
+  } catch (error) {
+    const status = error.code === 'TRIAL_RATE_LIMITED' ? 429 : 503;
+    return res.status(status).json({
+      success: false,
+      code: error.code || 'TRIAL_UNAVAILABLE',
+      error: error.message || 'Unable to create a practice room'
+    });
+  }
+});
+
+app.get('/api/trial', authenticateTrial, (req, res) => {
+  const trial = trialManager.get(req.trial.id);
+  const session = activeSessions.get(req.trial.sessionCode);
+  const quiz = parseQuizMarkdown(guestQuizMarkdown);
+
+  res.json({
+    success: true,
+    trial: {
+      id: trial.id,
+      sessionCode: trial.sessionCode,
+      expiresAt: trial.expiresAt,
+      participantLimit: GUEST_TRIAL_MAX_PARTICIPANTS,
+      launched: Boolean(session)
+    },
+    template: {
+      title: quiz.title,
+      questionCount: quiz.questions.length,
+      markdown: guestQuizMarkdown
+    },
+    session: session
+      ? {
+          code: session.code,
+          quiz: session.quiz,
+          state: session.quizState,
+          participantCount: Object.keys(session.participants).length
+        }
+      : null
+  });
+});
+
+app.post('/api/trial/session', authenticateTrial, async (req, res) => {
+  if (!GUEST_TRIAL_ENABLED) {
+    return res.status(404).json({ success: false, error: 'Guest trials are not enabled' });
+  }
+
+  const trial = trialManager.get(req.trial.id);
+  if (!trial) {
+    return res.status(403).json({ success: false, error: 'This practice room has expired' });
+  }
+
+  try {
+    let session = activeSessions.get(trial.sessionCode);
+    if (!session) {
+      const quiz = parseQuizMarkdown(guestQuizMarkdown);
+      session = createSessionState({
+        id: `trial:${trial.id}`,
+        code: trial.sessionCode,
+        quiz,
+        kind: 'trial',
+        controller: { type: 'trial', id: trial.id },
+        repository: createTransientSessionRepository(),
+        expiresAt: trial.expiresAt,
+        participantLimit: GUEST_TRIAL_MAX_PARTICIPANTS
+      });
+      activeSessions.set(session.code, session);
+      trialManager.markLaunched(trial.id);
+    }
+
+    if (session.kind !== 'trial' || session.controller.id !== trial.id) {
+      return res.status(409).json({ success: false, error: 'Practice-room code collision' });
+    }
+
+    const joinUrl = `${req.protocol}://${req.get('host')}/play.html?session=${session.code}`;
+    const qrCode = await generateQRCode(joinUrl);
+    return res.json({
+      success: true,
+      session: sessionResponse(req, session, qrCode)
+    });
+  } catch (error) {
+    console.error('Practice-room launch error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to launch the practice room' });
+  }
+});
+
+app.post(
+  '/api/trial/session/:code/end',
+  authenticateTrial,
+  requireTrialSession,
+  async (req, res) => {
+    const session = req.activeSession;
+    await session.repository.updateStatus('ended');
+
+    io.to(`session:${session.code}`).emit('session_ended', {
+      message: 'This practice session has ended. Thanks for playing!'
+    });
+    io.to(`admin:${session.code}`).emit('session_ended', {
+      code: session.code,
+      message: 'Practice session ended'
+    });
+    activeSessions.delete(session.code);
+    res.json({ success: true, message: 'Practice session ended' });
+  }
+);
+
+app.get(
+  '/api/trial/session/:code/results',
+  authenticateTrial,
+  requireTrialSession,
+  (req, res) => {
+    const session = req.activeSession;
+    const results = rankParticipants(session).map(participant => ({
+      name: participant.name,
+      score: participant.correctCount,
+      total: session.quiz.questions.length,
+      avgResponseTime: participant.avgResponseTimeMs
+    }));
+    res.json({ success: true, results });
+  }
+);
 
 // Admin login
 app.post('/api/admin/login', async (req, res) => {
@@ -237,7 +607,7 @@ app.post('/api/admin/login', async (req, res) => {
         await db.logActivity(admin.id, 'account_created', { method: 'first_login' }, ipAddress);
 
         const token = jwt.sign(
-          { id: admin.id, username: admin.username, role: admin.role },
+          { type: 'admin', id: admin.id, username: admin.username, role: admin.role },
           JWT_SECRET,
           { expiresIn: JWT_EXPIRY }
         );
@@ -287,7 +657,7 @@ app.post('/api/admin/login', async (req, res) => {
     await db.logActivity(admin.id, 'login', {}, ipAddress);
 
     const token = jwt.sign(
-      { id: admin.id, username: admin.username, role: admin.role },
+      { type: 'admin', id: admin.id, username: admin.username, role: admin.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRY }
     );
@@ -321,25 +691,17 @@ app.post('/api/admin/session', async (req, res) => {
     const quiz = parseQuizMarkdown(markdown);
 
     // Create session in database
-    const { id, code, quizData } = await db.createSession(quiz, courseName);
+    const { id, code, quizData } = await db.createSession(quiz, courseName, req.admin.id);
 
     // Create in-memory session state
-    const sessionState = {
+    const sessionState = createSessionState({
       id,
       code,
       quiz,
-      participants: {},
-      quizState: {
-        isRunning: false,
-        currentQuestionIndex: -1,
-        questionEndTime: null,
-        showingResults: false
-      },
-      questionStartTime: null,
-      rankSnapshot: {},
-      lastQuestionPresentation: null,
-      finale: null
-    };
+      kind: 'persistent',
+      controller: { type: 'admin', id: req.admin.id },
+      repository: createPersistentSessionRepository(db, id, code)
+    });
     activeSessions.set(code, sessionState);
 
     // Generate QR code
@@ -362,9 +724,9 @@ app.post('/api/admin/session', async (req, res) => {
 });
 
 // Get QR code for a session
-app.get('/api/admin/session/:code/qr', async (req, res) => {
+app.get('/api/admin/session/:code/qr', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
-  const session = activeSessions.get(code);
+  const session = req.activeSession;
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
@@ -376,21 +738,37 @@ app.get('/api/admin/session/:code/qr', async (req, res) => {
   res.json({ success: true, qrCode, joinUrl });
 });
 
+// Public presenter lookup. This exposes only the participant join URL and its QR code.
+app.get('/api/session/:code/qr', async (req, res) => {
+  const code = String(req.params.code || '').trim().toUpperCase();
+  if (!activeSessions.has(code)) {
+    return res.status(404).json({ success: false, error: 'Session not found' });
+  }
+
+  const joinUrl = `${req.protocol}://${req.get('host')}/play.html?session=${code}`;
+  const qrCode = await generateQRCode(joinUrl);
+  res.json({ success: true, qrCode, joinUrl });
+});
+
 // End a session
-app.post('/api/admin/session/:code/end', async (req, res) => {
+app.post('/api/admin/session/:code/end', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
-  const session = activeSessions.get(code);
+  const session = req.activeSession;
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
   }
 
   // Update database status
-  await db.updateSessionStatus(code, 'ended');
+  await session.repository.updateStatus('ended');
 
   // Save final participant scores to database
   for (const participant of Object.values(session.participants)) {
-    await db.updateParticipantScore(participant.id, participant.score || 0, participant.correctCount || 0);
+    await session.repository.updateParticipantScore(
+      participant.id,
+      participant.score || 0,
+      participant.correctCount || 0
+    );
   }
 
   // Notify all clients in this session
@@ -411,13 +789,13 @@ app.post('/api/admin/session/:code/end', async (req, res) => {
 });
 
 // Get session info
-app.get('/api/admin/session/:code', async (req, res) => {
+app.get('/api/admin/session/:code', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
-  const session = activeSessions.get(code);
+  const session = req.activeSession;
 
   if (!session) {
-    // Try to get from database (might be ended session)
-    const dbSession = await db.getSession(code);
+    // Try to get from database (might be ended session).
+    const dbSession = req.storedSession;
     if (dbSession) {
       const participants = await db.getParticipantsBySession(dbSession.id);
       return res.json({
@@ -447,12 +825,12 @@ app.get('/api/admin/session/:code', async (req, res) => {
 // List session history
 app.get('/api/admin/sessions', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
-  const sessions = await db.listSessions(limit);
+  const sessions = await db.listSessions(limit, ownerFilterFor(req.admin));
   res.json({ success: true, sessions });
 });
 
 // Update session metadata
-app.post('/api/admin/session/:code/metadata', async (req, res) => {
+app.post('/api/admin/session/:code/metadata', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
   const { courseName, isTest } = req.body;
   try {
@@ -465,14 +843,18 @@ app.post('/api/admin/session/:code/metadata', async (req, res) => {
 });
 
 // Delete a session permanently
-app.delete('/api/admin/session/:code', async (req, res) => {
+app.delete('/api/admin/session/:code', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
   try {
     // If it's active, remove it from memory too
     if (activeSessions.has(code)) {
       activeSessions.delete(code);
     }
-    await db.deleteSession(code);
+    if (req.activeSession) {
+      await req.activeSession.repository.deleteSession();
+    } else {
+      await db.deleteSession(code);
+    }
     res.json({ success: true, message: 'Session deleted' });
   } catch (err) {
     console.error('Delete session error:', err);
@@ -487,9 +869,9 @@ app.get('/api/admin/ping', (req, res) => {
 });
 
 // Get participants for a session
-app.get('/api/admin/session/:code/participants', (req, res) => {
+app.get('/api/admin/session/:code/participants', authorizeAdminSession, (req, res) => {
   const { code } = req.params;
-  const session = activeSessions.get(code);
+  const session = req.activeSession;
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
@@ -506,9 +888,9 @@ app.get('/api/admin/session/:code/participants', (req, res) => {
 });
 
 // Get final results for a session
-app.get('/api/admin/session/:code/results', async (req, res) => {
+app.get('/api/admin/session/:code/results', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
-  const session = activeSessions.get(code);
+  const session = req.activeSession;
 
   if (!session || !session.quiz) {
     return res.json({ results: [] });
@@ -555,8 +937,16 @@ app.post('/api/session/:code/join', async (req, res) => {
     });
   }
 
-  // Create participant in database
-  const { id } = await db.createParticipant(session.id, name.trim());
+  if (session.participantLimit
+    && Object.keys(session.participants).length >= session.participantLimit) {
+    return res.status(429).json({
+      success: false,
+      error: `This practice room is limited to ${session.participantLimit} participants`
+    });
+  }
+
+  // Persistent sessions write through PostgreSQL; trials allocate only in memory.
+  const { id } = await session.repository.createParticipant(name.trim());
 
   // Add to in-memory session
   session.participants[id] = {
@@ -781,11 +1171,14 @@ app.post('/api/admin/recovery/verify', async (req, res) => {
 // ============================================
 
 // Kick participant from session
-app.post('/api/admin/session/:code/kick/:participantId', authenticateToken, async (req, res) => {
+app.post(
+  '/api/admin/session/:code/kick/:participantId',
+  authorizeAdminSession,
+  async (req, res) => {
   const { code, participantId } = req.params;
   const ipAddress = req.ip || req.connection.remoteAddress;
 
-  const session = activeSessions.get(code);
+  const session = req.activeSession;
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
   }
@@ -796,8 +1189,7 @@ app.post('/api/admin/session/:code/kick/:participantId', authenticateToken, asyn
   }
 
   try {
-    // Mark as kicked in database
-    await db.kickParticipant(participantId);
+    await session.repository.kickParticipant(participantId);
 
     // Disconnect socket if connected
     if (participant.socketId) {
@@ -833,6 +1225,44 @@ app.post('/api/admin/session/:code/kick/:participantId', authenticateToken, asyn
   }
 });
 
+app.post(
+  '/api/trial/session/:code/kick/:participantId',
+  authenticateTrial,
+  requireTrialSession,
+  async (req, res) => {
+    const { code, participantId } = req.params;
+    const session = req.activeSession;
+    const participant = session.participants[participantId];
+
+    if (!participant) {
+      return res.status(404).json({ success: false, error: 'Participant not found' });
+    }
+
+    await session.repository.kickParticipant(participantId);
+    if (participant.socketId) {
+      const participantSocket = io.sockets.sockets.get(participant.socketId);
+      if (participantSocket) {
+        participantSocket.emit('kicked', {
+          message: 'You have been removed from this practice room.'
+        });
+        participantSocket.disconnect(true);
+      }
+    }
+
+    delete session.participants[participantId];
+    io.to(`admin:${code}`).emit('participant_kicked', {
+      participantId,
+      name: participant.name,
+      count: Object.keys(session.participants).length
+    });
+
+    return res.json({
+      success: true,
+      message: `${participant.name} has been removed from the practice room`
+    });
+  }
+);
+
 // Get activity log
 app.get('/api/admin/activity-log', authenticateToken, async (req, res) => {
   try {
@@ -861,11 +1291,11 @@ app.get('/api/admin/activity-log', authenticateToken, async (req, res) => {
 // Recover an interrupted session by recomputing scores from raw DB answers.
 // Called when the server crashed mid-quiz and the in-memory session was lost.
 // The session must exist in the DB with status 'active' or 'created'.
-app.post('/api/admin/session/:code/recover', authenticateToken, async (req, res) => {
+app.post('/api/admin/session/:code/recover', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
   try {
     // Look up session in DB (may not be in activeSessions since server crashed)
-    const dbSession = await db.getSession(code);
+    const dbSession = req.storedSession || await db.getSession(code);
     if (!dbSession) {
       return res.status(404).json({ success: false, error: 'Session not found in database' });
     }
@@ -942,8 +1372,9 @@ function getDifficultyRating(correctPercent) {
 
 // Platform overview statistics
 app.get('/api/admin/analytics/overview', async (req, res) => {
-  const stats = await db.getPlatformStats();
-  const courseStats = await db.getCourseStats();
+  const ownerId = ownerFilterFor(req.admin);
+  const stats = await db.getPlatformStats(ownerId);
+  const courseStats = await db.getCourseStats(ownerId);
   res.json({
     success: true,
     stats: {
@@ -961,7 +1392,11 @@ app.get('/api/admin/analytics/overview', async (req, res) => {
 app.get('/api/admin/analytics/sessions', async (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const filter = req.query.filter || null; // 'ended', 'incomplete', or null
-  const sessions = await db.getSessionAnalytics(limit, filter);
+  const sessions = await db.getSessionAnalytics(
+    limit,
+    filter,
+    ownerFilterFor(req.admin)
+  );
   res.json({
     success: true,
     sessions: sessions.map(s => ({
@@ -982,9 +1417,9 @@ app.get('/api/admin/analytics/sessions', async (req, res) => {
 });
 
 // Detailed session analytics
-app.get('/api/admin/analytics/session/:code', async (req, res) => {
+app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req, res) => {
   const { code } = req.params;
-  const session = await db.getSession(code);
+  const session = req.storedSession || await db.getSession(code);
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
@@ -1072,9 +1507,12 @@ app.get('/api/admin/analytics/session/:code', async (req, res) => {
 });
 
 // Question difficulty breakdown
-app.get('/api/admin/analytics/session/:code/questions', async (req, res) => {
+app.get(
+  '/api/admin/analytics/session/:code/questions',
+  authorizeAdminSession,
+  async (req, res) => {
   const { code } = req.params;
-  const session = await db.getSession(code);
+  const session = req.storedSession || await db.getSession(code);
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
@@ -1114,9 +1552,12 @@ app.get('/api/admin/analytics/session/:code/questions', async (req, res) => {
 });
 
 // Export session data as CSV
-app.get('/api/admin/analytics/session/:code/export', async (req, res) => {
+app.get(
+  '/api/admin/analytics/session/:code/export',
+  authorizeAdminSession,
+  async (req, res) => {
   const { code } = req.params;
-  const session = await db.getSession(code);
+  const session = req.storedSession || await db.getSession(code);
 
   if (!session) {
     return res.status(404).json({ success: false, error: 'Session not found' });
@@ -1175,16 +1616,108 @@ app.get('/api/admin/analytics/session/:code/export', async (req, res) => {
 // ============================================
 // SOCKET.IO EVENTS
 // ============================================
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  socket.data.principal = { type: 'anonymous' };
+
+  if (!token) return next();
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (payload?.id && payload.type !== 'trial') {
+      socket.data.principal = adminPrincipal(payload);
+      return next();
+    }
+  } catch (error) {
+    // It may be a trial token signed with the separate trial key.
+  }
+
+  try {
+    socket.data.principal = trialManager.authenticate(token);
+    return next();
+  } catch (error) {
+    return next(new Error('Authentication expired'));
+  }
+});
+
+function socketCanControl(socket, sessionCode) {
+  const session = activeSessions.get(sessionCode);
+  return Boolean(session && canControlSession(socket.data.principal, session));
+}
+
+function rejectSocketControl(socket) {
+  socket.emit('control_error', {
+    message: 'You do not have permission to control this session.'
+  });
+}
+
+function sendLiveSessionSnapshot(socket, session, sessionCode) {
+  socket.emit('participant_joined', {
+    count: Object.keys(session.participants).length
+  });
+
+  socket.emit('quiz_loaded', {
+    title: session.quiz.title,
+    questionCount: session.quiz.questions.length,
+    sessionCode
+  });
+
+  if (session.finale) {
+    socket.emit('quiz_ended', session.finale);
+    return;
+  }
+
+  if (session.quizState.currentQuestionIndex < 0
+    || session.quizState.currentQuestionIndex >= session.quiz.questions.length) {
+    return;
+  }
+
+  const question = session.quiz.questions[session.quizState.currentQuestionIndex];
+  const timeRemaining = Math.max(
+    0,
+    Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000)
+  );
+
+  if (session.quizState.showingResults && session.lastQuestionPresentation) {
+    socket.emit('question_ended', {
+      questionId: question.id,
+      question,
+      questionNumber: session.quizState.currentQuestionIndex + 1,
+      correctIndices: question.correctIndices,
+      stats: calculateStats(session, question.id),
+      presentation: session.lastQuestionPresentation
+    });
+  } else if (session.quizState.isRunning) {
+    socket.emit('question_started', {
+      question,
+      timeRemaining,
+      questionNumber: session.quizState.currentQuestionIndex + 1,
+      totalQuestions: session.quiz.questions.length
+    });
+  }
+}
+
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
   // Admin joins a session's admin room
   socket.on('admin_join', (sessionCode) => {
-    if (sessionCode) {
+    if (sessionCode && socketCanControl(socket, sessionCode)) {
       socket.join(`admin:${sessionCode}`);
       socket.sessionCode = sessionCode;
       socket.isAdmin = true;
       console.log('Admin joined session:', sessionCode);
+      const session = activeSessions.get(sessionCode);
+      socket.emit('participant_roster', {
+        participants: Object.values(session.participants).map(participant => ({
+          id: participant.id,
+          name: participant.name
+        })),
+        count: Object.keys(session.participants).length
+      });
+      sendLiveSessionSnapshot(socket, session, sessionCode);
+    } else {
+      rejectSocketControl(socket);
     }
   });
 
@@ -1204,50 +1737,8 @@ io.on('connection', (socket) => {
     socket.sessionCode = sessionCode;
     console.log('Presenter joined session:', sessionCode);
 
-    // Send current participant count
-    socket.emit('participant_joined', {
-      count: Object.keys(session.participants).length
-    });
-
-    // Send quiz info
-    socket.emit('quiz_loaded', {
-      title: session.quiz.title,
-      questionCount: session.quiz.questions.length,
-      sessionCode
-    });
-
     // Restore the current presenter view after a browser refresh or reconnect.
-    if (session.finale) {
-      socket.emit('quiz_ended', session.finale);
-      return;
-    }
-
-    if (session.quizState.currentQuestionIndex >= 0
-      && session.quizState.currentQuestionIndex < session.quiz.questions.length) {
-      const question = session.quiz.questions[session.quizState.currentQuestionIndex];
-      const timeRemaining = Math.max(
-        0,
-        Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000)
-      );
-
-      if (session.quizState.showingResults && session.lastQuestionPresentation) {
-        socket.emit('question_ended', {
-          questionId: question.id,
-          question,
-          questionNumber: session.quizState.currentQuestionIndex + 1,
-          correctIndices: question.correctIndices,
-          stats: calculateStats(session, question.id),
-          presentation: session.lastQuestionPresentation
-        });
-      } else if (session.quizState.isRunning) {
-        socket.emit('question_started', {
-          question,
-          timeRemaining,
-          questionNumber: session.quizState.currentQuestionIndex + 1,
-          totalQuestions: session.quiz.questions.length
-        });
-      }
-    }
+    sendLiveSessionSnapshot(socket, session, sessionCode);
   });
 
   // Participant joins with their ID and session code
@@ -1262,7 +1753,7 @@ io.on('connection', (socket) => {
     }
 
     // Check if participant was kicked
-    const wasKicked = await db.isParticipantKicked(participantId);
+    const wasKicked = await session.repository.isParticipantKicked(participantId);
     if (wasKicked) {
       socket.emit('kicked', { message: 'You have been removed from this session.' });
       socket.emit('clear_participant_id');
@@ -1282,9 +1773,14 @@ io.on('connection', (socket) => {
     participant.socketId = socket.id;
 
     // Update socket ID in database
-    await db.updateParticipantSocket(participantId, socket.id);
+    await session.repository.updateParticipantSocket(participantId, socket.id);
 
-    console.log('Participant joined:', participant.name, 'in session:', sessionCode);
+    console.log(
+      'Participant joined session:',
+      sessionCode,
+      'count:',
+      Object.keys(session.participants).length
+    );
 
     // Restore the participant's personal finale after a refresh.
     if (session.finale) {
@@ -1353,6 +1849,9 @@ io.on('connection', (socket) => {
   socket.on('start_quiz', async (sessionCode) => {
     const session = activeSessions.get(sessionCode);
     if (!session || !session.quiz || session.quiz.questions.length === 0) return;
+    if (!socketCanControl(socket, sessionCode)) {
+      return rejectSocketControl(socket);
+    }
 
     session.quizState.isRunning = true;
     session.quizState.currentQuestionIndex = -1;
@@ -1362,7 +1861,7 @@ io.on('connection', (socket) => {
     session.finale = null;
 
     // Update database status
-    await db.updateSessionStatus(sessionCode, 'active');
+    await session.repository.updateStatus('active');
 
     // Reset all participant answers and scores
     for (const p of Object.values(session.participants)) {
@@ -1389,6 +1888,9 @@ io.on('connection', (socket) => {
   socket.on('next_question', async (sessionCode) => {
     const session = activeSessions.get(sessionCode);
     if (!session || !session.quiz || !session.quizState.isRunning) return;
+    if (!socketCanControl(socket, sessionCode)) {
+      return rejectSocketControl(socket);
+    }
 
     session.quizState.currentQuestionIndex++;
     session.quizState.showingResults = false;
@@ -1399,7 +1901,7 @@ io.on('connection', (socket) => {
       const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
 
       // Update database status
-      await db.updateSessionStatus(sessionCode, 'ended');
+      await session.repository.updateStatus('ended');
 
       // Save final scores to database and send results to each participant
       console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
@@ -1409,12 +1911,14 @@ io.on('connection', (socket) => {
         const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
         const passed = percentage >= session.quiz.passingPercent;
         const standing = finalLeaderboard.find(entry => entry.id === participant.id);
-        console.log(`[FINAL SCORES] ${participant.name}: ${participant.correctCount} correct, ${finalScore}/${session.quiz.totalScore} points, ${percentage}%`);
-
         participant.score = finalScore;
 
         // Update database
-        await db.updateParticipantScore(participant.id, finalScore, participant.correctCount || 0);
+        await session.repository.updateParticipantScore(
+          participant.id,
+          finalScore,
+          participant.correctCount || 0
+        );
 
         if (participant.socketId) {
           io.to(participant.socketId).emit('quiz_ended', {
@@ -1466,6 +1970,9 @@ io.on('connection', (socket) => {
 
   // Admin manually ends current question
   socket.on('end_question', (sessionCode) => {
+    if (!socketCanControl(socket, sessionCode)) {
+      return rejectSocketControl(socket);
+    }
     endCurrentQuestion(sessionCode);
   });
 
@@ -1485,6 +1992,10 @@ io.on('connection', (socket) => {
       socket.emit('session_invalid', { message: 'Please rejoin the session' });
       socket.emit('clear_participant_id');
       return;
+    }
+
+    if (socket.participantId !== participantId || socket.sessionCode !== sessionCode) {
+      return socket.emit('session_invalid', { message: 'Participant session mismatch' });
     }
 
     if (!session.quizState.isRunning) return;
@@ -1508,9 +2019,7 @@ io.on('connection', (socket) => {
 
     // Record answer in database
     const isCorrect = question.correctIndices.includes(answerIndex);
-    console.log(`[ANSWER] Participant: ${participant.name}, Q${questionId}, Answer: ${answerIndex}, Correct: ${isCorrect}, CorrectIndices: [${question.correctIndices}]`);
-    await db.recordAnswer(
-      session.id,
+    await session.repository.recordAnswer(
       participantId,
       session.quizState.currentQuestionIndex,
       answerIndex,
@@ -1535,13 +2044,20 @@ io.on('connection', (socket) => {
   socket.on('end_session', async (sessionCode) => {
     const session = activeSessions.get(sessionCode);
     if (!session) return;
+    if (!socketCanControl(socket, sessionCode)) {
+      return rejectSocketControl(socket);
+    }
 
     // Update database status
-    await db.updateSessionStatus(sessionCode, 'ended');
+    await session.repository.updateStatus('ended');
 
     // Save final participant scores
     for (const participant of Object.values(session.participants)) {
-      await db.updateParticipantScore(participant.id, participant.score || 0, participant.correctCount || 0);
+      await session.repository.updateParticipantScore(
+        participant.id,
+        participant.score || 0,
+        participant.correctCount || 0
+      );
     }
 
     // Notify all clients
@@ -1588,7 +2104,6 @@ function endCurrentQuestion(sessionCode) {
     } else {
       participant.currentStreak = 0;
     }
-    console.log(`[SCORING] ${participant.name}: answered ${answer}, correct: ${wasCorrect}, total correct: ${participant.correctCount}`);
   }
 
   const presentation = buildQuestionPresentation(session, question);
@@ -1644,5 +2159,4 @@ function endCurrentQuestion(sessionCode) {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Markdown Mash server running on http://localhost:${PORT}`);
-  console.log(`Admin password: ${adminPassword}`);
 });

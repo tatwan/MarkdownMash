@@ -89,7 +89,7 @@ async function joinSession(code) {
   sessionCode = code;
 
   try {
-    const response = await fetch(`/api/admin/session/${code}/qr`);
+    const response = await fetch(`/api/session/${code}/qr`);
     const data = await response.json();
 
     if (!data.success) {
@@ -130,6 +130,13 @@ function initSocket() {
     clearPresenterTimers();
     hideAllSections();
     sessionEndedMessage.textContent = data.message || 'This session has ended.';
+    sessionEndedSection.classList.remove('hidden');
+  });
+
+  socket.on('trial_expired', data => {
+    clearPresenterTimers();
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message || 'This temporary practice room has expired.';
     sessionEndedSection.classList.remove('hidden');
   });
 

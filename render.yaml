@@ -10,3 +10,17 @@ services:
         value: production
       - key: ADMIN_PASSWORD
         generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GUEST_TRIAL_JWT_SECRET
+        generateValue: true
+      - key: GUEST_TRIAL_ENABLED
+        value: "true"
+      - key: GUEST_TRIAL_TTL_MINUTES
+        value: "20"
+      - key: GUEST_TRIAL_MAX_PARTICIPANTS
+        value: "8"
+      - key: GUEST_TRIAL_MAX_CONCURRENT
+        value: "25"
+      - key: GUEST_TRIAL_STARTS_PER_IP_HOUR
+        value: "5"

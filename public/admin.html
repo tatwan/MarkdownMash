@@ -19,9 +19,9 @@
         <span class="brand-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
         <span class="brand-name">Markdown <strong>Mash</strong></span>
       </a>
-      <div class="admin-title">
+      <div class="admin-title" id="studio-title">
         <span class="live-dot" aria-hidden="true"></span>
-        Instructor studio
+        <span id="studio-title-label">Instructor studio</span>
       </div>
       <nav class="header-actions" aria-label="Instructor navigation">
         <a href="/" class="topbar-action">
@@ -62,25 +62,43 @@
           </form>
           <p id="login-error" class="form-message error-text hidden" role="alert"></p>
           <p class="login-help"><a href="#" id="forgot-password-link">Forgot password?</a></p>
+          <div id="trial-entry" class="trial-entry hidden">
+            <div class="login-divider"><span>or explore first</span></div>
+            <button id="try-it-out-btn" type="button" class="btn btn-trial btn-block btn-lg">
+              <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>
+              Try It Out
+            </button>
+            <p>No account needed · Temporary 20-minute room</p>
+          </div>
         </div>
       </section>
 
       <!-- Dashboard Section (hidden until login) -->
       <div id="dashboard-section" class="hidden">
+        <aside id="trial-banner" class="trial-banner hidden" aria-live="polite">
+          <div class="trial-banner-copy">
+            <span class="trial-badge"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Guest trial</span>
+            <span>Nothing is saved. Use a nickname rather than real student information.</span>
+          </div>
+          <div class="trial-time">
+            <span>Room expires in</span>
+            <strong id="trial-countdown">20:00</strong>
+          </div>
+        </aside>
         <section id="upload-section" class="quiz-builder">
           <div class="workspace-heading">
             <div>
-              <p class="section-eyebrow">New live session</p>
-              <h1>Build your next Mash</h1>
-              <p>Paste a Markdown quiz, preview it, then open the room.</p>
+              <p id="builder-eyebrow" class="section-eyebrow">New live session</p>
+              <h1 id="builder-heading" tabindex="-1">Build your next Mash</h1>
+              <p id="builder-description">Paste a Markdown quiz, preview it, then open the room.</p>
             </div>
             <div class="workspace-heading-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></div>
           </div>
           <div class="card builder-card">
             <div class="builder-toolbar">
               <div>
-                <h2>Quiz Markdown</h2>
-                <p class="text-muted">Questions, options, timers and scoring stay in one readable file.</p>
+                <h2 id="builder-card-heading">Quiz Markdown</h2>
+                <p id="builder-card-description" class="text-muted">Questions, options, timers and scoring stay in one readable file.</p>
               </div>
               <input type="text" id="course-name-input" class="course-name-input" placeholder="Course name (optional)" aria-label="Course name">
             </div>
@@ -98,12 +116,12 @@
 - [x] False
 ::time=10"></textarea>
             <div class="builder-actions">
-              <button id="preview-btn" class="btn btn-secondary">
-                <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#external"></use></svg>
-                Preview
+              <button id="preview-btn" class="btn btn-preview">
+                <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#eye"></use></svg>
+                Preview questions
               </button>
               <button id="upload-btn" class="btn btn-primary">
-                Load quiz
+                <span id="upload-btn-label">Load quiz</span>
                 <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
               </button>
             </div>
@@ -144,6 +162,17 @@
                   <thead><tr><th>Rank</th><th>Name</th><th>Score</th></tr></thead>
                   <tbody id="results-body"></tbody>
                 </table>
+              </div>
+              <div id="trial-completion-cta" class="trial-completion-cta hidden">
+                <div>
+                  <p class="section-eyebrow">Make it yours</p>
+                  <h3>Had fun? Deploy your own Mash.</h3>
+                  <p>Markdown Mash is free and open source. Your own instance lets you create quizzes and keep classroom results.</p>
+                </div>
+                <a class="btn btn-primary" href="https://github.com/tatwan/MarkdownMash" target="_blank" rel="noopener">
+                  View on GitHub
+                  <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#external"></use></svg>
+                </a>
               </div>
             </section>
 
@@ -450,23 +479,35 @@
   </div>
 
   <!-- Preview Modal -->
-  <div id="preview-modal" class="modal hidden">
-    <div class="modal-content" style="max-width: 400px; padding: 0; background: transparent; box-shadow: none;">
-      <div style="background: var(--bg-card); border-radius: 20px; overflow: hidden; border: 4px solid #333; height: 600px; display: flex; flex-direction: column;">
-        <div style="background: #333; color: white; padding: 10px; text-align: center; font-weight: bold; position: relative;">
-          Preview Mode
-          <button id="close-preview-btn" style="position: absolute; right: 10px; top: 10px; background: none; border: none; color: white; cursor: pointer;">&times;</button>
+  <div id="preview-modal" class="modal preview-modal hidden" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
+    <div class="modal-content preview-modal-content">
+      <div class="preview-device">
+        <div class="preview-device-bar">
+          <div>
+            <span class="preview-device-status" aria-hidden="true"></span>
+            <span id="preview-modal-title">Question preview</span>
+          </div>
+          <button id="close-preview-btn" class="preview-close" type="button" aria-label="Close preview">
+            <svg aria-hidden="true"><use href="/assets/icons.svg#x-circle"></use></svg>
+          </button>
         </div>
-        <div style="padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
-          <div class="player-header" style="margin-bottom: 20px;">
+        <div class="preview-device-screen">
+          <div class="player-header preview-player-header">
             <span class="player-qnum">Q<span id="preview-q-num">1</span>/<span id="preview-total-q-num">10</span></span>
             <span class="player-score">0 pts</span>
           </div>
-          <h1 class="player-question" id="preview-question-text" style="font-size: 1.5rem; margin-bottom: 20px;">Question?</h1>
-          <div class="player-options" id="preview-options-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
-          <div style="margin-top: auto; display: flex; justify-content: space-between; padding-top: 20px;">
-            <button id="preview-prev-btn" class="btn btn-secondary">Previous</button>
-            <button id="preview-next-btn" class="btn btn-primary">Next</button>
+          <h1 class="player-question preview-question" id="preview-question-text">Question?</h1>
+          <div class="player-options preview-options" id="preview-options-container"></div>
+          <div class="preview-footer">
+            <button id="preview-prev-btn" class="btn btn-secondary" type="button">
+              <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>
+              Previous
+            </button>
+            <span class="preview-footer-hint">Check every question before launch</span>
+            <button id="preview-next-btn" class="btn btn-primary" type="button">
+              Next
+              <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
+            </button>
           </div>
         </div>
       </div>

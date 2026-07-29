@@ -15,6 +15,18 @@ const dashboardSection = document.getElementById('dashboard-section');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
 const forgotPasswordLink = document.getElementById('forgot-password-link');
+const trialEntry = document.getElementById('trial-entry');
+const tryItOutBtn = document.getElementById('try-it-out-btn');
+const trialBanner = document.getElementById('trial-banner');
+const trialCountdown = document.getElementById('trial-countdown');
+const trialCompletionCta = document.getElementById('trial-completion-cta');
+const studioTitle = document.getElementById('studio-title');
+const studioTitleLabel = document.getElementById('studio-title-label');
+const builderEyebrow = document.getElementById('builder-eyebrow');
+const builderHeading = document.getElementById('builder-heading');
+const builderDescription = document.getElementById('builder-description');
+const builderCardHeading = document.getElementById('builder-card-heading');
+const builderCardDescription = document.getElementById('builder-card-description');
 
 // Settings elements
 const settingsBtn = document.getElementById('settings-btn');
@@ -32,12 +44,16 @@ const closeRecoveryBtn = document.getElementById('close-recovery-btn');
 const recoveryForm = document.getElementById('recovery-form');
 
 // Auth state
-let authToken = localStorage.getItem('authToken');
-let currentAdmin = JSON.parse(localStorage.getItem('currentAdmin') || 'null');
+const storedTrialToken = sessionStorage.getItem('trialToken');
+let authToken = storedTrialToken || localStorage.getItem('authToken');
+let currentAdmin = storedTrialToken
+  ? JSON.parse(sessionStorage.getItem('trialPrincipal') || 'null')
+  : JSON.parse(localStorage.getItem('currentAdmin') || 'null');
 
 const uploadSection = document.getElementById('upload-section');
 const quizMarkdown = document.getElementById('quiz-markdown');
 const uploadBtn = document.getElementById('upload-btn');
+const uploadBtnLabel = document.getElementById('upload-btn-label');
 const previewBtn = document.getElementById('preview-btn');
 const courseNameInput = document.getElementById('course-name-input');
 const uploadStatus = document.getElementById('upload-status');
@@ -144,6 +160,8 @@ let timerInterval = null;
 let sessionCode = null;
 let viewingSessionCode = null; // For analytics detail view
 let currentSessionsFilter = 'all'; // For sessions list filtering ('all', 'ended', 'incomplete')
+let trialExpiresAt = null;
+let trialCountdownInterval = null;
 
 // Chart instances (for cleanup on re-render)
 let scoreDistributionChart = null;
@@ -173,6 +191,12 @@ function setLobbyPanel(mode = 'ready') {
         title: 'The presenter is revealing the final leaderboard.',
         copy: 'Use “Show final results” for the instructor table, or keep the shared screen on the podium and hardest-question recap.'
       }
+    : isTrialMode()
+      ? {
+          eyebrow: 'Practice room ready',
+          title: 'Open the participant view and play along.',
+          copy: 'Join with a nickname in another tab, return here, then start the quiz. Open the presenter to see the classroom display.'
+        }
     : {
         eyebrow: 'Room ready',
         title: 'Invite participants, then start when everyone is in.',
@@ -201,9 +225,10 @@ async function copyText(value, button, successLabel) {
 
 function startKeepAlive() {
   stopKeepAlive();
+  if (isTrialMode()) return;
   keepAliveInterval = setInterval(() => {
     if (sessionCode) {
-      fetch('/api/admin/ping').catch(() => { });
+      authFetch('/api/admin/ping').catch(() => { });
     }
   }, 10 * 60 * 1000); // 10 minutes
 }
@@ -214,6 +239,128 @@ function stopKeepAlive() {
     keepAliveInterval = null;
   }
 }
+
+function isTrialMode() {
+  return currentAdmin?.role === 'trial';
+}
+
+function sessionApiPath(suffix = '') {
+  const base = isTrialMode() ? '/api/trial/session' : '/api/admin/session';
+  return `${base}${suffix}`;
+}
+
+function showAuthenticatedWorkspace() {
+  loginSection.classList.add('hidden');
+  dashboardSection.classList.remove('hidden');
+  logoutBtn.classList.remove('hidden');
+
+  const trialMode = isTrialMode();
+  analyticsBtn.classList.toggle('hidden', trialMode);
+  settingsBtn.classList.toggle('hidden', trialMode);
+  trialBanner.classList.toggle('hidden', !trialMode);
+  trialCompletionCta.classList.add('hidden');
+
+  const logoutLabel = logoutBtn.querySelector('span');
+  if (logoutLabel) logoutLabel.textContent = trialMode ? 'Leave trial' : 'Logout';
+  if (studioTitle && studioTitleLabel) {
+    studioTitleLabel.textContent = trialMode ? 'Guest studio' : 'Instructor studio';
+  }
+}
+
+function configureInstructorWorkspace() {
+  quizMarkdown.readOnly = false;
+  courseNameInput.classList.remove('hidden');
+  trialBanner.classList.add('hidden');
+  trialCompletionCta.classList.add('hidden');
+  builderEyebrow.textContent = 'New live session';
+  builderHeading.textContent = 'Build your next Mash';
+  builderDescription.textContent = 'Paste a Markdown quiz, preview it, then open the room.';
+  builderCardHeading.textContent = 'Quiz Markdown';
+  builderCardDescription.textContent = 'Questions, options, timers and scoring stay in one readable file.';
+  uploadBtnLabel.textContent = 'Load quiz';
+}
+
+function configureTrialWorkspace(data) {
+  currentAdmin = {
+    id: data.trial.id,
+    role: 'trial',
+    displayName: 'Guest'
+  };
+  trialExpiresAt = Number(data.trial.expiresAt);
+  quizMarkdown.value = data.template.markdown;
+  quizMarkdown.readOnly = true;
+  courseNameInput.value = '';
+  courseNameInput.classList.add('hidden');
+  builderEyebrow.textContent = 'Temporary playground';
+  builderHeading.textContent = 'Your practice room is ready.';
+  builderDescription.textContent = 'Preview the sample, launch it, then join from another tab to experience both sides.';
+  builderCardHeading.textContent = data.template.title || 'Mini Mash: Quick Wins';
+  builderCardDescription.textContent = `${data.template.questionCount} quick questions · Nothing is saved`;
+  uploadBtnLabel.textContent = 'Launch practice room';
+  showAuthenticatedWorkspace();
+  startTrialCountdown();
+}
+
+function stopTrialCountdown() {
+  if (trialCountdownInterval) {
+    clearInterval(trialCountdownInterval);
+    trialCountdownInterval = null;
+  }
+}
+
+function startTrialCountdown() {
+  stopTrialCountdown();
+
+  const renderCountdown = () => {
+    const remainingMs = Math.max(0, trialExpiresAt - Date.now());
+    const totalSeconds = Math.ceil(remainingMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    trialCountdown.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+
+    if (remainingMs <= 0) {
+      stopTrialCountdown();
+      handleTrialExpired('Your temporary practice room has expired.');
+    }
+  };
+
+  renderCountdown();
+  trialCountdownInterval = setInterval(renderCountdown, 1000);
+}
+
+function clearTrialCredentials() {
+  sessionStorage.removeItem('trialToken');
+  sessionStorage.removeItem('trialPrincipal');
+  stopTrialCountdown();
+  trialExpiresAt = null;
+}
+
+function handleTrialExpired(message) {
+  clearTrialCredentials();
+  authToken = null;
+  currentAdmin = null;
+  resetToUploadState();
+  dashboardSection.classList.add('hidden');
+  loginSection.classList.remove('hidden');
+  trialBanner.classList.add('hidden');
+  if (message) showError(loginError, message);
+}
+
+async function loadTrialAvailability() {
+  try {
+    const res = await fetch('/api/trial/config');
+    const data = await res.json();
+    trialEntry.classList.toggle('hidden', !data.enabled);
+    if (data.enabled && data.ttlMinutes) {
+      const note = trialEntry.querySelector('p');
+      note.textContent = `No account needed · Temporary ${data.ttlMinutes}-minute room`;
+    }
+  } catch (error) {
+    trialEntry.classList.add('hidden');
+  }
+}
+
+loadTrialAvailability();
 
 // Login
 loginForm.addEventListener('submit', async (e) => {
@@ -229,17 +376,15 @@ loginForm.addEventListener('submit', async (e) => {
 
     const data = await res.json();
     if (data.success) {
+      clearTrialCredentials();
       // Store auth token
       authToken = data.token;
       currentAdmin = data.admin;
       localStorage.setItem('authToken', authToken);
       localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
 
-      loginSection.classList.add('hidden');
-      dashboardSection.classList.remove('hidden');
-      analyticsBtn.classList.remove('hidden');
-      settingsBtn.classList.remove('hidden');
-      logoutBtn.classList.remove('hidden');
+      configureInstructorWorkspace();
+      showAuthenticatedWorkspace();
 
       // If first login or no security questions, prompt to set them
       if (data.isFirstLogin || !data.admin.hasSecurityQuestions) {
@@ -257,32 +402,86 @@ loginForm.addEventListener('submit', async (e) => {
   }
 });
 
+tryItOutBtn?.addEventListener('click', async () => {
+  tryItOutBtn.disabled = true;
+  const originalMarkup = tryItOutBtn.innerHTML;
+  tryItOutBtn.textContent = 'Preparing your room…';
+
+  try {
+    const res = await fetch('/api/trial', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Unable to start a practice room');
+    }
+
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentAdmin');
+    authToken = data.token;
+    sessionStorage.setItem('trialToken', data.token);
+    sessionStorage.setItem('trialPrincipal', JSON.stringify({
+      id: data.trial.id,
+      role: 'trial',
+      displayName: 'Guest'
+    }));
+    configureTrialWorkspace(data);
+    builderHeading.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (error) {
+    showError(loginError, error.message || 'Unable to start a practice room');
+  } finally {
+    tryItOutBtn.disabled = false;
+    tryItOutBtn.innerHTML = originalMarkup;
+  }
+});
+
 // Check for existing valid token on page load
 async function checkExistingAuth() {
-  if (authToken) {
+  if (!authToken) return;
+
+  if (isTrialMode() || sessionStorage.getItem('trialToken')) {
     try {
-      const res = await fetch('/api/admin/settings', {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
+      const res = await authFetch('/api/trial');
       if (res.ok) {
         const data = await res.json();
-        currentAdmin = data.admin;
-        localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
-        loginSection.classList.add('hidden');
-        dashboardSection.classList.remove('hidden');
-        analyticsBtn.classList.remove('hidden');
-        settingsBtn.classList.remove('hidden');
-        logoutBtn.classList.remove('hidden');
+        configureTrialWorkspace(data);
+
+        if (data.session) {
+          const launchRes = await authFetch('/api/trial/session', { method: 'POST' });
+          const launchData = await launchRes.json();
+          if (launchData.success) {
+            sessionCode = launchData.session.code;
+            currentQuiz = launchData.session.quiz;
+            showSessionInfo(launchData.session);
+            initSocket(sessionCode);
+          }
+        }
         return;
       }
     } catch (err) {
-      // Token invalid, clear it
+      // The expiration state below will clear the temporary credentials.
     }
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('currentAdmin');
-    authToken = null;
-    currentAdmin = null;
+    handleTrialExpired();
+    return;
   }
+
+  try {
+    const res = await authFetch('/api/admin/settings');
+    if (res.ok) {
+      const data = await res.json();
+      currentAdmin = data.admin;
+      localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
+      configureInstructorWorkspace();
+      showAuthenticatedWorkspace();
+      return;
+    }
+  } catch (err) {
+    // Token invalid, clear it below.
+  }
+
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('currentAdmin');
+  authToken = null;
+  currentAdmin = null;
 }
 
 // Run auth check on load
@@ -298,8 +497,12 @@ copyJoinUrlBtn?.addEventListener('click', () => {
 
 // Logout function
 function logout() {
-  if (!confirm('Are you sure you want to logout?')) return;
+  const prompt = isTrialMode()
+    ? 'Leave this temporary trial? The practice room will no longer be available from this tab.'
+    : 'Are you sure you want to logout?';
+  if (!confirm(prompt)) return;
 
+  clearTrialCredentials();
   authToken = null;
   currentAdmin = null;
   localStorage.removeItem('authToken');
@@ -309,7 +512,9 @@ function logout() {
   analyticsBtn.classList.add('hidden');
   settingsBtn.classList.add('hidden');
   logoutBtn.classList.add('hidden');
+  trialBanner.classList.add('hidden');
   resetToUploadState();
+  configureInstructorWorkspace();
 
   // Clear password field
   document.getElementById('password').value = '';
@@ -333,7 +538,11 @@ function initSocket(code) {
     socket.disconnect();
   }
 
-  socket = io();
+  socket = io({
+    auth: {
+      token: authToken
+    }
+  });
   let isFirstConnect = true;
 
   socket.on('connect', () => {
@@ -342,7 +551,7 @@ function initSocket(code) {
     if (!isFirstConnect) {
       // Reconnected after a drop — verify the session is still alive on the server.
       // If the server restarted (Render sleep), the in-memory session will be gone.
-      fetch(`/api/admin/session/${code}`)
+      authFetch(isTrialMode() ? '/api/trial' : sessionApiPath(`/${code}`))
         .then(r => r.json())
         .then(data => {
           if (!data.success) {
@@ -361,6 +570,16 @@ function initSocket(code) {
       addParticipantChip(data.name, data.id);
     }
     updateResponseProgress(Number(answersReceived.textContent || 0), data.count);
+  });
+
+  socket.on('participant_roster', (data) => {
+    participantList.innerHTML = '';
+    (data.participants || []).forEach(participant => {
+      addParticipantChip(participant.name, participant.id);
+    });
+    participantCount.textContent = data.count || 0;
+    totalParticipants.textContent = data.count || 0;
+    updateResponseProgress(Number(answersReceived.textContent || 0), data.count || 0);
   });
 
   socket.on('participant_kicked', (data) => {
@@ -430,6 +649,20 @@ function initSocket(code) {
     // or if we're not mid-quiz (avoids false positives on reconnections)
     alert(data.message || 'Session has ended');
     resetToUploadState();
+  });
+
+  socket.on('trial_expired', (data) => {
+    handleTrialExpired(data?.message || 'Your temporary practice room has expired.');
+  });
+
+  socket.on('control_error', (data) => {
+    alert(data?.message || 'You do not have permission to control this session.');
+  });
+
+  socket.on('connect_error', (error) => {
+    if (isTrialMode() && /auth|expired/i.test(error.message || '')) {
+      handleTrialExpired('Your temporary practice room has expired.');
+    }
   });
 }
 
@@ -501,11 +734,15 @@ uploadBtn.addEventListener('click', async () => {
   if (!markdown) return;
 
   try {
-    const res = await fetch('/api/admin/session', {
+    uploadBtn.disabled = true;
+    const res = await authFetch(
+      isTrialMode() ? '/api/trial/session' : '/api/admin/session',
+      {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ markdown, courseName })
-    });
+      }
+    );
 
     const data = await res.json();
     if (data.success) {
@@ -521,7 +758,7 @@ uploadBtn.addEventListener('click', async () => {
       // Start keep-alive pings to prevent Render free-tier from sleeping mid-quiz
       startKeepAlive();
 
-      uploadStatus.innerHTML = '<span class="badge badge-success">Session created!</span>';
+      uploadStatus.innerHTML = `<span class="badge badge-success">${isTrialMode() ? 'Practice room ready!' : 'Session created!'}</span>`;
       uploadStatus.classList.remove('hidden');
     } else {
       uploadStatus.innerHTML = `<span style="color: var(--danger);">${data.error}</span>`;
@@ -530,6 +767,8 @@ uploadBtn.addEventListener('click', async () => {
   } catch (err) {
     uploadStatus.innerHTML = '<span style="color: var(--danger);">Connection error</span>';
     uploadStatus.classList.remove('hidden');
+  } finally {
+    uploadBtn.disabled = false;
   }
 });
 
@@ -557,8 +796,25 @@ previewBtn.addEventListener('click', () => {
 });
 
 closePreviewBtn.addEventListener('click', () => {
-  previewModal.classList.add('hidden');
+  closePreview();
 });
+
+previewModal.addEventListener('click', (event) => {
+  if (event.target === previewModal) {
+    closePreview();
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !previewModal.classList.contains('hidden')) {
+    closePreview();
+  }
+});
+
+function closePreview() {
+  previewModal.classList.add('hidden');
+  previewBtn.focus();
+}
 
 previewNextBtn.addEventListener('click', () => {
   if (previewCurrentQuestionIndex < previewQuizData.questions.length - 1) {
@@ -584,15 +840,13 @@ function renderPreviewQuestion() {
   previewOptionsContainer.innerHTML = '';
   q.options.forEach((opt, idx) => {
     const div = document.createElement('div');
-    div.className = 'option';
-    // Style as a preview option
-    div.style.padding = '15px';
-    div.style.border = '2px solid var(--border)';
-    div.style.borderRadius = '8px';
-    div.style.marginBottom = '10px';
-    div.style.backgroundColor = q.correctIndices.includes(idx) ? 'var(--success)' : 'var(--bg-card)';
-    div.style.color = q.correctIndices.includes(idx) ? 'white' : 'var(--text)';
-    div.innerHTML = marked.parseInline(opt);
+    const isCorrect = q.correctIndices.includes(idx);
+    div.className = `preview-option${isCorrect ? ' preview-option-correct' : ''}`;
+    div.innerHTML = `
+      <span class="preview-option-letter">${String.fromCharCode(65 + idx)}</span>
+      <span>${marked.parseInline(opt)}</span>
+      ${isCorrect ? '<svg aria-label="Correct answer"><use href="/assets/icons.svg#check-circle"></use></svg>' : ''}
+    `;
     previewOptionsContainer.appendChild(div);
   });
   
@@ -637,6 +891,12 @@ function parseQuizMarkdownLocal(markdown) {
       if (isCorrect) {
         currentQuestion.correctIndices.push(optionIndex);
       }
+      continue;
+    }
+
+    const timeMatch = trimmed.match(/^::time=(\d+)$/);
+    if (timeMatch && currentQuestion) {
+      currentQuestion.timeLimit = parseInt(timeMatch[1], 10);
       continue;
     }
 
@@ -717,6 +977,7 @@ function resetToUploadState() {
   liveLobbyPanel.classList.remove('hidden');
   uploadSection.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
+  trialCompletionCta.classList.add('hidden');
 
   participantList.innerHTML = '';
 
@@ -760,7 +1021,7 @@ endSessionBtn.addEventListener('click', async () => {
   }
 
   try {
-    const res = await fetch(`/api/admin/session/${sessionCode}/end`, {
+    const res = await authFetch(sessionApiPath(`/${sessionCode}/end`), {
       method: 'POST'
     });
     const data = await res.json();
@@ -777,7 +1038,7 @@ showResultsBtn.addEventListener('click', async () => {
   if (!sessionCode) return;
 
   try {
-    const res = await fetch(`/api/admin/session/${sessionCode}/results`);
+    const res = await authFetch(sessionApiPath(`/${sessionCode}/results`));
     const data = await res.json();
 
     resultsBody.innerHTML = '';
@@ -795,6 +1056,7 @@ showResultsBtn.addEventListener('click', async () => {
     liveLobbyPanel.classList.add('hidden');
     resultsSection.classList.remove('hidden');
     showResultsBtn.classList.add('hidden');
+    trialCompletionCta.classList.toggle('hidden', !isTrialMode());
   } catch (err) {
     console.error('Failed to load results', err);
   }
@@ -905,9 +1167,23 @@ backToAnalyticsBtn.addEventListener('click', () => {
 });
 
 // Export CSV
-exportCsvBtn.addEventListener('click', () => {
-  if (viewingSessionCode) {
-    window.location.href = `/api/admin/analytics/session/${viewingSessionCode}/export`;
+exportCsvBtn.addEventListener('click', async () => {
+  if (!viewingSessionCode) return;
+
+  try {
+    const res = await authFetch(`/api/admin/analytics/session/${viewingSessionCode}/export`);
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${viewingSessionCode}-results.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    alert('Unable to export this session.');
   }
 });
 
@@ -956,7 +1232,7 @@ function hideAnalytics() {
 let overviewChartInstance = null;
 async function loadPlatformStats() {
   try {
-    const res = await fetch('/api/admin/analytics/overview');
+    const res = await authFetch('/api/admin/analytics/overview');
     const data = await res.json();
 
     if (data.success) {
@@ -1465,7 +1741,7 @@ function renderEngagement(participants, totalQuestions) {
 // Load session detail
 async function loadSessionDetail(code) {
   try {
-    const res = await fetch(`/api/admin/analytics/session/${code}`);
+    const res = await authFetch(`/api/admin/analytics/session/${code}`);
     const data = await res.json();
 
     if (!data.success) {
@@ -1901,7 +2177,7 @@ async function kickParticipant(participantId, participantName) {
   if (!sessionCode) return;
 
   try {
-    const res = await authFetch(`/api/admin/session/${sessionCode}/kick/${participantId}`, {
+    const res = await authFetch(sessionApiPath(`/${sessionCode}/kick/${participantId}`), {
       method: 'POST'
     });
 

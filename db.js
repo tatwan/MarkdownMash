@@ -15,16 +15,19 @@ dns.setDefaultResultOrder('ipv4first');
 // Only use SSL if we are in production OR if explicitly requested
 const isProduction = process.env.NODE_ENV === 'production';
 const useSSL = isProduction || process.env.DATABASE_URL.includes('supabase.co') || process.env.DATABASE_URL.includes('render.com');
+const skipDatabaseInit = process.env.SKIP_DATABASE_INIT === 'true';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ...(useSSL && { ssl: { rejectUnauthorized: false } })
 });
 
-// Test connection
-pool.query('SELECT NOW()')
-  .then(() => console.log('Connected to PostgreSQL database'))
-  .catch(err => console.error('Database connection error:', err.message));
+// Test connection unless an explicitly transient local run disables persistence.
+if (!skipDatabaseInit) {
+  pool.query('SELECT NOW()')
+    .then(() => console.log('Connected to PostgreSQL database'))
+    .catch(err => console.error('Database connection error:', err.message));
+}
 
 // Initialize tables (with retry for cold-start connection issues)
 async function initializeDatabase(retries = 5, delay = 3000) {
@@ -184,8 +187,12 @@ async function runMigrations(client) {
   }
 }
 
-// Initialize on startup
-initializeDatabase();
+// Initialize on startup. Guest-only local QA can opt out without changing production.
+if (!skipDatabaseInit) {
+  initializeDatabase();
+} else {
+  console.log('Database initialization skipped; persistent instructor features are unavailable.');
+}
 
 // Helper functions
 function generateSessionCode() {
@@ -204,7 +211,7 @@ function generateParticipantId() {
 // Database API
 const dbApi = {
   // Session operations
-  async createSession(quizData, courseName = null) {
+  async createSession(quizData, courseName = null, ownerId = null) {
     let code;
     let attempts = 0;
 
@@ -220,8 +227,8 @@ const dbApi = {
     }
 
     const result = await pool.query(
-      `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score, course_name, is_test)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, false)
+      `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score, course_name, is_test, owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
        RETURNING id`,
       [
         code,
@@ -230,7 +237,8 @@ const dbApi = {
         quizData.questions.length,
         quizData.passingPercent || 70,
         quizData.totalScore || 100,
-        courseName
+        courseName,
+        ownerId
       ]
     );
 
@@ -273,14 +281,15 @@ const dbApi = {
     return pool.query(query, [status, code]);
   },
 
-  async listSessions(limit = 50) {
+  async listSessions(limit = 50, ownerId = null) {
     const result = await pool.query(
       `SELECT s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at, s.total_questions, s.course_name, s.is_test,
               (SELECT COUNT(*) FROM participants WHERE session_id = s.id) as participant_count
        FROM sessions s
+       WHERE ($1::integer IS NULL OR s.owner_id = $1)
        ORDER BY s.created_at DESC
-       LIMIT $1`,
-      [limit]
+       LIMIT $2`,
+      [ownerId, limit]
     );
     return result.rows;
   },
@@ -347,15 +356,15 @@ const dbApi = {
   },
 
   // Analytics operations
-  async getSessionAnalytics(limit = 50, statusFilter = null) {
-    let whereClause = '';
-    const params = [limit];
+  async getSessionAnalytics(limit = 50, statusFilter = null, ownerId = null) {
+    const conditions = ['($1::integer IS NULL OR s.owner_id = $1)'];
+    const params = [ownerId, limit];
 
     if (statusFilter === 'ended') {
-      whereClause = "WHERE s.status = 'ended'";
+      conditions.push("s.status = 'ended'");
     } else if (statusFilter === 'incomplete') {
       // incomplete = active (interrupted) or created (never started / trial runs)
-      whereClause = "WHERE s.status IN ('active', 'created')";
+      conditions.push("s.status IN ('active', 'created')");
     }
 
     const result = await pool.query(
@@ -366,10 +375,10 @@ const dbApi = {
         ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1) as avg_score_percent
       FROM sessions s
       LEFT JOIN participants p ON p.session_id = s.id
-      ${whereClause}
+      WHERE ${conditions.join(' AND ')}
       GROUP BY s.id
       ORDER BY COALESCE(s.ended_at, s.started_at, s.created_at) DESC
-      LIMIT $1`,
+      LIMIT $2`,
       params
     );
     return result.rows;
@@ -425,22 +434,27 @@ const dbApi = {
     return result.rows;
   },
 
-  async getPlatformStats() {
+  async getPlatformStats(ownerId = null) {
     const result = await pool.query(
       `SELECT
-        (SELECT COUNT(*) FROM sessions) as total_sessions,
-        (SELECT COUNT(*) FROM sessions WHERE status = 'ended') as completed_sessions,
-        (SELECT COUNT(*) FROM participants) as total_participants,
-        (SELECT COUNT(DISTINCT course_name) FROM sessions WHERE course_name IS NOT NULL AND course_name != '') as total_courses,
+        (SELECT COUNT(*) FROM sessions WHERE ($1::integer IS NULL OR owner_id = $1)) as total_sessions,
+        (SELECT COUNT(*) FROM sessions WHERE status = 'ended' AND ($1::integer IS NULL OR owner_id = $1)) as completed_sessions,
+        (SELECT COUNT(*) FROM participants p JOIN sessions s ON s.id = p.session_id
+          WHERE ($1::integer IS NULL OR s.owner_id = $1)) as total_participants,
+        (SELECT COUNT(DISTINCT course_name) FROM sessions
+          WHERE course_name IS NOT NULL AND course_name != ''
+            AND ($1::integer IS NULL OR owner_id = $1)) as total_courses,
         (SELECT ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1)
          FROM participants p
          JOIN sessions s ON s.id = p.session_id
-         WHERE s.status = 'ended') as overall_avg_score`
+         WHERE s.status = 'ended'
+           AND ($1::integer IS NULL OR s.owner_id = $1)) as overall_avg_score`,
+      [ownerId]
     );
     return result.rows[0];
   },
 
-  async getCourseStats() {
+  async getCourseStats(ownerId = null) {
     const result = await pool.query(
       `SELECT
         COALESCE(NULLIF(TRIM(s.course_name), ''), 'No Course') as course_name,
@@ -449,8 +463,10 @@ const dbApi = {
        FROM sessions s
        LEFT JOIN participants p ON p.session_id = s.id
        WHERE s.is_test = false
+         AND ($1::integer IS NULL OR s.owner_id = $1)
        GROUP BY COALESCE(NULLIF(TRIM(s.course_name), ''), 'No Course')
-       ORDER BY session_count DESC`
+       ORDER BY session_count DESC`,
+      [ownerId]
     );
     return result.rows;
   },

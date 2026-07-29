@@ -309,6 +309,16 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
     sessionCode = null;
   });
 
+  socket.on('trial_expired', (data) => {
+    clearInterval(timerInterval);
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message || 'This temporary practice room has expired.';
+    sessionEndedSection.classList.remove('hidden');
+    clearCurrentIdentity({ clearSession: true });
+    participantId = null;
+    sessionCode = null;
+  });
+
   socket.on('quiz_started', (data) => {
     quizTitleDisplay.textContent = data.title;
     totalQNum.textContent = data.totalQuestions;

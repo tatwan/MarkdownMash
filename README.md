@@ -10,30 +10,27 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
-## What's New in v1.2.0
+## What's New in v1.2.1
 
-### The Mash Time & Classroom Momentum Update
+### The Try It Out Update
 
-Version 1.2.0 turns Markdown Mash into a more complete live classroom experience, adding the energy and feedback of game-based quiz platforms while preserving its lightweight Markdown workflow.
+Version 1.2.1 lets visitors experience the complete Markdown Mash workflow before deploying it themselves, while keeping real classroom data private and untouched.
 
 #### Key Highlights
 
-- **Live Classroom Momentum** - Between questions, the presenter celebrates correct responders, fastest answers, winning streaks, rank movement, and close contests.
-- **Animated Podium Finale** - End each quiz with a projector-ready reveal of third, second, and first place, followed by fourth and fifth place and a recap of the hardest questions.
-- **Mash Time Visual Redesign** - A cohesive new visual system now spans the landing page, instructor login, live admin studio, analytics, participant screens, and presenter.
-- **Instructor Control Room** - Monitor the room, participant count, response progress, session links, QR code, presenter, and contextual quiz controls from one responsive workspace.
-- **Personal Participant Feedback** - Participants now see their current rank, rank movement, answer streak, full answer distribution, final placement, correct-answer count, and best streak.
-- **Smarter Analytics Workspace** - Search and filter sessions, compare course activity, review difficult questions, and see one accurate overall participant ranking.
-- **SVG Icon System** - Interface emoji have been replaced with a consistent, accessible SVG icon library.
+- **No-Account Guest Trial** - Select **Try It Out** to launch a preloaded practice Mash without credentials.
+- **Complete Product Experience** - Visitors can preview, host, join, present, answer, view live momentum, and reach the animated podium and hardest-question recap.
+- **Private by Design** - Trial rooms live only in server memory, expire automatically, and never appear in PostgreSQL, Supabase, instructor history, analytics, or exports.
+- **Polished Question Preview** - A clearer eye-icon action opens a responsive participant-style preview with correct-answer indicators and improved navigation.
+- **Open-Source Handoff** - The completed trial points visitors to GitHub so they can deploy their own persistent instance.
 
 #### Fixes & Reliability
 
-- Fixed clipped answer labels by replacing participant result charts with responsive HTML response bars.
-- Fixed analytics using a hard-coded 60% passing threshold instead of the threshold saved with the quiz.
-- Fixed failed-participant rankings restarting at first place instead of preserving the true overall rank.
-- Fixed session-code placeholder clipping and restored browser zoom for participant accessibility.
-- Improved refresh and reconnect recovery during question results and after the final leaderboard.
-- Improved script loading so branded page content can render without waiting for external libraries.
+- Protected instructor HTTP routes and Socket.IO controls with session-aware authorization.
+- Isolated participant identities by session so multiple browser contexts are counted correctly.
+- Restored presenter access through a public, non-sensitive QR lookup while keeping admin endpoints protected.
+- Added trial rate, duration, participant, and global-capacity limits.
+- Removed participant names and answer details from routine server logs.
 
 ## Features
 
@@ -49,6 +46,7 @@ Version 1.2.0 turns Markdown Mash into a more complete live classroom experience
 - **Multi-session Support** - Host multiple concurrent quiz sessions seamlessly with unique Kahoot-style 6-character codes.
 - **Rich Markdown & Code Highlighting** - Format questions and answers with bold, italics, lists, and syntax-highlighted code blocks (`highlight.js`).
 - **Inline Quiz Previews** - Test and preview your markdown formatting directly in the Admin Dashboard with a built-in mobile simulator.
+- **Temporary Try It Out Mode** - A server-owned sample quiz lets visitors experience hosting, joining, live results, and the finale without an account. Trial rooms expire automatically and are never stored in PostgreSQL.
 - **Course Metadata & Grouping** - Assign course tags to sessions to easily organize and filter your Analytics dashboard.
 - **Test/Dry Runs** - Flag sessions as test runs to exclude them from your primary analytics, or permanently delete unwanted sessions.
 - **Exportable Data** - Export full session results and analytics to CSV for external grading or record-keeping.
@@ -134,9 +132,13 @@ Create a `.env` file:
 ```env
 DATABASE_URL=postgresql://user:password@host:port/your_db_name
 ADMIN_PASSWORD=your_secure_password
+JWT_SECRET=replace-with-a-long-random-value
+GUEST_TRIAL_JWT_SECRET=replace-with-a-different-long-random-value
 ```
 
 **Admin Password Setup:** The `ADMIN_PASSWORD` in your `.env` file acts as a one-time bootstrap password. During your first login to the Admin Dashboard, the system will use this variable to permanently create your Master Admin account in the PostgreSQL database. **Note:** Changing the `.env` variable after your first login will not change your password.
+
+Guest trials are enabled by default in `render.yaml`. They last 20 minutes, allow up to eight participants, live only in server memory, and disappear on expiration or server restart. Set `GUEST_TRIAL_ENABLED=false` to disable the public **Try It Out** entry point.
 
 **Get your DATABASE_URL from Supabase:**
 1. Create a free account at [supabase.com](https://supabase.com)
@@ -160,6 +162,7 @@ npm start
 Open `http://localhost:3000` in your browser.
 
 - **Admin Dashboard:** `http://localhost:3000/admin.html`
+- **Guest Trial:** Open the Admin Dashboard and select **Try It Out**
 - **Participant Join:** `http://localhost:3000/play.html`
 - **Presenter View:** `http://localhost:3000/present.html`
 
@@ -310,6 +313,8 @@ Any PostgreSQL 12+ instance will work. You'll need:
    - **Build Command**: `npm install`
    - **Start Command**: `npm start`
    - **Plan**: Free (or upgrade for better performance)
+
+   The included `render.yaml` also provisions separate generated secrets for admin and guest tokens and configures conservative guest-trial limits.
 
 5. **Add Environment Variables**
    
