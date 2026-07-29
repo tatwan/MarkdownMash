@@ -34,19 +34,20 @@ const sharedLocalStorage = new MemoryStorage();
 const firstTab = createParticipantStore(new MemoryStorage(), sharedLocalStorage);
 const secondTab = createParticipantStore(new MemoryStorage(), sharedLocalStorage);
 
-firstTab.setActive('MASH42', 'participant-a', 'Lina');
-firstTab.rememberRecovery('MASH42', 'participant-a', 'Lina');
+firstTab.setActive('MASH42', 'participant-a', 'Lina', 'token-a');
+firstTab.rememberRecovery('MASH42', 'participant-a', 'Lina', 'token-a');
 
 assert.deepStrictEqual(firstTab.getActive('MASH42'), {
   id: 'participant-a',
+  accessToken: 'token-a',
   sessionCode: 'MASH42',
   name: 'Lina'
 });
 assert.strictEqual(secondTab.getActive('MASH42'), null);
 assert.deepStrictEqual(secondTab.getRecoveries('MASH42').map(entry => entry.name), ['Lina']);
 
-secondTab.setActive('MASH42', 'participant-b', 'Omar');
-secondTab.rememberRecovery('MASH42', 'participant-b', 'Omar');
+secondTab.setActive('MASH42', 'participant-b', 'Omar', 'token-b');
+secondTab.rememberRecovery('MASH42', 'participant-b', 'Omar', 'token-b');
 
 assert.strictEqual(firstTab.getActive('MASH42').id, 'participant-a');
 assert.strictEqual(secondTab.getActive('MASH42').id, 'participant-b');

@@ -1,26 +1,32 @@
 {
   "name": "markdown-mash",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "A real-time quiz platform with Markdown-based questions and scoring",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test-presentation.js && node test-participant-identity.js && node test-guest-trial.js",
+    "test": "node test-presentation.js && node test-participant-identity.js && node test-guest-trial.js && node test-security.js",
     "simulate": "node test-simulation.js",
     "simulate:help": "node test-simulation.js"
   },
   "dependencies": {
-    "bcrypt": "^6.0.0",
-    "dotenv": "^17.4.2",
-    "express": "^4.22.2",
-    "jsonwebtoken": "^9.0.2",
-    "pg": "^8.22.0",
-    "qrcode": "^1.5.4",
-    "socket.io": "^4.7.2"
+    "@highlightjs/cdn-assets": "11.11.1",
+    "bcrypt": "6.0.0",
+    "chart.js": "4.5.1",
+    "dompurify": "3.4.12",
+    "dotenv": "17.4.2",
+    "express": "4.22.2",
+    "express-rate-limit": "8.6.1",
+    "helmet": "8.3.0",
+    "jsonwebtoken": "9.0.2",
+    "marked": "15.0.12",
+    "pg": "8.22.0",
+    "qrcode": "1.5.4",
+    "socket.io": "4.8.3"
   },
   "devDependencies": {
-    "socket.io-client": "^4.7.2"
+    "socket.io-client": "4.8.3"
   },
   "engines": {
     "node": ">=18.0.0"

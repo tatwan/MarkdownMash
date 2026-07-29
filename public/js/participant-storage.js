@@ -9,6 +9,7 @@
   const ACTIVE_ID_KEY = 'markdownMashActiveParticipantId';
   const ACTIVE_SESSION_KEY = 'markdownMashActiveSession';
   const ACTIVE_NAME_KEY = 'markdownMashActiveName';
+  const ACTIVE_TOKEN_KEY = 'markdownMashActiveParticipantToken';
   const RECOVERY_KEY = 'markdownMashParticipantRecoveriesV2';
   const LEGACY_ID_KEY = 'markdownMashId';
   const LEGACY_SESSION_KEY = 'markdownMashSession';
@@ -51,15 +52,22 @@
       const id = read(sessionStore, ACTIVE_ID_KEY);
       const storedSession = read(sessionStore, ACTIVE_SESSION_KEY);
       const name = read(sessionStore, ACTIVE_NAME_KEY);
+      const accessToken = read(sessionStore, ACTIVE_TOKEN_KEY);
 
-      if (!id || !storedSession || storedSession !== sessionCode) return null;
-      return { id, sessionCode: storedSession, name: name || '' };
+      if (!id || !accessToken || !storedSession || storedSession !== sessionCode) return null;
+      return {
+        id,
+        accessToken,
+        sessionCode: storedSession,
+        name: name || ''
+      };
     }
 
-    function setActive(sessionCode, participantId, name) {
+    function setActive(sessionCode, participantId, name, accessToken) {
       write(sessionStore, ACTIVE_ID_KEY, participantId);
       write(sessionStore, ACTIVE_SESSION_KEY, sessionCode);
       write(sessionStore, ACTIVE_NAME_KEY, name);
+      write(sessionStore, ACTIVE_TOKEN_KEY, accessToken);
     }
 
     function clearActive(sessionCode = null) {
@@ -70,21 +78,23 @@
       remove(sessionStore, ACTIVE_ID_KEY);
       remove(sessionStore, ACTIVE_SESSION_KEY);
       remove(sessionStore, ACTIVE_NAME_KEY);
+      remove(sessionStore, ACTIVE_TOKEN_KEY);
     }
 
     function getRecoveries(sessionCode) {
       const recoveries = parseRecoveries(localStore);
       const entries = Array.isArray(recoveries[sessionCode]) ? recoveries[sessionCode] : [];
       return entries
-        .filter(entry => entry && entry.id && entry.name)
+        .filter(entry => entry && entry.id && entry.name && entry.accessToken)
         .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
     }
 
-    function rememberRecovery(sessionCode, participantId, name) {
+    function rememberRecovery(sessionCode, participantId, name, accessToken) {
       const recoveries = parseRecoveries(localStore);
       const current = Array.isArray(recoveries[sessionCode]) ? recoveries[sessionCode] : [];
       const entry = {
         id: participantId,
+        accessToken,
         name: String(name || '').trim(),
         updatedAt: Date.now()
       };

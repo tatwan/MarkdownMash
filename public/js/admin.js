@@ -1,13 +1,4 @@
-// Configure marked to use highlight.js
-if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
-  marked.setOptions({
-    highlight: function(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    },
-    breaks: true
-  });
-}
+const markdown = MarkdownMashMarkdown;
 
 // DOM Elements
 const loginSection = document.getElementById('login-section');
@@ -758,14 +749,23 @@ uploadBtn.addEventListener('click', async () => {
       // Start keep-alive pings to prevent Render free-tier from sleeping mid-quiz
       startKeepAlive();
 
-      uploadStatus.innerHTML = `<span class="badge badge-success">${isTrialMode() ? 'Practice room ready!' : 'Session created!'}</span>`;
+      uploadStatus.innerHTML = '';
+      const statusBadge = document.createElement('span');
+      statusBadge.className = 'badge badge-success';
+      statusBadge.textContent = isTrialMode()
+        ? 'Practice room ready!'
+        : 'Session created!';
+      uploadStatus.appendChild(statusBadge);
+      uploadStatus.style.color = '';
       uploadStatus.classList.remove('hidden');
     } else {
-      uploadStatus.innerHTML = `<span style="color: var(--danger);">${data.error}</span>`;
+      uploadStatus.textContent = data.error || 'Unable to load quiz';
+      uploadStatus.style.color = 'var(--danger)';
       uploadStatus.classList.remove('hidden');
     }
   } catch (err) {
-    uploadStatus.innerHTML = '<span style="color: var(--danger);">Connection error</span>';
+    uploadStatus.textContent = 'Connection error';
+    uploadStatus.style.color = 'var(--danger)';
     uploadStatus.classList.remove('hidden');
   } finally {
     uploadBtn.disabled = false;
@@ -835,7 +835,7 @@ function renderPreviewQuestion() {
   previewQNum.textContent = previewCurrentQuestionIndex + 1;
   previewTotalQNum.textContent = previewQuizData.questions.length;
   
-  previewQuestionText.innerHTML = marked.parse(q.text);
+  previewQuestionText.innerHTML = markdown.block(q.text);
   
   previewOptionsContainer.innerHTML = '';
   q.options.forEach((opt, idx) => {
@@ -844,7 +844,7 @@ function renderPreviewQuestion() {
     div.className = `preview-option${isCorrect ? ' preview-option-correct' : ''}`;
     div.innerHTML = `
       <span class="preview-option-letter">${String.fromCharCode(65 + idx)}</span>
-      <span>${marked.parseInline(opt)}</span>
+      <span>${markdown.inline(opt)}</span>
       ${isCorrect ? '<svg aria-label="Correct answer"><use href="/assets/icons.svg#check-circle"></use></svg>' : ''}
     `;
     previewOptionsContainer.appendChild(div);
@@ -929,9 +929,9 @@ function showSessionInfo(session) {
     qrCodeImg.style.display = 'block';
   }
 
-  // Update presenter URL with session code
-  const presenterUrlWithSession = `${window.location.origin}/present.html?session=${session.code}`;
-  presenterUrl.href = presenterUrlWithSession;
+  // Presenter access is a signed, session-bound capability returned only to the host.
+  presenterUrl.href = session.presenterUrl || '#';
+  presenterUrl.classList.toggle('disabled', !session.presenterUrl);
 
   // Clear participant list
   participantList.innerHTML = '';
@@ -1065,13 +1065,13 @@ showResultsBtn.addEventListener('click', async () => {
 // Show current question
 function showQuestion(data) {
   currentQNum.textContent = data.questionNumber;
-  currentQuestionText.innerHTML = marked.parse(data.question.text);
+  currentQuestionText.innerHTML = markdown.block(data.question.text);
   answersReceived.textContent = '0';
   optionsDisplay.innerHTML = ''; // Clear previous options
   data.question.options.forEach((opt, i) => {
     const btn = document.createElement('div');
     btn.className = 'option-btn';
-    btn.innerHTML = `${String.fromCharCode(65 + i)}. ${marked.parseInline(opt)}`;
+    btn.innerHTML = `${String.fromCharCode(65 + i)}. ${markdown.inline(opt)}`;
     
     if (data.question.correctIndices && data.question.correctIndices.includes(i)) {
       btn.classList.add('correct');
@@ -1983,8 +1983,8 @@ changePasswordForm.addEventListener('submit', async (e) => {
     return;
   }
 
-  if (newPassword.length < 6) {
-    showStatus('password-status', 'Password must be at least 6 characters', false);
+  if (newPassword.length < 12) {
+    showStatus('password-status', 'Password must be at least 12 characters', false);
     return;
   }
 
@@ -2118,8 +2118,8 @@ recoveryForm.addEventListener('submit', async (e) => {
   const answer2 = document.getElementById('recovery-a2').value;
   const newPassword = document.getElementById('recovery-new-password').value;
 
-  if (newPassword.length < 6) {
-    showStatus('recovery-status', 'Password must be at least 6 characters', false);
+  if (newPassword.length < 12) {
+    showStatus('recovery-status', 'Password must be at least 12 characters', false);
     return;
   }
 

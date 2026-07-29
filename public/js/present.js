@@ -1,12 +1,4 @@
-if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
-  marked.setOptions({
-    highlight(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    },
-    breaks: true
-  });
-}
+const markdown = MarkdownMashMarkdown;
 
 const sessionInputSection = document.getElementById('session-input-section');
 const sessionForm = document.getElementById('session-form');
@@ -55,6 +47,7 @@ const finaleProgress = document.getElementById('finale-progress');
 
 let socket = null;
 let sessionCode = null;
+let presenterToken = null;
 let currentQuestion = null;
 let timerInterval = null;
 let highlightInterval = null;
@@ -68,10 +61,20 @@ function iconHref(icon) {
 
 function init() {
   createConfetti();
-  const urlSessionCode = new URLSearchParams(window.location.search).get('session');
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  const query = new URLSearchParams(window.location.search);
+  const urlSessionCode = fragment.get('session') || query.get('session');
+  const fragmentToken = fragment.get('token');
   if (urlSessionCode) {
-    sessionCodeInput.value = urlSessionCode.toUpperCase();
-    joinSession(urlSessionCode.toUpperCase());
+    const code = urlSessionCode.toUpperCase();
+    const tokenKey = `markdownMashPresenterToken:${code}`;
+    presenterToken = fragmentToken || sessionStorage.getItem(tokenKey);
+    if (fragmentToken) {
+      sessionStorage.setItem(tokenKey, fragmentToken);
+      history.replaceState(null, '', `/present.html?session=${encodeURIComponent(code)}`);
+    }
+    sessionCodeInput.value = code;
+    joinSession(code);
   }
 }
 
@@ -87,6 +90,13 @@ sessionForm.addEventListener('submit', event => {
 
 async function joinSession(code) {
   sessionCode = code;
+  presenterToken = presenterToken
+    || sessionStorage.getItem(`markdownMashPresenterToken:${code}`);
+
+  if (!presenterToken) {
+    showSessionError('Open this presenter from the instructor studio for secure access.');
+    return;
+  }
 
   try {
     const response = await fetch(`/api/session/${code}/qr`);
@@ -114,7 +124,11 @@ async function joinSession(code) {
 
 function initSocket() {
   if (socket) socket.disconnect();
-  socket = io();
+  socket = io({
+    auth: {
+      token: presenterToken
+    }
+  });
 
   socket.on('connect', () => {
     socket.emit('presenter_join', sessionCode);
@@ -123,6 +137,13 @@ function initSocket() {
   socket.on('session_invalid', data => {
     hideAllSections();
     sessionEndedMessage.textContent = data.message || 'Session not found';
+    sessionEndedSection.classList.remove('hidden');
+  });
+
+  socket.on('presenter_unauthorized', data => {
+    hideAllSections();
+    sessionEndedMessage.textContent = data.message
+      || 'Open this presenter from the instructor studio.';
     sessionEndedSection.classList.remove('hidden');
   });
 
@@ -145,6 +166,11 @@ function initSocket() {
     totalParticipants.textContent = data.count;
   });
 
+  socket.on('participant_kicked', data => {
+    participantCount.textContent = data.count;
+    totalParticipants.textContent = data.count;
+  });
+
   socket.on('quiz_loaded', data => {
     quizTitle.textContent = data.title;
     if (data.sessionCode) sessionCodeDisplay.textContent = data.sessionCode;
@@ -163,7 +189,7 @@ function initSocket() {
     timerDuration = Math.max(1, data.timeRemaining);
     currentQNum.textContent = data.questionNumber;
     totalQNum.textContent = data.totalQuestions;
-    questionText.innerHTML = marked.parse(data.question.text);
+    questionText.innerHTML = markdown.block(data.question.text);
     answeredCount.textContent = '0';
     renderOptions(data.question.options);
     startTimer(data.timeRemaining);
@@ -182,7 +208,7 @@ function initSocket() {
     if (!currentQuestion) return;
 
     resultQNum.textContent = data.questionNumber || currentQNum.textContent;
-    resultQuestionText.innerHTML = marked.parse(currentQuestion.text);
+    resultQuestionText.innerHTML = markdown.block(currentQuestion.text);
 
     const correctAnswers = data.stats.counts.reduce(
       (sum, count, index) => sum + (data.correctIndices.includes(index) ? count : 0),
@@ -212,7 +238,7 @@ function renderOptions(options) {
     item.className = 'presenter-option';
     item.innerHTML = `
       <span class="option-letter">${String.fromCharCode(65 + index)}</span>
-      <span class="option-text">${marked.parseInline(option)}</span>
+      <span class="option-text">${markdown.inline(option)}</span>
     `;
     optionsContainer.appendChild(item);
   });
@@ -257,7 +283,7 @@ function renderAnswerDistribution(data) {
     row.innerHTML = `
       <div class="answer-bar-label">
         <span class="answer-letter">${String.fromCharCode(65 + index)}</span>
-        <span class="answer-copy">${marked.parseInline(option)}</span>
+        <span class="answer-copy">${markdown.inline(option)}</span>
         ${isCorrect ? `
           <svg class="answer-check" aria-label="Correct answer">
             <use href="/assets/icons.svg#check-circle"></use>
@@ -414,7 +440,7 @@ function renderHardestQuestions(questions) {
     const card = document.createElement('article');
     card.className = 'hard-question-card';
     const commonWrong = question.commonWrongAnswer
-      ? `<div class="common-wrong"><span>Most common miss</span>${marked.parseInline(question.commonWrongAnswer)}</div>`
+      ? `<div class="common-wrong"><span>Most common miss</span>${markdown.inline(question.commonWrongAnswer)}</div>`
       : '<div class="common-wrong"><span>Most common miss</span>No single wrong answer</div>';
 
     card.innerHTML = `
@@ -424,7 +450,7 @@ function renderHardestQuestions(questions) {
       </div>
       <div class="hard-question-copy">
         <div class="hard-question-label">Question ${question.index + 1}</div>
-        <h3>${marked.parse(question.text)}</h3>
+        <h3>${markdown.block(question.text)}</h3>
         ${commonWrong}
       </div>
       <div class="difficulty-ring" style="--difficulty: ${question.correctPercent}">

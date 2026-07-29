@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const { Pool } = require('pg');
 const dns = require('dns');
 
@@ -14,11 +15,14 @@ dns.setDefaultResultOrder('ipv4first');
 // });
 // Only use SSL if we are in production OR if explicitly requested
 const isProduction = process.env.NODE_ENV === 'production';
-const useSSL = isProduction || process.env.DATABASE_URL.includes('supabase.co') || process.env.DATABASE_URL.includes('render.com');
+const databaseUrl = process.env.DATABASE_URL || '';
+const useSSL = isProduction
+  || databaseUrl.includes('supabase.co')
+  || databaseUrl.includes('render.com');
 const skipDatabaseInit = process.env.SKIP_DATABASE_INIT === 'true';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl || undefined,
   ...(useSSL && { ssl: { rejectUnauthorized: false } })
 });
 
@@ -199,13 +203,13 @@ function generateSessionCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(crypto.randomInt(0, chars.length));
   }
   return code;
 }
 
 function generateParticipantId() {
-  return Math.random().toString(36).substring(2, 8);
+  return crypto.randomBytes(9).toString('base64url');
 }
 
 // Database API

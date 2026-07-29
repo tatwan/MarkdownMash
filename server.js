@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -6,7 +7,9 @@ const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
 const bcrypt = require('bcrypt');
+const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
+const { rateLimit } = require('express-rate-limit');
 const db = require('./db');
 const {
   buildFinaleSummary,
@@ -23,21 +26,73 @@ const {
   canControlSession
 } = require('./controller-authorization');
 const { createTrialManager } = require('./trial-manager');
+const {
+  createOpaqueToken,
+  escapeCSV,
+  hashOpaqueToken,
+  verifyOpaqueToken
+} = require('./security-utils');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Middleware
 app.set('trust proxy', 1);
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      connectSrc: ["'self'", 'ws:', 'wss:'],
+      fontSrc: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      imgSrc: ["'self'", 'data:'],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      upgradeInsecureRequests: isProduction ? [] : null
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  referrerPolicy: { policy: 'same-origin' },
+  strictTransportSecurity: isProduction
+    ? { maxAge: 31536000, includeSubDomains: true }
+    : false
+}));
+app.use((req, res, next) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+  );
+  if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
+});
+app.use(express.json({ limit: '1mb' }));
+
+const vendorFiles = new Map([
+  ['/vendor/marked.js', path.join(__dirname, 'node_modules', 'marked', 'marked.min.js')],
+  ['/vendor/dompurify.js', path.join(__dirname, 'node_modules', 'dompurify', 'dist', 'purify.min.js')],
+  ['/vendor/highlight.js', path.join(__dirname, 'node_modules', '@highlightjs', 'cdn-assets', 'highlight.min.js')],
+  ['/vendor/highlight.css', path.join(__dirname, 'node_modules', '@highlightjs', 'cdn-assets', 'styles', 'atom-one-dark.min.css')],
+  ['/vendor/chart.js', path.join(__dirname, 'node_modules', 'chart.js', 'dist', 'chart.umd.min.js')]
+]);
+for (const [route, file] of vendorFiles) {
+  app.get(route, (req, res) => res.sendFile(file));
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================
 // CONFIGURATION
 // ============================================
-const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-const JWT_SECRET = process.env.JWT_SECRET || 'markdown-mash-secret-key-change-in-production';
+const adminPassword = process.env.ADMIN_PASSWORD || (isProduction ? '' : 'admin123');
+const JWT_SECRET = process.env.JWT_SECRET
+  || (isProduction ? '' : 'markdown-mash-secret-key-change-in-production');
 const JWT_EXPIRY = '24h';
 const SALT_ROUNDS = 10;
 const GUEST_TRIAL_ENABLED = process.env.GUEST_TRIAL_ENABLED !== 'false';
@@ -59,6 +114,44 @@ const GUEST_TRIAL_STARTS_PER_IP_HOUR = Math.max(
 );
 const GUEST_TRIAL_SECRET = process.env.GUEST_TRIAL_JWT_SECRET
   || crypto.createHash('sha256').update(`${JWT_SECRET}:guest-trial`).digest('hex');
+
+if (isProduction) {
+  const invalidConfiguration = [];
+  if (!process.env.DATABASE_URL) invalidConfiguration.push('DATABASE_URL');
+  if (!JWT_SECRET || JWT_SECRET.length < 32) invalidConfiguration.push('JWT_SECRET (32+ characters)');
+  if (!process.env.GUEST_TRIAL_JWT_SECRET
+    || process.env.GUEST_TRIAL_JWT_SECRET.length < 32
+    || process.env.GUEST_TRIAL_JWT_SECRET === JWT_SECRET) {
+    invalidConfiguration.push('GUEST_TRIAL_JWT_SECRET (32+ characters and different from JWT_SECRET)');
+  }
+  if (invalidConfiguration.length > 0) {
+    throw new Error(`Unsafe production configuration: ${invalidConfiguration.join(', ')}`);
+  }
+}
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: 'Too many login attempts. Please try again later.' }
+});
+const recoveryQuestionsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many recovery requests. Please try again later.' }
+});
+const recoveryVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: 'Too many recovery attempts. Please try again later.' }
+});
 const guestQuizMarkdown = fs.readFileSync(
   path.join(__dirname, 'demo-quizzes', 'quick-wins.md'),
   'utf8'
@@ -130,7 +223,7 @@ function createSessionState({
     repository,
     expiresAt,
     participantLimit,
-    participants: {},
+    participants: Object.create(null),
     quizState: {
       isRunning: false,
       currentQuestionIndex: -1,
@@ -290,6 +383,39 @@ function getBearerToken(req) {
     : null;
 }
 
+function createPresenterToken(session) {
+  return jwt.sign(
+    {
+      type: 'presenter',
+      sessionCode: session.code,
+      sessionId: String(session.id)
+    },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+}
+
+function presenterCanView(principal, session) {
+  return Boolean(
+    principal?.type === 'presenter'
+    && principal.sessionCode === session.code
+    && principal.sessionId === String(session.id)
+  );
+}
+
+function createParticipantCredential() {
+  const token = createOpaqueToken();
+  return {
+    token,
+    digest: hashOpaqueToken(token)
+  };
+}
+
+function canReuseParticipantCredential(participant, name, token) {
+  return canReuseParticipant(participant, name)
+    && verifyOpaqueToken(token, participant.accessTokenDigest);
+}
+
 function authenticateTrial(req, res, next) {
   const token = getBearerToken(req);
   if (!token) {
@@ -382,12 +508,13 @@ function generateTrialSessionCode() {
 }
 
 function sessionResponse(req, session, qrCode) {
+  const presenterToken = createPresenterToken(session);
   return {
     code: session.code,
     quiz: session.quiz,
     qrCode,
     joinUrl: `${req.protocol}://${req.get('host')}/play.html?session=${session.code}`,
-    presenterUrl: `${req.protocol}://${req.get('host')}/present.html?session=${session.code}`,
+    presenterUrl: `${req.protocol}://${req.get('host')}/present.html#session=${session.code}&token=${encodeURIComponent(presenterToken)}`,
     kind: session.kind,
     expiresAt: session.expiresAt
   };
@@ -401,6 +528,9 @@ function expireTrial(trial) {
     });
     io.to(`admin:${trial.sessionCode}`).emit('trial_expired', {
       message: 'Your temporary practice room has expired.'
+    });
+    io.to(`presenter:${trial.sessionCode}`).emit('trial_expired', {
+      message: 'This temporary practice room has expired.'
     });
     activeSessions.delete(trial.sessionCode);
   }
@@ -562,6 +692,9 @@ app.post(
       code: session.code,
       message: 'Practice session ended'
     });
+    io.to(`presenter:${session.code}`).emit('session_ended', {
+      message: 'This practice session has ended.'
+    });
     activeSessions.delete(session.code);
     res.json({ success: true, message: 'Practice session ended' });
   }
@@ -584,7 +717,7 @@ app.get(
 );
 
 // Admin login
-app.post('/api/admin/login', async (req, res) => {
+app.post('/api/admin/login', loginLimiter, async (req, res) => {
   const { password } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress;
 
@@ -593,6 +726,13 @@ app.post('/api/admin/login', async (req, res) => {
     let admin = await db.getMasterAdmin();
 
     if (!admin) {
+      if (!adminPassword || adminPassword.length < 12) {
+        return res.status(503).json({
+          success: false,
+          error: 'Initial setup requires ADMIN_PASSWORD with at least 12 characters'
+        });
+      }
+
       // First login - create master admin from env password
       if (password === adminPassword) {
         const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -710,12 +850,7 @@ app.post('/api/admin/session', async (req, res) => {
 
     res.json({
       success: true,
-      session: {
-        code,
-        quiz,
-        qrCode,
-        joinUrl
-      }
+      session: sessionResponse(req, sessionState, qrCode)
     });
   } catch (err) {
     console.error('Session creation error:', err);
@@ -780,6 +915,9 @@ app.post('/api/admin/session/:code/end', authorizeAdminSession, async (req, res)
   io.to(`admin:${code}`).emit('session_ended', {
     code,
     message: 'Session ended successfully'
+  });
+  io.to(`presenter:${code}`).emit('session_ended', {
+    message: 'This session has ended.'
   });
 
   // Remove from active sessions
@@ -908,11 +1046,21 @@ app.get('/api/admin/session/:code/results', authorizeAdminSession, async (req, r
 
 // Join a specific session (replaces /api/join)
 app.post('/api/session/:code/join', async (req, res) => {
-  const { code } = req.params;
-  const { name, existingParticipantId } = req.body;
+  const code = String(req.params.code || '').trim().toUpperCase();
+  const {
+    name,
+    existingParticipantId,
+    existingParticipantToken
+  } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({ success: false, error: 'Name is required' });
+  }
+  if (name.trim().length > 80) {
+    return res.status(400).json({ success: false, error: 'Name must be 80 characters or fewer' });
+  }
+  if (!/^[A-Z0-9]{6}$/.test(code)) {
+    return res.status(400).json({ success: false, error: 'Invalid session code' });
   }
 
   const session = activeSessions.get(code);
@@ -926,12 +1074,17 @@ app.post('/api/session/:code/join', async (req, res) => {
 
   // Check if this is a rejoin with an existing participant ID
   if (existingParticipantId
-    && canReuseParticipant(session.participants[existingParticipantId], name)) {
+    && canReuseParticipantCredential(
+      session.participants[existingParticipantId],
+      name,
+      existingParticipantToken
+    )) {
     const existing = session.participants[existingParticipantId];
 
     return res.json({
       success: true,
       participantId: existingParticipantId,
+      participantToken: existingParticipantToken,
       sessionCode: code,
       quizTitle: session.quiz.title
     });
@@ -947,6 +1100,7 @@ app.post('/api/session/:code/join', async (req, res) => {
 
   // Persistent sessions write through PostgreSQL; trials allocate only in memory.
   const { id } = await session.repository.createParticipant(name.trim());
+  const participantCredential = createParticipantCredential();
 
   // Add to in-memory session
   session.participants[id] = {
@@ -958,7 +1112,8 @@ app.post('/api/session/:code/join', async (req, res) => {
     bestStreak: 0,
     answers: {},
     responseTimes: {},
-    socketId: null
+    socketId: null,
+    accessTokenDigest: participantCredential.digest
   };
 
   // Notify admin
@@ -967,10 +1122,14 @@ app.post('/api/session/:code/join', async (req, res) => {
     name: name.trim(),
     count: Object.keys(session.participants).length
   });
+  io.to(`presenter:${code}`).emit('participant_joined', {
+    count: Object.keys(session.participants).length
+  });
 
   res.json({
     success: true,
     participantId: id,
+    participantToken: participantCredential.token,
     sessionCode: code,
     quizTitle: session.quiz.title
   });
@@ -1025,8 +1184,8 @@ app.post('/api/admin/settings/password', authenticateToken, async (req, res) => 
     return res.status(400).json({ success: false, error: 'Current and new passwords are required' });
   }
 
-  if (newPassword.length < 6) {
-    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+  if (newPassword.length < 12) {
+    return res.status(400).json({ success: false, error: 'New password must be at least 12 characters' });
   }
 
   try {
@@ -1102,7 +1261,7 @@ app.post('/api/admin/settings/email', authenticateToken, async (req, res) => {
 });
 
 // Password recovery - Step 1: Get security questions
-app.post('/api/admin/recovery/questions', async (req, res) => {
+app.post('/api/admin/recovery/questions', recoveryQuestionsLimiter, async (req, res) => {
   try {
     const admin = await db.getMasterAdmin();
     if (!admin || !admin.security_question_1) {
@@ -1126,7 +1285,7 @@ app.post('/api/admin/recovery/questions', async (req, res) => {
 });
 
 // Password recovery - Step 2: Verify answers and reset
-app.post('/api/admin/recovery/verify', async (req, res) => {
+app.post('/api/admin/recovery/verify', recoveryVerifyLimiter, async (req, res) => {
   const { answer1, answer2, newPassword } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress;
 
@@ -1134,8 +1293,8 @@ app.post('/api/admin/recovery/verify', async (req, res) => {
     return res.status(400).json({ success: false, error: 'All fields are required' });
   }
 
-  if (newPassword.length < 6) {
-    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+  if (newPassword.length < 12) {
+    return res.status(400).json({ success: false, error: 'New password must be at least 12 characters' });
   }
 
   try {
@@ -1217,6 +1376,9 @@ app.post(
       name: participant.name,
       count: Object.keys(session.participants).length
     });
+    io.to(`presenter:${code}`).emit('participant_kicked', {
+      count: Object.keys(session.participants).length
+    });
 
     res.json({ success: true, message: `${participant.name} has been removed from the session` });
   } catch (err) {
@@ -1253,6 +1415,9 @@ app.post(
     io.to(`admin:${code}`).emit('participant_kicked', {
       participantId,
       name: participant.name,
+      count: Object.keys(session.participants).length
+    });
+    io.to(`presenter:${code}`).emit('participant_kicked', {
       count: Object.keys(session.participants).length
     });
 
@@ -1352,16 +1517,6 @@ app.post('/api/admin/session/:code/recover', authorizeAdminSession, async (req, 
 // ============================================
 // ANALYTICS API ENDPOINTS
 // ============================================
-
-// Helper function for CSV escaping
-function escapeCSV(value) {
-  if (value == null) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
 
 // Helper function for difficulty rating
 function getDifficultyRating(correctPercent) {
@@ -1624,6 +1779,16 @@ io.use((socket, next) => {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
+    if (payload?.type === 'presenter'
+      && payload.sessionCode
+      && payload.sessionId) {
+      socket.data.principal = {
+        type: 'presenter',
+        sessionCode: payload.sessionCode,
+        sessionId: payload.sessionId
+      };
+      return next();
+    }
     if (payload?.id && payload.type !== 'trial') {
       socket.data.principal = adminPrincipal(payload);
       return next();
@@ -1651,7 +1816,7 @@ function rejectSocketControl(socket) {
   });
 }
 
-function sendLiveSessionSnapshot(socket, session, sessionCode) {
+function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin') {
   socket.emit('participant_joined', {
     count: Object.keys(session.participants).length
   });
@@ -1689,7 +1854,9 @@ function sendLiveSessionSnapshot(socket, session, sessionCode) {
     });
   } else if (session.quizState.isRunning) {
     socket.emit('question_started', {
-      question,
+      question: audience === 'presenter'
+        ? getQuestionForParticipants(question)
+        : question,
       timeRemaining,
       questionNumber: session.quizState.currentQuestionIndex + 1,
       totalQuestions: session.quiz.questions.length
@@ -1721,7 +1888,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Presenter joins a session (receives same events, no controls)
+  // Presenter joins a read-only display room with a session-bound capability.
   socket.on('presenter_join', (sessionCode) => {
     if (!sessionCode) return;
 
@@ -1731,14 +1898,19 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Presenter receives the richer admin-room payloads, but has no controls.
-    // Keeping it out of the participant room avoids duplicate events.
-    socket.join(`admin:${sessionCode}`);
+    if (!presenterCanView(socket.data.principal, session)) {
+      socket.emit('presenter_unauthorized', {
+        message: 'Open the presenter from the instructor studio for this room.'
+      });
+      return;
+    }
+
+    socket.join(`presenter:${sessionCode}`);
     socket.sessionCode = sessionCode;
     console.log('Presenter joined session:', sessionCode);
 
     // Restore the current presenter view after a browser refresh or reconnect.
-    sendLiveSessionSnapshot(socket, session, sessionCode);
+    sendLiveSessionSnapshot(socket, session, sessionCode, 'presenter');
   });
 
   // Participant joins with their ID and session code
@@ -1752,17 +1924,31 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Check if participant was kicked
-    const wasKicked = await session.repository.isParticipantKicked(participantId);
-    if (wasKicked) {
-      socket.emit('kicked', { message: 'You have been removed from this session.' });
+    const participant = session.participants[participantId];
+    if (!participant) {
+      socket.emit('session_invalid', { message: 'Please rejoin the session' });
       socket.emit('clear_participant_id');
       return;
     }
 
-    const participant = session.participants[participantId];
-    if (!participant) {
-      socket.emit('session_invalid', { message: 'Please rejoin the session' });
+    const participantAccess = socket.handshake.auth || {};
+    if (participantAccess.participantId !== participantId
+      || participantAccess.sessionCode !== sessionCode
+      || !verifyOpaqueToken(
+        participantAccess.participantToken,
+        participant.accessTokenDigest
+      )) {
+      socket.emit('session_invalid', {
+        message: 'Participant access expired. Please rejoin.'
+      });
+      socket.emit('clear_participant_id');
+      return;
+    }
+
+    // Check kick status only after the participant capability has been verified.
+    const wasKicked = await session.repository.isParticipantKicked(participantId);
+    if (wasKicked) {
+      socket.emit('kicked', { message: 'You have been removed from this session.' });
       socket.emit('clear_participant_id');
       return;
     }
@@ -1774,6 +1960,10 @@ io.on('connection', (socket) => {
 
     // Update socket ID in database
     await session.repository.updateParticipantSocket(participantId, socket.id);
+    socket.emit('participant_ready', {
+      participantId,
+      sessionCode
+    });
 
     console.log(
       'Participant joined session:',
@@ -1882,6 +2072,10 @@ io.on('connection', (socket) => {
       title: session.quiz.title,
       totalQuestions: session.quiz.questions.length
     });
+    io.to(`presenter:${sessionCode}`).emit('quiz_started', {
+      title: session.quiz.title,
+      totalQuestions: session.quiz.questions.length
+    });
   });
 
   // Admin advances to next question
@@ -1938,6 +2132,7 @@ io.on('connection', (socket) => {
 
       session.finale = buildFinaleSummary(session);
       io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
+      io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
       return;
     }
 
@@ -1954,6 +2149,12 @@ io.on('connection', (socket) => {
 
     io.to(`admin:${sessionCode}`).emit('question_started', {
       question: question,
+      timeRemaining: question.timeLimit,
+      questionNumber: session.quizState.currentQuestionIndex + 1,
+      totalQuestions: session.quiz.questions.length
+    });
+    io.to(`presenter:${sessionCode}`).emit('question_started', {
+      question: getQuestionForParticipants(question),
       timeRemaining: question.timeLimit,
       questionNumber: session.quizState.currentQuestionIndex + 1,
       totalQuestions: session.quiz.questions.length
@@ -2003,6 +2204,15 @@ io.on('connection', (socket) => {
 
     const question = session.quiz.questions.find(q => q.id === questionId);
     if (!question) return;
+    if (!Number.isInteger(answerIndex)
+      || answerIndex < 0
+      || answerIndex >= question.options.length) {
+      socket.emit('answer_rejected', {
+        questionId,
+        message: 'Invalid answer selection'
+      });
+      return;
+    }
 
     // Check if already answered
     if (participant.answers[questionId] !== undefined) return;
@@ -2033,6 +2243,12 @@ io.on('connection', (socket) => {
       participantName: participant.name,
       questionId,
       answeredCount: Object.values(session.participants).filter(p => p.answers[questionId] !== undefined).length,
+      totalParticipants: Object.keys(session.participants).length
+    });
+    io.to(`presenter:${sessionCode}`).emit('answer_received', {
+      questionId,
+      answeredCount: Object.values(session.participants)
+        .filter(p => p.answers[questionId] !== undefined).length,
       totalParticipants: Object.keys(session.participants).length
     });
 
@@ -2068,6 +2284,9 @@ io.on('connection', (socket) => {
     io.to(`admin:${sessionCode}`).emit('session_ended', {
       code: sessionCode,
       message: 'Session ended successfully'
+    });
+    io.to(`presenter:${sessionCode}`).emit('session_ended', {
+      message: 'This session has ended.'
     });
 
     // Remove from active sessions
@@ -2114,12 +2333,11 @@ function endCurrentQuestion(sessionCode) {
     highlights: presentation.highlights
   };
 
-  // Build results for each participant
-  const participantResults = {};
+  // Send each participant only their own private result record.
   for (const participant of Object.values(session.participants)) {
     const currentScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
     const standing = presentation.leaderboard.find(entry => entry.id === participant.id);
-    participantResults[participant.id] = {
+    const participantResult = {
       yourAnswer: participant.answers[question.id],
       currentScore,
       correctCount: participant.correctCount || 0,
@@ -2129,21 +2347,32 @@ function endCurrentQuestion(sessionCode) {
       previousRank: standing?.previousRank || null,
       movement: standing?.movement || 0
     };
-  }
 
-  // Broadcast to all participants - they'll look up their own data
-  io.to(`session:${sessionCode}`).emit('question_ended', {
-    questionId: question.id,
-    correctIndices: question.correctIndices,
-    stats,
-    participantResults,
-    totalScore: session.quiz.totalScore,
-    questionsAnswered: session.quizState.currentQuestionIndex + 1,
-    totalQuestions: session.quiz.questions.length
-  });
+    if (participant.socketId) {
+      io.to(participant.socketId).emit('question_ended', {
+        questionId: question.id,
+        correctIndices: question.correctIndices,
+        stats,
+        participantResults: {
+          [participant.id]: participantResult
+        },
+        totalScore: session.quiz.totalScore,
+        questionsAnswered: session.quizState.currentQuestionIndex + 1,
+        totalQuestions: session.quiz.questions.length
+      });
+    }
+  }
 
   // Send to admin
   io.to(`admin:${sessionCode}`).emit('question_ended', {
+    questionId: question.id,
+    question,
+    questionNumber: session.quizState.currentQuestionIndex + 1,
+    correctIndices: question.correctIndices,
+    stats,
+    presentation: session.lastQuestionPresentation
+  });
+  io.to(`presenter:${sessionCode}`).emit('question_ended', {
     questionId: question.id,
     question,
     questionNumber: session.quizState.currentQuestionIndex + 1,

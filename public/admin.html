@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/vendor/highlight.css">
+  <script defer src="/vendor/marked.js"></script>
+  <script defer src="/vendor/dompurify.js"></script>
+  <script defer src="/vendor/highlight.js"></script>
+  <script defer src="/js/markdown.js"></script>
+  <script defer src="/vendor/chart.js"></script>
   <script defer src="/socket.io/socket.io.js"></script>
   <script defer src="/js/admin.js"></script>
 </head>
@@ -214,7 +216,7 @@
                   <span><svg aria-hidden="true"><use href="/assets/icons.svg#qr"></use></svg>Scan to join</span>
                 </div>
                 <div class="session-actions">
-                  <a id="join-url-link" href="#" target="_blank" class="icon-action">
+                  <a id="join-url-link" href="#" target="_blank" rel="noopener" class="icon-action">
                     <svg aria-hidden="true"><use href="/assets/icons.svg#external"></use></svg>
                     Open join page
                   </a>
@@ -222,7 +224,7 @@
                     <svg aria-hidden="true"><use href="/assets/icons.svg#link"></use></svg>
                     Copy join link
                   </button>
-                  <a id="presenter-url" href="#" target="_blank" class="icon-action icon-action-primary">
+                  <a id="presenter-url" href="#" target="_blank" rel="noopener" class="icon-action icon-action-primary">
                     <svg aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>
                     Open presenter
                   </a>
@@ -384,11 +386,11 @@
             </div>
             <div class="form-group">
               <label for="new-password">New Password</label>
-              <input type="password" id="new-password" minlength="6" required>
+              <input type="password" id="new-password" minlength="12" required>
             </div>
             <div class="form-group">
               <label for="confirm-password">Confirm New Password</label>
-              <input type="password" id="confirm-password" minlength="6" required>
+              <input type="password" id="confirm-password" minlength="12" required>
             </div>
             <button type="submit" class="btn btn-primary btn-block">Update Password</button>
           </form>
@@ -469,7 +471,7 @@
           </div>
           <div class="form-group">
             <label for="recovery-new-password">New Password</label>
-            <input type="password" id="recovery-new-password" minlength="6" required>
+            <input type="password" id="recovery-new-password" minlength="12" required>
           </div>
           <button type="submit" class="btn btn-primary btn-block">Reset Password</button>
         </form>

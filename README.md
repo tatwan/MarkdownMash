@@ -10,27 +10,29 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
-## What's New in v1.2.1
+## What's New in v1.2.2
 
-### The Try It Out Update
+### The Secure Rooms Update
 
-Version 1.2.1 lets visitors experience the complete Markdown Mash workflow before deploying it themselves, while keeping real classroom data private and untouched.
+Version 1.2.2 hardens live classroom sessions, browser rendering, account recovery, and deployment dependencies without changing the PostgreSQL schema or existing classroom data.
 
 #### Key Highlights
 
-- **No-Account Guest Trial** - Select **Try It Out** to launch a preloaded practice Mash without credentials.
-- **Complete Product Experience** - Visitors can preview, host, join, present, answer, view live momentum, and reach the animated podium and hardest-question recap.
-- **Private by Design** - Trial rooms live only in server memory, expire automatically, and never appear in PostgreSQL, Supabase, instructor history, analytics, or exports.
-- **Polished Question Preview** - A clearer eye-icon action opens a responsive participant-style preview with correct-answer indicators and improved navigation.
-- **Open-Source Handoff** - The completed trial points visitors to GitHub so they can deploy their own persistent instance.
+- **Protected Presenter Access** - Presenter windows now use signed, session-bound links and receive answer keys only after the instructor reveals results.
+- **Private Participant Results** - Each participant receives only their own answer, score, streak, and rank record.
+- **Participant Capabilities** - Cryptographic participant credentials prevent another browser from taking over a participant identity using only its ID.
+- **Sanitized Markdown** - Questions and options pass through DOMPurify before entering the page, preserving Markdown and code highlighting without allowing executable HTML.
+- **Browser Security Headers** - CSP, HSTS, clickjacking protection, referrer controls, and restrictive browser permissions are enabled.
+- **Reproducible Dependencies** - Frontend libraries are pinned, installed with npm, and served locally instead of loading floating CDN releases.
 
-#### Fixes & Reliability
+#### Additional Hardening
 
-- Protected instructor HTTP routes and Socket.IO controls with session-aware authorization.
-- Isolated participant identities by session so multiple browser contexts are counted correctly.
-- Restored presenter access through a public, non-sensitive QR lookup while keeping admin endpoints protected.
-- Added trial rate, duration, participant, and global-capacity limits.
-- Removed participant names and answer details from routine server logs.
+- Added IP rate limits to instructor login and password-recovery endpoints.
+- Raised new and recovered instructor passwords to a 12-character minimum.
+- Neutralized spreadsheet formulas in CSV exports.
+- Replaced predictable participant IDs and session-code selection with cryptographic randomness.
+- Added an end-to-end security regression suite covering presenter authorization, answer-key privacy, participant impersonation, and per-participant result isolation.
+- Production refuses to start with missing or unsafe database/JWT secrets, and first-time admin setup requires a strong bootstrap password.
 
 ## Features
 
@@ -238,9 +240,10 @@ greet("Alice")
    - They enter their name to join
 
 3. **Screen sharing (optional)**
-   - Open `/present.html` in a new window
+   - Select **Open presenter** from the instructor studio
    - Share this window with participants for a beautiful full-screen display
    - Participants can still use their own devices to answer
+   - Presenter links contain a temporary signed capability; do not replace the link with a manually typed room code
 
 4. **Run the quiz**
    - Click "Start Quiz"
@@ -270,6 +273,8 @@ This app requires a PostgreSQL database. Choose one of these options:
 Supabase plan limits change over time, so review the current [Supabase pricing](https://supabase.com/pricing) before deploying.
 
 > Markdown Mash connects directly to PostgreSQL. It does not require a Supabase anon key, service-role key, or Supabase Auth. Keep the application tables out of the public Data API unless you intentionally configure API access and Row Level Security.
+
+For the smallest public attack surface, disable the Supabase Data API for this project. If the project shares its Data API with another application, place Markdown Mash tables in an unexposed schema or revoke `anon` and `authenticated` privileges and enable appropriate RLS. Supabase treats table grants and RLS as separate layers; configure both for every intentionally exposed object. See [Securing your Supabase API](https://supabase.com/docs/guides/api/securing-your-api).
 
 #### Option 2: Neon (Serverless Postgres)
 
@@ -320,7 +325,7 @@ Use this method if, like the hosted Markdown Mash instance, you redeploy directl
    - **Name**: `markdownmash` (or your choice)
    - **Region**: Choose closest to your users
    - **Branch**: `main`
-   - **Build Command**: `npm install`
+   - **Build Command**: `npm ci`
    - **Start Command**: `npm start`
    - **Plan**: Free (or upgrade for better performance)
 
@@ -331,9 +336,9 @@ Use this method if, like the hosted Markdown Mash instance, you redeploy directl
    | Variable | Value |
    |----------|-------|
    | `DATABASE_URL` | Your PostgreSQL connection string |
-   | `ADMIN_PASSWORD` | A strong initial instructor password |
-   | `JWT_SECRET` | A long random value |
-   | `GUEST_TRIAL_JWT_SECRET` | A different long random value |
+   | `ADMIN_PASSWORD` | A strong initial instructor password of at least 12 characters |
+   | `JWT_SECRET` | A random value of at least 32 characters |
+   | `GUEST_TRIAL_JWT_SECRET` | A different random value of at least 32 characters |
    | `GUEST_TRIAL_ENABLED` | `true` to show **Try It Out**, otherwise `false` |
    | `NODE_ENV` | `production` |
 
@@ -381,6 +386,8 @@ The included `render.yaml` can create a new Blueprint-managed web service with g
 4. Open the presenter view and confirm live updates, results, and the finale work.
 5. Confirm the trial does not appear in instructor history or analytics.
 6. Run one signed-in session, redeploy the service, and confirm its history remains available from PostgreSQL.
+7. Confirm `/present.html?session=ROOMCODE` cannot join without using **Open presenter** from the instructor studio.
+8. Inspect the browser response headers and confirm `Content-Security-Policy` and `Strict-Transport-Security` are present.
 
 ---
 
@@ -441,9 +448,9 @@ pm2 save
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | **Yes** | - | PostgreSQL connection string; use Supabase Session pooler for Render |
-| `ADMIN_PASSWORD` | **Yes in production** | `admin123` | Bootstrap instructor password, used for initial setup only |
-| `JWT_SECRET` | **Yes in production** | Development fallback | Signs instructor sessions; use a long random value |
-| `GUEST_TRIAL_JWT_SECRET` | **Yes in production** | Derived from `JWT_SECRET` | Separately signs guest-trial access |
+| `ADMIN_PASSWORD` | **Required for first setup** | `admin123` in development | Bootstrap instructor password; initial production setup requires at least 12 characters |
+| `JWT_SECRET` | **Yes in production** | Development fallback | Signs instructor and presenter sessions; production requires at least 32 characters |
+| `GUEST_TRIAL_JWT_SECRET` | **Yes in production** | Derived in development | Separately signs guest-trial access; production requires a different value of at least 32 characters |
 | `GUEST_TRIAL_ENABLED` | No | `true` | Enables or disables public **Try It Out** |
 | `GUEST_TRIAL_TTL_MINUTES` | No | `20` | Trial lifetime in minutes |
 | `GUEST_TRIAL_MAX_PARTICIPANTS` | No | `8` | Participant limit per trial |
@@ -487,6 +494,7 @@ Access via Admin Dashboard → Session History → View Analytics
 markdown-mash/
 ├── server.js              # Express + Socket.IO server
 ├── db.js                  # PostgreSQL database module
+├── security-utils.js      # Opaque tokens and safe CSV helpers
 ├── package.json           # Dependencies and scripts
 ├── .env.example           # Environment variables template
 ├── render.yaml            # Render.com deployment config
@@ -501,6 +509,7 @@ markdown-mash/
     │   └── style.css      # All styles
     └── js/
         ├── admin.js       # Admin client logic
+        ├── markdown.js    # Sanitized Markdown renderer
         ├── play.js        # Participant client logic
         └── present.js     # Presenter client logic
 ```

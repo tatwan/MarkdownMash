@@ -1,4 +1,5 @@
 // DOM Elements
+const markdown = MarkdownMashMarkdown;
 const joinSection = document.getElementById('join-section');
 const joinForm = document.getElementById('join-form');
 const joinError = document.getElementById('join-error');
@@ -56,6 +57,7 @@ const participantStore = MarkdownMashParticipantStorage.createParticipantStore(
 // State
 let socket = null;
 let participantId = null;
+let participantToken = null;
 let sessionCode = null;
 let currentQuestion = null;
 let selectedAnswer = null;
@@ -122,7 +124,7 @@ function renderRejoinOptions(code) {
     button.addEventListener('click', () => {
       sessionCodeInput.value = code;
       playerNameInput.value = identity.name;
-      attemptJoin(identity.id);
+      attemptJoin(identity.id, identity.accessToken);
     });
     rejoinOptions.appendChild(button);
   });
@@ -150,7 +152,10 @@ function clearCurrentIdentity({ forgetRecovery = false, clearSession = false } =
   participantStore.clearLegacyIdentity();
 }
 
-async function attemptJoin(requestedParticipantId = null) {
+async function attemptJoin(
+  requestedParticipantId = null,
+  requestedParticipantToken = null
+) {
   if (isJoining) return;
   const name = playerNameInput.value.trim();
   const code = sessionCodeInput.value.trim().toUpperCase();
@@ -162,13 +167,12 @@ async function attemptJoin(requestedParticipantId = null) {
   }
 
   let existingParticipantId = requestedParticipantId;
+  let existingParticipantToken = requestedParticipantToken;
   if (!existingParticipantId) {
     const active = participantStore.getActive(code);
     if (active && normalizeName(active.name) === normalizeName(name)) {
       existingParticipantId = active.id;
-    } else {
-      // One-time compatibility path for participants who joined before v1.2.0.
-      existingParticipantId = participantStore.getLegacyIdentity(code)?.id || null;
+      existingParticipantToken = active.accessToken;
     }
   }
 
@@ -180,16 +184,31 @@ async function attemptJoin(requestedParticipantId = null) {
     const res = await fetch(`/api/session/${code}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, existingParticipantId })
+      body: JSON.stringify({
+        name,
+        existingParticipantId,
+        existingParticipantToken
+      })
     });
 
     const data = await res.json();
     if (data.success) {
       participantId = data.participantId;
+      participantToken = data.participantToken;
       sessionCode = data.sessionCode;
 
-      participantStore.setActive(sessionCode, participantId, name);
-      participantStore.rememberRecovery(sessionCode, participantId, name);
+      participantStore.setActive(
+        sessionCode,
+        participantId,
+        name,
+        participantToken
+      );
+      participantStore.rememberRecovery(
+        sessionCode,
+        participantId,
+        name,
+        participantToken
+      );
       participantStore.clearLegacyIdentity();
 
       hideAllSections();
@@ -233,18 +252,13 @@ joinDifferentBtn.addEventListener('click', () => {
 
 // Initialize Socket.IO
 function initSocket() {
-  socket = io();
-
-// Configure marked to use highlight.js
-if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
-  marked.setOptions({
-    highlight: function(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    },
-    breaks: true
+  socket = io({
+    auth: {
+      participantId,
+      participantToken,
+      sessionCode
+    }
   });
-}
 
   isFirstConnect = true; // Reset on each new initSocket call
 
@@ -275,6 +289,7 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
   socket.on('clear_participant_id', () => {
     clearCurrentIdentity({ forgetRecovery: true });
     participantId = null;
+    participantToken = null;
     sessionCode = null;
   });
 
@@ -282,6 +297,7 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
     // Clear stored credentials
     clearCurrentIdentity({ forgetRecovery: true });
     participantId = null;
+    participantToken = null;
     sessionCode = null;
 
     // Show kicked message
@@ -306,6 +322,7 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
     // Clear stored credentials
     clearCurrentIdentity({ clearSession: true });
     participantId = null;
+    participantToken = null;
     sessionCode = null;
   });
 
@@ -316,6 +333,7 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
     sessionEndedSection.classList.remove('hidden');
     clearCurrentIdentity({ clearSession: true });
     participantId = null;
+    participantToken = null;
     sessionCode = null;
   });
 
@@ -333,7 +351,7 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
 
     currentQNum.textContent = data.questionNumber;
     totalQNum.textContent = data.totalQuestions;
-    questionText.innerHTML = marked.parse(data.question.text);
+    questionText.innerHTML = markdown.block(data.question.text);
     answerStatus.classList.add('hidden');
 
     renderOptions(data.question.options);
@@ -376,12 +394,12 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
       resultIcon.className = 'result-icon correct';
       resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
       resultText.textContent = 'Correct!';
-      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${marked.parseInline(currentQuestion.options[yourAnswerIdx])}`;
+      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
     } else {
       resultIcon.className = 'result-icon incorrect';
       resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#x-circle"></use></svg>';
       resultText.textContent = 'Incorrect';
-      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${marked.parseInline(currentQuestion.options[yourAnswerIdx])}`;
+      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
     }
 
     resultRank.textContent = myResults.rank ? `#${myResults.rank}` : '—';
@@ -394,7 +412,7 @@ if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
       resultMovement.textContent = myResults.previousRank ? 'Held' : 'New';
     }
 
-    correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${marked.parseInline(currentQuestion.options[correctIdx])}`;
+    correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${markdown.inline(currentQuestion.options[correctIdx])}`;
     document.querySelector('.result-detail-row.correct').style.display = isCorrect ? 'none' : 'flex';
 
     // Show results chart
@@ -464,14 +482,17 @@ function showReconnectBanner(reason) {
     'box-shadow:0 2px 8px rgba(0,0,0,0.4)'
   ].join(';');
 
-  const msg = reason || 'Connection to quiz server was interrupted.';
+  const msg = escapeText(reason || 'Connection to quiz server was interrupted.');
   banner.innerHTML = `
     <svg class="banner-icon" aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg>
     <strong>Connection interrupted.</strong> ${msg}
     <br><small>Wait for your teacher to let you know if the quiz will continue.
-    <a href="javascript:location.reload()" style="color:#fde68a;text-decoration:underline">Refresh</a>
+    <button type="button" class="reconnect-refresh" style="color:#fde68a;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer">Refresh</button>
     to try reconnecting.</small>
   `;
+  banner.querySelector('.reconnect-refresh').addEventListener('click', () => {
+    window.location.reload();
+  });
 
   document.body.prepend(banner);
 }
@@ -485,7 +506,7 @@ function renderOptions(options) {
     btn.className = 'player-option';
     btn.innerHTML = `
       <span class="option-letter">${String.fromCharCode(65 + i)}</span>
-      <span class="option-text">${marked.parseInline(opt)}</span>
+      <span class="option-text">${markdown.inline(opt)}</span>
     `;
     btn.addEventListener('click', () => selectAnswer(i, btn));
     optionsContainer.appendChild(btn);
@@ -528,7 +549,7 @@ function showResultsChart(data) {
     const row = document.createElement('div');
     row.className = `distribution-row ${data.correctIndices.includes(index) ? 'correct' : ''}`;
     row.innerHTML = `
-      <div class="distribution-answer"><strong>${String.fromCharCode(65 + index)}.</strong> ${marked.parseInline(option)}</div>
+      <div class="distribution-answer"><strong>${String.fromCharCode(65 + index)}.</strong> ${markdown.inline(option)}</div>
       <div class="distribution-track" aria-hidden="true"><span style="width: ${width}%"></span></div>
       <div class="distribution-count">${count}</div>
     `;
