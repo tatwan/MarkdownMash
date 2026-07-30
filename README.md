@@ -55,17 +55,11 @@ This release does not change the PostgreSQL schema or existing classroom data.
 
 ![image-20260729231715630](images/image-20260729231715630.png)
 
-![image-20260729231722369](images/image-20260729231722369.png)
-
-#### Load questions 
-
-![image-20260729231743718](images/image-20260729231743718.png)
-
 #### Presenter Screen
 
 If needed to have a presenter view, there is one that you can share in class or remote setting 
 
-![image-20260729231755155](images/image-20260729231755155.png)
+![image-20260730124732857](images/image-20260730124732857.png)
 
 ![image-20260729231833097](images/image-20260729231833097.png)
 
@@ -89,9 +83,21 @@ A final score will be presented for each user
 
 ![image-20260729232023418](images/image-20260729232023418.png)
 
-#### Admin Screen (Analytics)
+#### Admin Screen (and Analytics)
+
+![image-20260729231722369](images/image-20260729231722369.png)
+
+#### Load questions 
+
+![image-20260729231743718](images/image-20260729231743718.png)
+
+#### Control the session and monitor progress
 
 View progress, control flow (start, end early ..etc), and finally when done you can view summary 
+
+![image-20260729231755155](images/image-20260729231755155.png)
+
+#### Analytics detail 
 
 ![image-20260729232111905](images/image-20260729232111905.png)
 
