@@ -12,41 +12,86 @@
   <script src="/js/markdown.js"></script>
 </head>
 <body class="presenter-body">
+  <div class="presenter-brand-pattern" aria-hidden="true"></div>
   <div class="presenter-container">
 
-    <!-- Session Code Input -->
-    <div id="session-input-section" class="presenter-section">
-      <div class="presenter-logo">Markdown Mash</div>
-      <div class="presenter-waiting">
-        <h1>Enter Session Code</h1>
-        <form id="session-form" style="max-width: 400px; margin: 2rem auto;">
-          <input type="text" id="session-code-input" placeholder="SESSION CODE" required maxlength="6" style="text-transform: uppercase; text-align: center; font-size: 2rem; letter-spacing: 0.3em; padding: 1rem;">
-          <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1rem; font-size: 1.25rem;">Join as Presenter</button>
-        </form>
-        <p id="session-error" class="error-text hidden" style="color: var(--danger); text-align: center;"></p>
+    <!-- Secure Presenter Access -->
+    <div id="session-input-section" class="presenter-section presenter-access-section">
+      <a class="brand-lockup presenter-brand" href="/" aria-label="Markdown Mash home">
+        <span class="brand-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
+        <span class="brand-name">Markdown <strong>Mash</strong></span>
+      </a>
+      <div class="presenter-access-card">
+        <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg></div>
+        <p class="section-eyebrow">Secure presenter display</p>
+        <h1>Open this screen from the instructor studio.</h1>
+        <p>Presenter links are protected for each live room. Launch your quiz, then choose <strong>Open presenter</strong>.</p>
+        <a href="/admin.html" class="btn btn-primary btn-lg">
+          Open instructor studio
+          <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg>
+        </a>
+        <p id="session-error" class="form-message error-text hidden" role="alert"></p>
       </div>
     </div>
 
     <!-- Waiting for Quiz -->
-    <div id="waiting-section" class="presenter-section hidden">
-      <div class="presenter-logo">Markdown Mash</div>
-      <div class="presenter-waiting">
-        <h1 id="quiz-title">Waiting for quiz...</h1>
-        <div class="session-info" style="margin: 1.5rem 0;">
-          <span style="font-size: 1.25rem; color: var(--text-muted);">Session Code:</span>
-          <span id="session-code-display" style="font-size: 3rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); display: block;">------</span>
+    <div id="waiting-section" class="presenter-section presenter-lobby-section hidden">
+      <header class="presenter-lobby-header">
+        <a class="brand-lockup presenter-brand" href="/" aria-label="Markdown Mash home">
+          <span class="brand-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></span>
+          <span class="brand-name">Markdown <strong>Mash</strong></span>
+        </a>
+        <div class="presenter-display-status">
+          <span class="live-dot" aria-hidden="true"></span>
+          Presenter display
         </div>
-        <div class="participant-counter">
-          <span id="participant-count">0</span>
-          <span class="counter-label">participants joined</span>
-        </div>
-        <div class="qr-section" style="margin: 2rem 0;">
-          <img id="qr-code" src="" alt="QR Code" style="width: 200px; height: 200px; border-radius: 8px; display: none;">
-          <p class="presenter-hint" style="margin-top: 1rem;">Scan to join</p>
-        </div>
-        <p class="presenter-hint">Or visit:</p>
-        <div class="presenter-url" id="join-url"></div>
+      </header>
+
+      <div class="presenter-lobby-grid">
+        <main class="presenter-lobby-copy">
+          <p class="brand-kicker">
+            <svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>
+            Room ready
+          </p>
+          <h1 id="quiz-title">Waiting for quiz…</h1>
+          <p class="presenter-lobby-lede">Invite everyone in, then start when the room is ready.</p>
+
+          <div class="presenter-code-panel">
+            <span>Session code</span>
+            <strong id="session-code-display">------</strong>
+          </div>
+
+          <div class="participant-counter" aria-live="polite" aria-atomic="true">
+            <span class="participant-counter-icon" aria-hidden="true">
+              <svg><use href="/assets/icons.svg#users"></use></svg>
+            </span>
+            <span id="participant-count">0</span>
+            <span class="counter-label" id="participant-label">participants joined</span>
+          </div>
+        </main>
+
+        <aside class="presenter-join-card" aria-label="How to join">
+          <div class="presenter-join-heading">
+            <span class="presenter-join-icon" aria-hidden="true">
+              <svg><use href="/assets/icons.svg#qr"></use></svg>
+            </span>
+            <div>
+              <p class="section-eyebrow">Join the room</p>
+              <h2>Scan to play</h2>
+            </div>
+          </div>
+          <div class="presenter-qr-frame">
+            <img id="qr-code" src="" alt="QR code to join the quiz">
+          </div>
+          <p class="presenter-join-help">Point a phone camera at the code, or visit</p>
+          <div class="presenter-url" id="join-url"></div>
+        </aside>
       </div>
+
+      <footer class="presenter-lobby-footer">
+        <span class="waiting-live-dot" aria-hidden="true"></span>
+        <span>Waiting for the host to start</span>
+      </footer>
     </div>
 
     <!-- Session Ended -->

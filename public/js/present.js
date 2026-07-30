@@ -1,8 +1,6 @@
 const markdown = MarkdownMashMarkdown;
 
 const sessionInputSection = document.getElementById('session-input-section');
-const sessionForm = document.getElementById('session-form');
-const sessionCodeInput = document.getElementById('session-code-input');
 const sessionError = document.getElementById('session-error');
 const waitingSection = document.getElementById('waiting-section');
 const sessionEndedSection = document.getElementById('session-ended-section');
@@ -14,6 +12,7 @@ const endedSection = document.getElementById('ended-section');
 const quizTitle = document.getElementById('quiz-title');
 const sessionCodeDisplay = document.getElementById('session-code-display');
 const participantCount = document.getElementById('participant-count');
+const participantLabel = document.getElementById('participant-label');
 const joinUrl = document.getElementById('join-url');
 const qrCodeImg = document.getElementById('qr-code');
 const currentQNum = document.getElementById('current-q-num');
@@ -73,20 +72,9 @@ function init() {
       sessionStorage.setItem(tokenKey, fragmentToken);
       history.replaceState(null, '', `/present.html?session=${encodeURIComponent(code)}`);
     }
-    sessionCodeInput.value = code;
     joinSession(code);
   }
 }
-
-sessionForm.addEventListener('submit', event => {
-  event.preventDefault();
-  const code = sessionCodeInput.value.trim().toUpperCase();
-  if (code.length === 6) {
-    joinSession(code);
-  } else {
-    showSessionError('Please enter a valid 6-character session code');
-  }
-});
 
 async function joinSession(code) {
   sessionCode = code;
@@ -108,10 +96,9 @@ async function joinSession(code) {
     }
 
     sessionCodeDisplay.textContent = code;
-    joinUrl.textContent = data.joinUrl;
+    joinUrl.textContent = formatJoinDestination(data.joinUrl);
     if (data.qrCode) {
       qrCodeImg.src = data.qrCode;
-      qrCodeImg.style.display = 'block';
     }
 
     hideAllSections();
@@ -162,13 +149,11 @@ function initSocket() {
   });
 
   socket.on('participant_joined', data => {
-    participantCount.textContent = data.count;
-    totalParticipants.textContent = data.count;
+    updateParticipantCount(data.count);
   });
 
   socket.on('participant_kicked', data => {
-    participantCount.textContent = data.count;
-    totalParticipants.textContent = data.count;
+    updateParticipantCount(data.count);
   });
 
   socket.on('quiz_loaded', data => {
@@ -229,6 +214,32 @@ function initSocket() {
     clearPresenterTimers();
     showFinale(data);
   });
+}
+
+function formatJoinDestination(url) {
+  try {
+    return new URL(url).host;
+  } catch (error) {
+    return url;
+  }
+}
+
+function updateParticipantCount(count) {
+  const normalizedCount = Math.max(0, Number(count) || 0);
+  const changed = participantCount.textContent !== String(normalizedCount);
+
+  participantCount.textContent = normalizedCount;
+  participantLabel.textContent = normalizedCount === 1
+    ? 'participant joined'
+    : 'participants joined';
+  totalParticipants.textContent = normalizedCount;
+
+  if (changed) {
+    const counter = participantCount.closest('.participant-counter');
+    counter.classList.remove('participant-count-updated');
+    void counter.offsetWidth;
+    counter.classList.add('participant-count-updated');
+  }
 }
 
 function renderOptions(options) {

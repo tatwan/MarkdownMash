@@ -10,29 +10,22 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
-## What's New in v1.2.2
+## What's New in v1.2.3
 
-### The Secure Rooms Update
+### The Projector-Ready Presenter Update
 
-Version 1.2.2 hardens live classroom sessions, browser rendering, account recovery, and deployment dependencies without changing the PostgreSQL schema or existing classroom data.
+Version 1.2.3 brings the presenter lobby into the same polished visual system as the instructor and participant experiences, while ensuring the complete room invitation remains visible on common classroom projectors.
 
 #### Key Highlights
 
-- **Protected Presenter Access** - Presenter windows now use signed, session-bound links and receive answer keys only after the instructor reveals results.
-- **Private Participant Results** - Each participant receives only their own answer, score, streak, and rank record.
-- **Participant Capabilities** - Cryptographic participant credentials prevent another browser from taking over a participant identity using only its ID.
-- **Sanitized Markdown** - Questions and options pass through DOMPurify before entering the page, preserving Markdown and code highlighting without allowing executable HTML.
-- **Browser Security Headers** - CSP, HSTS, clickjacking protection, referrer controls, and restrictive browser permissions are enabled.
-- **Reproducible Dependencies** - Frontend libraries are pinned, installed with npm, and served locally instead of loading floating CDN releases.
+- **Modern Presenter Lobby** - A new two-column composition gives the quiz title, session code, participant status, and joining instructions a clear projector-friendly hierarchy.
+- **Always-Visible QR Code** - The QR card and join destination now remain fully visible without scrolling at a standard 1280×720 classroom resolution.
+- **Live Room Energy** - Participant arrivals update the lobby counter in real time with a subtle celebration animation and singular/plural labels.
+- **Consistent Product Identity** - The presenter now uses the same SVG brand lockup, icon system, color language, cards, and status treatments as the rest of Markdown Mash.
+- **Clear Secure Access** - Opening the presenter without a signed room link now explains how to launch it securely from the instructor studio instead of showing an unusable code form.
+- **Responsive and Accessible** - Compact-height, tablet, and mobile layouts are included, together with reduced-motion behavior for lobby animations.
 
-#### Additional Hardening
-
-- Added IP rate limits to instructor login and password-recovery endpoints.
-- Raised new and recovered instructor passwords to a 12-character minimum.
-- Neutralized spreadsheet formulas in CSV exports.
-- Replaced predictable participant IDs and session-code selection with cryptographic randomness.
-- Added an end-to-end security regression suite covering presenter authorization, answer-key privacy, participant impersonation, and per-participant result isolation.
-- Production refuses to start with missing or unsafe database/JWT secrets, and first-time admin setup requires a strong bootstrap password.
+This release does not change the PostgreSQL schema or existing classroom data.
 
 ## Features
 
@@ -43,7 +36,7 @@ Version 1.2.2 hardens live classroom sessions, browser rendering, account recove
 - **Animated Classroom Finale** - Reveals third, second, and first place on a projector-ready podium, followed by fourth/fifth place and the hardest questions.
 - **Post-Quiz Analytics & Dashboard** - Dive deep into session data, review question difficulty (automatically identifying the hardest questions), and analyze participant performance.
 - **Readable Response Boards** - Full answer text, response counts, and percentages remain visible without clipped chart labels.
-- **Presenter Mode** - A dedicated, full-screen view optimized for classroom projectors or remote screen sharing.
+- **Presenter Mode** - A dedicated, projector-safe display with a modern room lobby, live questions, momentum highlights, results, and an animated finale.
 - **Premium, Mobile-Optimized UI** - Gradient backgrounds, circular timers, smooth animations, and a smart mobile interface for participants.
 - **Multi-session Support** - Host multiple concurrent quiz sessions seamlessly with unique Kahoot-style 6-character codes.
 - **Rich Markdown & Code Highlighting** - Format questions and answers with bold, italics, lists, and syntax-highlighted code blocks (`highlight.js`).
