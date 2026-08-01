@@ -457,19 +457,26 @@ pm2 save
 | `GUEST_TRIAL_STARTS_PER_IP_HOUR` | No | `5` | Trial starts allowed per IP each hour |
 | `HOSTED_MODE` | No | `false` | Enables hosted-service room guardrails; leave disabled for unrestricted self-hosting |
 | `HOSTED_MAX_PARTICIPANTS` | No | `50` | Participant limit for persistent rooms when `HOSTED_MODE=true` |
+| `HOSTED_INVITE_TTL_HOURS` | No | `72` | Lifetime of a master-created one-time instructor setup link; capped at 168 hours |
 | `STRIPE_BILLING_ENABLED` | No | `false` | Enables annual hosted billing and subscription entitlements after all Stripe values are configured |
 | `STRIPE_SECRET_KEY` | When billing is enabled | - | Stripe secret or restricted server key; store only in encrypted deployment settings |
 | `STRIPE_WEBHOOK_SECRET` | When billing is enabled | - | Signing secret for this deployment's `/api/stripe/webhook` endpoint |
 | `STRIPE_PRICE_ID` | When billing is enabled | - | Recurring yearly $15 USD Price for the Markdown Mash Hosted Product |
-| `APP_BASE_URL` | When billing is enabled | - | Public application origin used for Stripe return URLs; HTTPS is required in production |
+| `APP_BASE_URL` | For hosted invitations or billing | Request origin | Public application origin used for invitation links and Stripe return URLs; use HTTPS in production |
 | `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
-The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. Hosted instructors sign in with a verified, normalized email address; account lifecycle changes are checked on every authenticated API request and Socket.IO connection. Public account creation remains disabled until the Stripe provisioning flow is enabled.
+The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. Hosted instructors sign in with a verified, normalized email address; account lifecycle changes are checked on every authenticated API request and Socket.IO connection. Public account creation remains disabled: the deployment master provisions each beta instructor from **Settings → Instructors**.
 
 The database-backed `master` account keeps the deployment-password login and is exempt from both hosted room guardrails. Self-hosted operators can leave `HOSTED_MODE=false` to retain the single-admin deployment login and unrestricted persistent rooms.
 
 An open room is a database session with `created` or `active` status. Ending, recovering, or deleting that room releases the hosted slot. Room creation uses a transaction-scoped PostgreSQL advisory lock, so simultaneous launch requests cannot bypass the limit even if the service later runs in more than one process.
+
+### Hosted Instructor Invitations
+
+In hosted mode, sign in as the deployment master, open **Settings → Instructors**, enter the instructor's name and email, and create a setup link. Copy and share that link directly with the intended instructor. The raw one-time token is returned only in the URL fragment and is never stored in the database; PostgreSQL stores its SHA-256 digest. Activating the link sets the instructor's password, verifies the invited email, and consumes every outstanding link for that account atomically. Creating a replacement link invalidates the earlier one.
+
+Email delivery is intentionally manual during the invite-only beta. Set `APP_BASE_URL` to the canonical public HTTPS origin so generated links do not depend on the request host. The master account can list invitation and billing states but remains exempt from the 50-participant and one-open-room guardrails.
 
 ### Stripe Hosted Billing
 

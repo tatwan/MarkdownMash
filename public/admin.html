@@ -78,6 +78,7 @@
             <button type="submit" class="btn btn-primary btn-block btn-lg">Open instructor studio</button>
           </form>
           <p id="login-error" class="form-message error-text hidden" role="alert"></p>
+          <p id="login-success" class="status-message success hidden" role="status"></p>
           <p id="login-recovery-help" class="login-help"><a href="#" id="forgot-password-link">Forgot password?</a></p>
           <div id="trial-entry" class="trial-entry hidden">
             <div class="login-divider"><span>or explore first</span></div>
@@ -87,6 +88,35 @@
             </button>
             <p>No account needed · Temporary 20-minute room</p>
           </div>
+        </div>
+      </section>
+
+      <!-- One-time hosted account activation -->
+      <section id="invite-section" class="admin-login-wrap hidden">
+        <div class="admin-login-intro">
+          <p class="brand-kicker"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>You’re invited</p>
+          <h1>Set up your instructor account.</h1>
+          <p>Create your password once, then sign in whenever you are ready to run a room.</p>
+        </div>
+        <div class="card admin-login-card">
+          <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg></div>
+          <p class="section-eyebrow">Markdown Mash Hosted</p>
+          <h2 id="invite-heading">Checking invitation…</h2>
+          <p id="invite-account-copy" class="text-muted">Please wait while we securely verify this one-time link.</p>
+          <form id="invite-activation-form" class="hidden">
+            <div class="form-group">
+              <label for="invite-password">Create password</label>
+              <input type="password" id="invite-password" minlength="12" maxlength="72" autocomplete="new-password" required>
+              <p class="login-field-help">Use at least 12 characters. A short phrase is easy to remember and hard to guess.</p>
+            </div>
+            <div class="form-group">
+              <label for="invite-confirm-password">Confirm password</label>
+              <input type="password" id="invite-confirm-password" minlength="12" maxlength="72" autocomplete="new-password" required>
+            </div>
+            <button id="activate-invite-btn" type="submit" class="btn btn-primary btn-block btn-lg">Activate instructor account</button>
+          </form>
+          <p id="invite-status" class="status-message hidden" role="alert"></p>
+          <p class="login-help"><a href="/admin.html" id="invite-sign-in-link">Return to sign in</a></p>
         </div>
       </section>
 
@@ -394,6 +424,7 @@
         <div class="settings-tabs">
           <button class="settings-tab active" data-tab="password">Password</button>
           <button class="settings-tab hidden" data-tab="billing">Billing</button>
+          <button class="settings-tab hidden" data-tab="instructors">Instructors</button>
           <button class="settings-tab" data-tab="security">Security Questions</button>
           <button class="settings-tab" data-tab="email">Email</button>
         </div>
@@ -416,6 +447,40 @@
             <button type="submit" class="btn btn-primary btn-block">Update Password</button>
           </form>
           <p id="password-status" class="status-message hidden"></p>
+        </div>
+
+        <!-- Hosted Instructor Invitations Tab -->
+        <div id="settings-instructors" class="settings-tab-content hidden">
+          <p class="section-eyebrow">Invite-only beta</p>
+          <h3>Hosted instructors</h3>
+          <p class="text-muted mb-4">Create a one-time setup link, then share it directly with the instructor. Links expire automatically.</p>
+          <form id="create-invitation-form">
+            <div class="form-group">
+              <label for="invitation-display-name">Instructor name</label>
+              <input type="text" id="invitation-display-name" maxlength="120" autocomplete="name" required>
+            </div>
+            <div class="form-group">
+              <label for="invitation-email">Instructor email</label>
+              <input type="email" id="invitation-email" maxlength="254" autocomplete="email" required>
+            </div>
+            <button id="create-invitation-btn" type="submit" class="btn btn-primary">Create invitation link</button>
+          </form>
+          <div id="invitation-result" class="invitation-result hidden">
+            <label for="invitation-url">Copy this link now</label>
+            <div class="invitation-link-row">
+              <input type="text" id="invitation-url" readonly>
+              <button id="copy-invitation-btn" type="button" class="btn btn-secondary">Copy</button>
+            </div>
+            <p id="invitation-expiry" class="login-field-help"></p>
+          </div>
+          <p id="invitation-status" class="status-message hidden"></p>
+          <div class="instructor-list-heading">
+            <h3>Accounts</h3>
+            <button id="refresh-instructors-btn" type="button" class="btn btn-secondary btn-sm">Refresh</button>
+          </div>
+          <div id="instructor-list" class="instructor-list" aria-live="polite">
+            <p class="text-muted">Loading hosted instructors…</p>
+          </div>
         </div>
 
         <!-- Hosted Billing Tab -->

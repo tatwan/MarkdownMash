@@ -60,6 +60,13 @@ const {
   BillingRequestError,
   createStripeBillingService
 } = require('./stripe-billing');
+const {
+  buildInvitationUrl,
+  getInvitationPasswordError,
+  invitationExpiry,
+  maskEmail,
+  resolveInviteTtlHours
+} = require('./account-invitations');
 
 const app = express();
 const server = http.createServer(app);
@@ -132,6 +139,7 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || '';
 const APP_BASE_URL = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+const HOSTED_INVITE_TTL_HOURS = resolveInviteTtlHours(process.env.HOSTED_INVITE_TTL_HOURS);
 const GUEST_TRIAL_ENABLED = process.env.GUEST_TRIAL_ENABLED !== 'false';
 const GUEST_TRIAL_TTL_MINUTES = Math.max(
   5,
@@ -248,6 +256,28 @@ const billingSessionLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { success: false, error: 'Too many billing requests. Please try again shortly.' }
+});
+const invitationInspectLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many invitation requests. Please try again later.' }
+});
+const invitationActivateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: 'Too many activation attempts. Please try again later.' }
+});
+const invitationCreateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 50,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many invitation creations. Please try again later.' }
 });
 const guestQuizMarkdown = fs.readFileSync(
   path.join(__dirname, 'demo-quizzes', 'quick-wins.md'),
@@ -546,6 +576,13 @@ function adminPrincipal(admin) {
   };
 }
 
+function requireMaster(req, res, next) {
+  if (req.admin?.role !== 'master') {
+    return res.status(403).json({ success: false, error: 'Master account access is required' });
+  }
+  return next();
+}
+
 async function hostedBillingFailureForAdmin(admin) {
   const subscription = STRIPE_BILLING_ENABLED
     ? await db.getSubscriptionByAccountId(admin.id)
@@ -662,6 +699,8 @@ app.use('/api/admin', (req, res, next) => {
   const publicAdminPaths = new Set([
     '/auth/config',
     '/login',
+    '/invite/inspect',
+    '/invite/activate',
     '/recovery/questions',
     '/recovery/verify'
   ]);
@@ -679,6 +718,7 @@ app.get('/api/admin/auth/config', (req, res) => {
     hostedMode: HOSTED_MODE,
     emailLogin: HOSTED_MODE,
     publicSignup: false,
+    invitationActivation: HOSTED_MODE,
     billingEnabled: STRIPE_BILLING_ENABLED,
     hostedPlan: {
       name: 'Markdown Mash Hosted',
@@ -687,6 +727,160 @@ app.get('/api/admin/auth/config', (req, res) => {
       interval: 'year'
     }
   });
+});
+
+app.post('/api/admin/invite/inspect', invitationInspectLimiter, async (req, res) => {
+  if (!HOSTED_MODE) {
+    return res.status(404).json({ success: false, error: 'Hosted invitations are not enabled' });
+  }
+  const token = typeof req.body?.token === 'string' ? req.body.token : '';
+  if (token.length < 32 || token.length > 256) {
+    return res.status(404).json({ success: false, error: 'This invitation is invalid or expired' });
+  }
+
+  try {
+    const invitation = await db.getHostedAccountInvitation(hashOpaqueToken(token));
+    if (!invitation) {
+      return res.status(404).json({ success: false, error: 'This invitation is invalid or expired' });
+    }
+    return res.json({
+      success: true,
+      invitation: {
+        displayName: invitation.display_name,
+        maskedEmail: maskEmail(invitation.email),
+        expiresAt: invitation.expires_at
+      }
+    });
+  } catch (error) {
+    console.error('Invitation inspection error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to inspect this invitation' });
+  }
+});
+
+app.post('/api/admin/invite/activate', invitationActivateLimiter, async (req, res) => {
+  if (!HOSTED_MODE) {
+    return res.status(404).json({ success: false, error: 'Hosted invitations are not enabled' });
+  }
+  const token = typeof req.body?.token === 'string' ? req.body.token : '';
+  const password = req.body?.password;
+  if (token.length < 32 || token.length > 256) {
+    return res.status(404).json({ success: false, error: 'This invitation is invalid or expired' });
+  }
+  const passwordError = getInvitationPasswordError(password);
+  if (passwordError) {
+    return res.status(400).json({ success: false, error: passwordError });
+  }
+
+  try {
+    // Hashing before token lookup keeps invalid-token attempts computationally expensive.
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const activated = await db.activateHostedAccountInvitation({
+      tokenHash: hashOpaqueToken(token),
+      passwordHash
+    });
+    if (!activated) {
+      return res.status(404).json({ success: false, error: 'This invitation is invalid or expired' });
+    }
+    try {
+      await db.logActivity(activated.account_id, 'hosted_account_activated', {}, req.ip);
+    } catch (auditError) {
+      console.error('Invitation activation audit error:', auditError);
+    }
+    return res.json({
+      success: true,
+      email: activated.email,
+      message: 'Your hosted instructor account is ready.'
+    });
+  } catch (error) {
+    console.error('Invitation activation error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to activate this invitation' });
+  }
+});
+
+app.post(
+  '/api/admin/invitations',
+  requireMaster,
+  invitationCreateLimiter,
+  async (req, res) => {
+    if (!HOSTED_MODE) {
+      return res.status(404).json({ success: false, error: 'Hosted invitations are not enabled' });
+    }
+
+    const email = normalizeEmail(req.body?.email);
+    const displayName = String(req.body?.displayName || '').trim();
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, error: 'Enter a valid instructor email' });
+    }
+    if (!displayName || displayName.length > 120) {
+      return res.status(400).json({ success: false, error: 'Display name is required and must be 120 characters or fewer' });
+    }
+
+    try {
+      const token = createOpaqueToken();
+      const placeholderPasswordHash = await bcrypt.hash(createOpaqueToken(), SALT_ROUNDS);
+      const result = await db.createHostedAccountInvitation({
+        email,
+        displayName,
+        username: `hosted_${crypto.randomUUID()}`,
+        passwordHash: placeholderPasswordHash,
+        tokenHash: hashOpaqueToken(token),
+        expiresAt: invitationExpiry(HOSTED_INVITE_TTL_HOURS),
+        createdBy: req.admin.id
+      });
+      const baseUrl = APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+      const inviteUrl = buildInvitationUrl(baseUrl, token);
+      try {
+        await db.logActivity(req.admin.id, 'hosted_invitation_created', {
+          accountId: result.account.id,
+          email
+        }, req.ip);
+      } catch (auditError) {
+        console.error('Invitation creation audit error:', auditError);
+      }
+
+      return res.status(201).json({
+        success: true,
+        invitation: {
+          accountId: result.account.id,
+          displayName: result.account.display_name,
+          email: result.account.email,
+          expiresAt: result.invitation.expires_at,
+          inviteUrl
+        }
+      });
+    } catch (error) {
+      if (error.code === 'ACCOUNT_ALREADY_EXISTS' || error.code === '23505') {
+        return res.status(409).json({ success: false, error: 'An instructor account already uses this email address' });
+      }
+      console.error('Invitation creation error:', error);
+      return res.status(500).json({ success: false, error: 'Unable to create this invitation' });
+    }
+  }
+);
+
+app.get('/api/admin/instructors', requireMaster, async (req, res) => {
+  try {
+    const instructors = await db.listHostedInstructors();
+    return res.json({
+      success: true,
+      instructors: instructors.map(instructor => ({
+        id: instructor.id,
+        email: instructor.email,
+        displayName: instructor.display_name,
+        accountStatus: instructor.account_status,
+        emailVerified: Boolean(instructor.email_verified_at),
+        subscriptionStatus: instructor.subscription_status,
+        currentPeriodEnd: instructor.current_period_end,
+        cancelAtPeriodEnd: instructor.cancel_at_period_end,
+        invitationExpiresAt: instructor.invitation_expires_at,
+        invitationUsedAt: instructor.invitation_used_at,
+        createdAt: instructor.created_at
+      }))
+    });
+  } catch (error) {
+    console.error('Hosted instructor list error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to load hosted instructors' });
+  }
 });
 
 app.get('/api/admin/billing', async (req, res) => {

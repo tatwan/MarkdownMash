@@ -30,5 +30,7 @@ services:
         value: "true"
       - key: HOSTED_MAX_PARTICIPANTS
         value: "50"
+      - key: HOSTED_INVITE_TTL_HOURS
+        value: "72"
       - key: STRIPE_BILLING_ENABLED
         value: "false"

@@ -2,9 +2,11 @@ const markdown = MarkdownMashMarkdown;
 
 // DOM Elements
 const loginSection = document.getElementById('login-section');
+const inviteSection = document.getElementById('invite-section');
 const dashboardSection = document.getElementById('dashboard-section');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
+const loginSuccess = document.getElementById('login-success');
 const forgotPasswordLink = document.getElementById('forgot-password-link');
 const loginEmailField = document.getElementById('login-email-field');
 const loginEmail = document.getElementById('login-email');
@@ -36,6 +38,7 @@ const settingsTabs = document.querySelectorAll('.settings-tab');
 const changePasswordForm = document.getElementById('change-password-form');
 const securityQuestionsForm = document.getElementById('security-questions-form');
 const emailForm = document.getElementById('email-form');
+const createInvitationForm = document.getElementById('create-invitation-form');
 
 // Recovery elements
 const recoveryModal = document.getElementById('recovery-modal');
@@ -50,6 +53,14 @@ let currentAdmin = storedTrialToken
   : JSON.parse(localStorage.getItem('currentAdmin') || 'null');
 let hostedAuthMode = false;
 let billingEnabled = false;
+let invitationActivationEnabled = false;
+let hostedInvitationToken = (() => {
+  try {
+    return new URLSearchParams(window.location.hash.slice(1)).get('invite');
+  } catch (error) {
+    return null;
+  }
+})();
 
 const uploadSection = document.getElementById('upload-section');
 const quizMarkdown = document.getElementById('quiz-markdown');
@@ -253,6 +264,7 @@ function sessionApiPath(suffix = '') {
 
 function showAuthenticatedWorkspace() {
   loginSection.classList.add('hidden');
+  inviteSection?.classList.add('hidden');
   dashboardSection.classList.remove('hidden');
   logoutBtn.classList.remove('hidden');
 
@@ -286,6 +298,8 @@ function configureInstructorWorkspace() {
     && currentAdmin.role !== 'master';
   const billingTab = document.querySelector('.settings-tab[data-tab="billing"]');
   billingTab?.classList.toggle('hidden', !hostedInstructor || !billingEnabled);
+  const instructorTab = document.querySelector('.settings-tab[data-tab="instructors"]');
+  instructorTab?.classList.toggle('hidden', !(hostedAuthMode && currentAdmin?.role === 'master'));
   document.querySelector('.settings-tab[data-tab="security"]')?.classList.toggle('hidden', hostedInstructor);
   document.querySelector('.settings-tab[data-tab="email"]')?.classList.toggle('hidden', hostedInstructor);
 }
@@ -378,9 +392,11 @@ async function loadAuthConfig() {
     const data = await response.json();
     hostedAuthMode = Boolean(data.hostedMode && data.emailLogin);
     billingEnabled = Boolean(data.billingEnabled);
+    invitationActivationEnabled = Boolean(data.invitationActivation);
   } catch (error) {
     hostedAuthMode = false;
     billingEnabled = false;
+    invitationActivationEnabled = false;
   }
 
   loginEmailField.classList.toggle('hidden', !hostedAuthMode);
@@ -399,12 +415,99 @@ async function loadAuthConfig() {
 
 const authConfigReady = loadAuthConfig();
 
+async function initializeInviteActivation() {
+  if (!hostedInvitationToken) return;
+  await authConfigReady;
+
+  loginSection.classList.add('hidden');
+  inviteSection.classList.remove('hidden');
+  const heading = document.getElementById('invite-heading');
+  const accountCopy = document.getElementById('invite-account-copy');
+  const form = document.getElementById('invite-activation-form');
+
+  if (!invitationActivationEnabled) {
+    heading.textContent = 'Invitations are not enabled';
+    accountCopy.textContent = 'This deployment is not accepting hosted account invitations.';
+    showStatus('invite-status', 'Ask the person who shared this link to check the deployment.', false);
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/admin/invite/inspect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: hostedInvitationToken })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'This invitation is invalid or expired');
+
+    heading.textContent = `Welcome, ${data.invitation.displayName}`;
+    accountCopy.textContent = `${data.invitation.maskedEmail} · Link expires ${billingDate(data.invitation.expiresAt)}`;
+    form.classList.remove('hidden');
+    document.getElementById('invite-password').focus({ preventScroll: true });
+  } catch (error) {
+    heading.textContent = 'This invitation cannot be used';
+    accountCopy.textContent = 'It may have expired, already been activated, or been replaced by a newer link.';
+    showStatus('invite-status', error.message, false);
+  }
+}
+
+document.getElementById('invite-activation-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const password = document.getElementById('invite-password').value;
+  const confirmation = document.getElementById('invite-confirm-password').value;
+  const button = document.getElementById('activate-invite-btn');
+
+  if (password !== confirmation) {
+    showStatus('invite-status', 'Passwords do not match', false);
+    return;
+  }
+  if (password.length < 12) {
+    showStatus('invite-status', 'Password must be at least 12 characters', false);
+    return;
+  }
+  if (new TextEncoder().encode(password).length > 72) {
+    showStatus('invite-status', 'Password must be 72 bytes or fewer', false);
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Activating…';
+  hideStatus('invite-status');
+  try {
+    const response = await fetch('/api/admin/invite/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: hostedInvitationToken, password })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Unable to activate this invitation');
+
+    hostedInvitationToken = null;
+    window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}`);
+    inviteSection.classList.add('hidden');
+    loginSection.classList.remove('hidden');
+    loginEmail.value = data.email;
+    passwordInput.value = '';
+    loginSuccess.textContent = data.message;
+    loginSuccess.classList.remove('hidden');
+    passwordInput.focus({ preventScroll: true });
+  } catch (error) {
+    showStatus('invite-status', error.message, false);
+    button.disabled = false;
+    button.textContent = 'Activate instructor account';
+  }
+});
+
+initializeInviteActivation();
+
 // Login
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   await authConfigReady;
   const password = passwordInput.value;
   const email = hostedAuthMode ? loginEmail.value.trim() : '';
+  loginSuccess.classList.add('hidden');
 
   try {
     const res = await fetch('/api/admin/login', {
@@ -477,6 +580,7 @@ tryItOutBtn?.addEventListener('click', async () => {
 // Check for existing valid token on page load
 async function checkExistingAuth() {
   await authConfigReady;
+  if (hostedInvitationToken) return;
   if (!authToken) return;
 
   if (isTrialMode() || sessionStorage.getItem('trialToken')) {
@@ -549,6 +653,7 @@ function logout() {
   localStorage.removeItem('authToken');
   localStorage.removeItem('currentAdmin');
   loginSection.classList.remove('hidden');
+  inviteSection?.classList.add('hidden');
   dashboardSection.classList.add('hidden');
   analyticsBtn.classList.add('hidden');
   settingsBtn.classList.add('hidden');
@@ -1970,6 +2075,9 @@ function truncateText(text, maxLength) {
 function openSettings() {
   settingsModal.classList.remove('hidden');
   loadAdminSettings();
+  if (hostedAuthMode && currentAdmin?.role === 'master') {
+    loadHostedInstructors();
+  }
   if (billingEnabled
     && hostedAuthMode
     && currentAdmin?.authSource === 'hosted'
@@ -1991,6 +2099,7 @@ function switchSettingsTab(tabName) {
   });
   document.getElementById('settings-password').classList.toggle('hidden', tabName !== 'password');
   document.getElementById('settings-billing').classList.toggle('hidden', tabName !== 'billing');
+  document.getElementById('settings-instructors').classList.toggle('hidden', tabName !== 'instructors');
   document.getElementById('settings-security').classList.toggle('hidden', tabName !== 'security');
   document.getElementById('settings-email').classList.toggle('hidden', tabName !== 'email');
 }
@@ -2064,6 +2173,101 @@ async function openStripeBilling(path, button) {
   }
 }
 
+function createInstructorAccountRow(instructor) {
+  const row = document.createElement('div');
+  row.className = 'instructor-account-row';
+
+  const identity = document.createElement('div');
+  const name = document.createElement('strong');
+  name.textContent = instructor.displayName || 'Hosted instructor';
+  const email = document.createElement('span');
+  email.className = 'text-muted';
+  email.textContent = instructor.email;
+  identity.append(name, email);
+
+  const meta = document.createElement('div');
+  meta.className = 'instructor-account-meta';
+  const accountStatus = document.createElement('span');
+  const invitationExpired = instructor.invitationExpiresAt
+    && new Date(instructor.invitationExpiresAt).getTime() <= Date.now();
+  accountStatus.textContent = instructor.emailVerified
+    ? instructor.accountStatus.replaceAll('_', ' ')
+    : invitationExpired
+      ? 'Invitation expired'
+      : 'Invitation pending';
+  const billingStatus = document.createElement('span');
+  billingStatus.textContent = `Billing: ${(instructor.subscriptionStatus || 'not subscribed').replaceAll('_', ' ')}`;
+  meta.append(accountStatus, billingStatus);
+
+  row.append(identity, meta);
+  return row;
+}
+
+async function loadHostedInstructors() {
+  const list = document.getElementById('instructor-list');
+  if (!list || currentAdmin?.role !== 'master') return;
+  list.replaceChildren();
+  const loading = document.createElement('p');
+  loading.className = 'text-muted';
+  loading.textContent = 'Loading hosted instructors…';
+  list.appendChild(loading);
+
+  try {
+    const response = await authFetch('/api/admin/instructors');
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Unable to load hosted instructors');
+
+    list.replaceChildren();
+    if (!data.instructors.length) {
+      const empty = document.createElement('p');
+      empty.className = 'text-muted';
+      empty.textContent = 'No hosted instructor accounts yet.';
+      list.appendChild(empty);
+      return;
+    }
+    data.instructors.forEach(instructor => list.appendChild(createInstructorAccountRow(instructor)));
+  } catch (error) {
+    list.replaceChildren();
+    const message = document.createElement('p');
+    message.className = 'error-text';
+    message.textContent = error.message;
+    list.appendChild(message);
+  }
+}
+
+createInvitationForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const displayName = document.getElementById('invitation-display-name').value.trim();
+  const email = document.getElementById('invitation-email').value.trim();
+  const button = document.getElementById('create-invitation-btn');
+  const result = document.getElementById('invitation-result');
+
+  button.disabled = true;
+  button.textContent = 'Creating…';
+  result.classList.add('hidden');
+  hideStatus('invitation-status');
+  try {
+    const response = await authFetch('/api/admin/invitations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName, email })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Unable to create invitation');
+
+    document.getElementById('invitation-url').value = data.invitation.inviteUrl;
+    document.getElementById('invitation-expiry').textContent = `Expires ${billingDate(data.invitation.expiresAt)}. Creating another link for this email invalidates this one.`;
+    result.classList.remove('hidden');
+    showStatus('invitation-status', `Invitation ready for ${data.invitation.email}`, true);
+    await loadHostedInstructors();
+  } catch (error) {
+    showStatus('invitation-status', error.message, false);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Create invitation link';
+  }
+});
+
 // Load admin settings
 async function loadAdminSettings() {
   try {
@@ -2094,6 +2298,8 @@ function clearSettingsForms() {
   hideStatus('security-status');
   hideStatus('email-status');
   hideStatus('billing-status-message');
+  hideStatus('invitation-status');
+  document.getElementById('invitation-result')?.classList.add('hidden');
 }
 
 // Show status message
@@ -2132,6 +2338,12 @@ document.getElementById('start-subscription-btn')?.addEventListener('click', (ev
 document.getElementById('manage-billing-btn')?.addEventListener('click', (event) => {
   openStripeBilling('/api/admin/billing/portal', event.currentTarget);
 });
+
+document.getElementById('copy-invitation-btn')?.addEventListener('click', (event) => {
+  copyText(document.getElementById('invitation-url').value, event.currentTarget, 'Copied');
+});
+
+document.getElementById('refresh-instructors-btn')?.addEventListener('click', loadHostedInstructors);
 
 // Change password form
 changePasswordForm.addEventListener('submit', async (e) => {
