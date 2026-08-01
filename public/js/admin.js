@@ -6,6 +6,14 @@ const dashboardSection = document.getElementById('dashboard-section');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
 const forgotPasswordLink = document.getElementById('forgot-password-link');
+const loginEmailField = document.getElementById('login-email-field');
+const loginEmail = document.getElementById('login-email');
+const loginAccountContext = document.getElementById('login-account-context');
+const loginAccountTitle = document.getElementById('login-account-title');
+const loginAccountDetail = document.getElementById('login-account-detail');
+const loginRecoveryHelp = document.getElementById('login-recovery-help');
+const passwordInput = document.getElementById('password');
+const passwordHelp = document.getElementById('password-help');
 const trialEntry = document.getElementById('trial-entry');
 const tryItOutBtn = document.getElementById('try-it-out-btn');
 const trialBanner = document.getElementById('trial-banner');
@@ -40,6 +48,7 @@ let authToken = storedTrialToken || localStorage.getItem('authToken');
 let currentAdmin = storedTrialToken
   ? JSON.parse(sessionStorage.getItem('trialPrincipal') || 'null')
   : JSON.parse(localStorage.getItem('currentAdmin') || 'null');
+let hostedAuthMode = false;
 
 const uploadSection = document.getElementById('upload-section');
 const quizMarkdown = document.getElementById('quiz-markdown');
@@ -270,6 +279,10 @@ function configureInstructorWorkspace() {
   builderCardHeading.textContent = 'Quiz Markdown';
   builderCardDescription.textContent = 'Questions, options, timers and scoring stay in one readable file.';
   uploadBtnLabel.textContent = 'Load quiz';
+
+  const hostedInstructor = hostedAuthMode && currentAdmin?.role !== 'master';
+  document.querySelector('.settings-tab[data-tab="security"]')?.classList.toggle('hidden', hostedInstructor);
+  document.querySelector('.settings-tab[data-tab="email"]')?.classList.toggle('hidden', hostedInstructor);
 }
 
 function configureTrialWorkspace(data) {
@@ -354,16 +367,43 @@ async function loadTrialAvailability() {
 
 loadTrialAvailability();
 
+async function loadAuthConfig() {
+  try {
+    const response = await fetch('/api/admin/auth/config');
+    const data = await response.json();
+    hostedAuthMode = Boolean(data.hostedMode && data.emailLogin);
+  } catch (error) {
+    hostedAuthMode = false;
+  }
+
+  loginEmailField.classList.toggle('hidden', !hostedAuthMode);
+  loginRecoveryHelp.classList.toggle('hidden', hostedAuthMode);
+  loginAccountContext.setAttribute(
+    'aria-label',
+    hostedAuthMode ? 'Account type: hosted instructor account' : 'Account type: single-admin deployment'
+  );
+  loginAccountTitle.textContent = hostedAuthMode ? 'Markdown Mash Hosted' : 'Instructor workspace';
+  loginAccountDetail.textContent = hostedAuthMode ? 'Email-secured instructor account' : 'Single-admin deployment';
+  passwordInput.placeholder = hostedAuthMode ? 'Enter your account password' : 'Enter the deployment password';
+  passwordHelp.textContent = hostedAuthMode
+    ? 'Use the password for your Markdown Mash Hosted account.'
+    : 'Use the password configured for this Markdown Mash deployment.';
+}
+
+const authConfigReady = loadAuthConfig();
+
 // Login
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const password = document.getElementById('password').value;
+  await authConfigReady;
+  const password = passwordInput.value;
+  const email = hostedAuthMode ? loginEmail.value.trim() : '';
 
   try {
     const res = await fetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
+      body: JSON.stringify({ password, email })
     });
 
     const data = await res.json();
@@ -379,7 +419,8 @@ loginForm.addEventListener('submit', async (e) => {
       showAuthenticatedWorkspace();
 
       // If first login or no security questions, prompt to set them
-      if (data.isFirstLogin || !data.admin.hasSecurityQuestions) {
+      if (data.admin.authSource !== 'hosted'
+        && (data.isFirstLogin || !data.admin.hasSecurityQuestions)) {
         setTimeout(() => {
           alert('Welcome! Please set up security questions in Settings for password recovery.');
           openSettings();
@@ -428,6 +469,7 @@ tryItOutBtn?.addEventListener('click', async () => {
 
 // Check for existing valid token on page load
 async function checkExistingAuth() {
+  await authConfigReady;
   if (!authToken) return;
 
   if (isTrialMode() || sessionStorage.getItem('trialToken')) {
@@ -509,7 +551,8 @@ function logout() {
   configureInstructorWorkspace();
 
   // Clear password field
-  document.getElementById('password').value = '';
+  passwordInput.value = '';
+  loginEmail.value = '';
 }
 
 // Logout button click

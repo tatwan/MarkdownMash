@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const dns = require('dns');
 const { assertHostedRoomAvailable } = require('./hosted-room-guard');
+const { normalizeEmail } = require('./account-identity');
 
 // Force IPv4 to avoid IPv6 connection issues
 dns.setDefaultResultOrder('ipv4first');
@@ -59,8 +60,13 @@ async function initializeDatabase(retries = 5, delay = 3000) {
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         email TEXT,
+        email_verified_at TIMESTAMPTZ,
         display_name TEXT,
         role TEXT DEFAULT 'admin',
+        account_status TEXT NOT NULL DEFAULT 'active'
+          CHECK (account_status IN ('invited', 'active', 'past_due', 'suspended', 'deleted')),
+        auth_source TEXT NOT NULL DEFAULT 'deployment'
+          CHECK (auth_source IN ('deployment', 'hosted')),
         security_question_1 TEXT,
         security_answer_1 TEXT,
         security_question_2 TEXT,
@@ -174,6 +180,19 @@ async function runMigrations(client) {
     {
       check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'participants' AND column_name = 'avatar_id'",
       migrate: "ALTER TABLE participants ADD COLUMN avatar_id TEXT"
+    },
+    // Hosted account lifecycle and identity fields
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'email_verified_at'",
+      migrate: "ALTER TABLE admins ADD COLUMN email_verified_at TIMESTAMPTZ"
+    },
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'account_status'",
+      migrate: "ALTER TABLE admins ADD COLUMN account_status TEXT NOT NULL DEFAULT 'active' CHECK (account_status IN ('invited', 'active', 'past_due', 'suspended', 'deleted'))"
+    },
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'auth_source'",
+      migrate: "ALTER TABLE admins ADD COLUMN auth_source TEXT NOT NULL DEFAULT 'deployment' CHECK (auth_source IN ('deployment', 'hosted'))"
     }
   ];
 
@@ -197,6 +216,11 @@ async function runMigrations(client) {
       CREATE INDEX IF NOT EXISTS idx_sessions_open_owner
       ON sessions(owner_id, created_at DESC)
       WHERE owner_id IS NOT NULL AND status IN ('created', 'active')
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_email_normalized
+      ON admins(LOWER(email))
+      WHERE email IS NOT NULL
     `);
   } catch (err) {
     // Ignore
@@ -556,6 +580,16 @@ const dbApi = {
     return result.rows[0] || null;
   },
 
+  async getAdminByEmail(email) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) return null;
+    const result = await pool.query(
+      'SELECT * FROM admins WHERE LOWER(email) = $1 LIMIT 1',
+      [normalizedEmail]
+    );
+    return result.rows[0] || null;
+  },
+
   async getAdminById(id) {
     const result = await pool.query('SELECT * FROM admins WHERE id = $1', [id]);
     return result.rows[0] || null;
@@ -566,12 +600,36 @@ const dbApi = {
     return result.rows[0] || null;
   },
 
-  async createAdmin({ username, passwordHash, email, displayName, role, createdBy }) {
+  async createAdmin({
+    username,
+    passwordHash,
+    email,
+    emailVerifiedAt = null,
+    displayName,
+    role,
+    accountStatus = 'active',
+    authSource = 'deployment',
+    createdBy
+  }) {
     const result = await pool.query(
-      `INSERT INTO admins (username, password_hash, email, display_name, role, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, username, email, display_name, role, created_at`,
-      [username, passwordHash, email, displayName, role || 'admin', createdBy]
+      `INSERT INTO admins (
+         username, password_hash, email, email_verified_at, display_name, role,
+         account_status, auth_source, created_by
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, username, email, email_verified_at, display_name, role,
+                 account_status, auth_source, created_at`,
+      [
+        username,
+        passwordHash,
+        normalizeEmail(email),
+        emailVerifiedAt,
+        displayName,
+        role || 'admin',
+        accountStatus,
+        authSource,
+        createdBy
+      ]
     );
     return result.rows[0];
   },
@@ -596,8 +654,17 @@ const dbApi = {
 
   async updateAdminEmail(adminId, email) {
     return pool.query(
-      'UPDATE admins SET email = $1, updated_at = NOW() WHERE id = $2',
-      [email, adminId]
+      `UPDATE admins
+       SET email = $1, email_verified_at = NULL, updated_at = NOW()
+       WHERE id = $2`,
+      [normalizeEmail(email), adminId]
+    );
+  },
+
+  async markAdminEmailVerified(adminId, verifiedAt = new Date()) {
+    return pool.query(
+      'UPDATE admins SET email_verified_at = $1, updated_at = NOW() WHERE id = $2',
+      [verifiedAt, adminId]
     );
   },
 

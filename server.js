@@ -46,6 +46,11 @@ const {
   HOSTED_ROOM_LIMIT_CODE,
   shouldEnforceSingleOpenRoom
 } = require('./hosted-room-guard');
+const {
+  getAccountAuthenticationFailure,
+  isValidEmail,
+  normalizeEmail
+} = require('./account-identity');
 
 const app = express();
 const server = http.createServer(app);
@@ -186,7 +191,9 @@ const trialManager = createTrialManager({
 // ============================================
 // JWT AUTHENTICATION MIDDLEWARE
 // ============================================
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
+  if (req.admin?.id) return next();
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
@@ -194,28 +201,27 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, admin) => {
-    if (err || !admin?.id || admin.type === 'trial') {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (!payload?.id || payload.type === 'trial') {
       return res.status(403).json({ success: false, error: 'Invalid or expired token' });
     }
-    req.admin = admin;
-    next();
-  });
-}
 
-// Optional auth - doesn't fail, just attaches admin if valid token
-function optionalAuth(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+    const account = await db.getAdminById(payload.id);
+    const failure = getAccountAuthenticationFailure(account, { hostedMode: HOSTED_MODE });
+    if (failure) {
+      return res.status(403).json({
+        success: false,
+        code: failure.code,
+        error: failure.message
+      });
+    }
 
-  if (token) {
-    jwt.verify(token, JWT_SECRET, (err, admin) => {
-      if (!err) {
-        req.admin = admin;
-      }
-    });
+    req.admin = adminPrincipal(account);
+    return next();
+  } catch (error) {
+    return res.status(403).json({ success: false, error: 'Invalid or expired token' });
   }
-  next();
 }
 
 // ============================================
@@ -462,7 +468,9 @@ function adminPrincipal(admin) {
     type: 'admin',
     id: admin.id,
     role: admin.role,
-    username: admin.username
+    username: admin.username,
+    accountStatus: admin.account_status || admin.accountStatus || 'active',
+    authSource: admin.auth_source || admin.authSource || 'deployment'
   };
 }
 
@@ -568,6 +576,7 @@ trialCleanupInterval.unref();
 // Every instructor route requires a real admin token except login and recovery.
 app.use('/api/admin', (req, res, next) => {
   const publicAdminPaths = new Set([
+    '/auth/config',
     '/login',
     '/recovery/questions',
     '/recovery/verify'
@@ -579,6 +588,15 @@ app.use('/api/admin', (req, res, next) => {
 // ============================================
 // REST API ENDPOINTS
 // ============================================
+
+app.get('/api/admin/auth/config', (req, res) => {
+  res.json({
+    success: true,
+    hostedMode: HOSTED_MODE,
+    emailLogin: HOSTED_MODE,
+    publicSignup: false
+  });
+});
 
 app.get('/api/trial/config', (req, res) => {
   res.json({
@@ -742,14 +760,29 @@ app.get(
 
 // Admin login
 app.post('/api/admin/login', loginLimiter, async (req, res) => {
-  const { password } = req.body;
+  const { password, email } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress;
 
   try {
-    // Check if master admin exists in database
-    let admin = await db.getMasterAdmin();
+    if (typeof password !== 'string' || !password) {
+      return res.status(400).json({ success: false, error: 'Password is required' });
+    }
+
+    const normalizedEmail = HOSTED_MODE ? normalizeEmail(email) : null;
+    if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ success: false, error: 'Enter a valid email address' });
+    }
+
+    // Hosted instructors authenticate by email. A blank email intentionally retains
+    // the deployment-master bootstrap path for self-hosting and operator access.
+    let admin = normalizedEmail
+      ? await db.getAdminByEmail(normalizedEmail)
+      : await db.getMasterAdmin();
 
     if (!admin) {
+      if (normalizedEmail) {
+        return res.status(401).json({ success: false, error: 'Invalid email or password' });
+      }
       if (!adminPassword || adminPassword.length < 12) {
         return res.status(503).json({
           success: false,
@@ -779,7 +812,17 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
         return res.json({
           success: true,
           token,
-          admin: { id: admin.id, username: admin.username, role: admin.role, displayName: admin.display_name },
+          admin: {
+            id: admin.id,
+            username: admin.username,
+            role: admin.role,
+            displayName: admin.display_name,
+            email: admin.email,
+            emailVerified: Boolean(admin.email_verified_at),
+            accountStatus: admin.account_status || 'active',
+            authSource: admin.auth_source || 'deployment',
+            hasSecurityQuestions: false
+          },
           isFirstLogin: true
         });
       } else {
@@ -806,7 +849,9 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
       if (attemptsLeft > 0) {
         return res.status(401).json({
           success: false,
-          error: `Invalid password. ${attemptsLeft} attempts remaining.`
+          error: normalizedEmail
+            ? 'Invalid email or password'
+            : `Invalid password. ${attemptsLeft} attempts remaining.`
         });
       } else {
         return res.status(429).json({
@@ -814,6 +859,15 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
           error: 'Account locked for 5 minutes due to too many failed attempts.'
         });
       }
+    }
+
+    const accountFailure = getAccountAuthenticationFailure(admin, { hostedMode: HOSTED_MODE });
+    if (accountFailure) {
+      return res.status(403).json({
+        success: false,
+        code: accountFailure.code,
+        error: accountFailure.message
+      });
     }
 
     // Successful login
@@ -838,6 +892,9 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
         role: admin.role,
         displayName: admin.display_name,
         email: admin.email,
+        emailVerified: Boolean(admin.email_verified_at),
+        accountStatus: admin.account_status || 'active',
+        authSource: admin.auth_source || 'deployment',
         hasSecurityQuestions
       }
     });
@@ -1284,6 +1341,9 @@ app.get('/api/admin/settings', authenticateToken, async (req, res) => {
         username: admin.username,
         displayName: admin.display_name,
         email: admin.email,
+        emailVerified: Boolean(admin.email_verified_at),
+        accountStatus: admin.account_status || 'active',
+        authSource: admin.auth_source || 'deployment',
         role: admin.role,
         hasSecurityQuestions: !!(admin.security_question_1 && admin.security_answer_1),
         securityQuestion1: admin.security_question_1 || null,
@@ -1340,6 +1400,13 @@ app.post('/api/admin/settings/security-questions', authenticateToken, async (req
   const { question1, answer1, question2, answer2 } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress;
 
+  if (HOSTED_MODE && req.admin.role !== 'master') {
+    return res.status(404).json({
+      success: false,
+      error: 'Hosted accounts use email-based recovery.'
+    });
+  }
+
   if (!question1 || !answer1 || !question2 || !answer2) {
     return res.status(400).json({ success: false, error: 'Both questions and answers are required' });
   }
@@ -1370,6 +1437,17 @@ app.post('/api/admin/settings/security-questions', authenticateToken, async (req
 app.post('/api/admin/settings/email', authenticateToken, async (req, res) => {
   const { email } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress;
+
+  if (HOSTED_MODE && req.admin.role !== 'master') {
+    return res.status(409).json({
+      success: false,
+      error: 'Hosted email changes require verification and are not available yet.'
+    });
+  }
+
+  if (email && !isValidEmail(email)) {
+    return res.status(400).json({ success: false, error: 'Enter a valid email address' });
+  }
 
   try {
     await db.updateAdminEmail(req.admin.id, email || null);
@@ -1893,7 +1971,7 @@ app.get(
 // ============================================
 // SOCKET.IO EVENTS
 // ============================================
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   socket.data.principal = { type: 'anonymous' };
 
@@ -1912,7 +1990,10 @@ io.use((socket, next) => {
       return next();
     }
     if (payload?.id && payload.type !== 'trial') {
-      socket.data.principal = adminPrincipal(payload);
+      const account = await db.getAdminById(payload.id);
+      const failure = getAccountAuthenticationFailure(account, { hostedMode: HOSTED_MODE });
+      if (failure) return next(new Error('Authentication expired'));
+      socket.data.principal = adminPrincipal(account);
       return next();
     }
   } catch (error) {

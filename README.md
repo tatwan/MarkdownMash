@@ -460,7 +460,9 @@ pm2 save
 | `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
-The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. The database-backed `master` account is exempt from both guardrails. Self-hosted operators can leave `HOSTED_MODE=false` for unrestricted persistent rooms.
+The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. Hosted instructors sign in with a verified, normalized email address; account lifecycle changes are checked on every authenticated API request and Socket.IO connection. Public account creation remains disabled until the Stripe provisioning flow is enabled.
+
+The database-backed `master` account keeps the deployment-password login and is exempt from both hosted room guardrails. Self-hosted operators can leave `HOSTED_MODE=false` to retain the single-admin deployment login and unrestricted persistent rooms.
 
 An open room is a database session with `created` or `active` status. Ending, recovering, or deleting that room releases the hosted slot. Room creation uses a transaction-scoped PostgreSQL advisory lock, so simultaneous launch requests cannot bypass the limit even if the service later runs in more than one process.
 

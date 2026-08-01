@@ -57,23 +57,28 @@
           <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg></div>
           <p class="section-eyebrow">Welcome back</p>
           <h2>Instructor sign in</h2>
-          <div class="login-account-context" aria-label="Account type: single-admin deployment">
+          <div id="login-account-context" class="login-account-context" aria-label="Account type: single-admin deployment">
             <span class="login-account-icon" aria-hidden="true">
               <svg><use href="/assets/icons.svg#check-circle"></use></svg>
             </span>
             <span class="login-account-copy">
-              <strong>Instructor workspace</strong>
-              <span>Single-admin deployment</span>
+              <strong id="login-account-title">Instructor workspace</strong>
+              <span id="login-account-detail">Single-admin deployment</span>
             </span>
           </div>
           <form id="login-form">
+            <div id="login-email-field" class="form-group hidden">
+              <label for="login-email">Instructor email</label>
+              <input type="email" id="login-email" placeholder="teacher@example.com" autocomplete="username">
+              <p class="login-field-help">Hosted instructors sign in by email. The deployment master may leave this blank.</p>
+            </div>
             <label for="password">Instructor password</label>
             <input type="password" id="password" placeholder="Enter the deployment password" aria-describedby="password-help" required autocomplete="current-password">
             <p id="password-help" class="login-field-help">Use the password configured for this Markdown Mash deployment.</p>
             <button type="submit" class="btn btn-primary btn-block btn-lg">Open instructor studio</button>
           </form>
           <p id="login-error" class="form-message error-text hidden" role="alert"></p>
-          <p class="login-help"><a href="#" id="forgot-password-link">Forgot password?</a></p>
+          <p id="login-recovery-help" class="login-help"><a href="#" id="forgot-password-link">Forgot password?</a></p>
           <div id="trial-entry" class="trial-entry hidden">
             <div class="login-divider"><span>or explore first</span></div>
             <button id="try-it-out-btn" type="button" class="btn btn-trial btn-block btn-lg">
