@@ -30,3 +30,5 @@ services:
         value: "true"
       - key: HOSTED_MAX_PARTICIPANTS
         value: "50"
+      - key: STRIPE_BILLING_ENABLED
+        value: "false"

@@ -393,6 +393,7 @@
         <!-- Settings Tabs -->
         <div class="settings-tabs">
           <button class="settings-tab active" data-tab="password">Password</button>
+          <button class="settings-tab hidden" data-tab="billing">Billing</button>
           <button class="settings-tab" data-tab="security">Security Questions</button>
           <button class="settings-tab" data-tab="email">Email</button>
         </div>
@@ -415,6 +416,25 @@
             <button type="submit" class="btn btn-primary btn-block">Update Password</button>
           </form>
           <p id="password-status" class="status-message hidden"></p>
+        </div>
+
+        <!-- Hosted Billing Tab -->
+        <div id="settings-billing" class="settings-tab-content hidden">
+          <div class="billing-plan-card">
+            <div>
+              <p class="section-eyebrow">One simple plan</p>
+              <h3>Markdown Mash Hosted</h3>
+              <p id="billing-plan-details" class="text-muted">$15 USD per year · one open room at a time</p>
+            </div>
+            <span id="billing-status-badge" class="billing-status-badge">Checking…</span>
+          </div>
+          <p id="billing-period-copy" class="text-muted billing-period-copy"></p>
+          <div class="billing-actions">
+            <button id="start-subscription-btn" type="button" class="btn btn-primary">Subscribe for $15/year</button>
+            <button id="manage-billing-btn" type="button" class="btn btn-secondary hidden">Manage billing</button>
+          </div>
+          <p class="login-field-help">Stripe securely handles payment details. Cancellation takes effect at the end of the paid year.</p>
+          <p id="billing-status-message" class="status-message hidden"></p>
         </div>
 
         <!-- Security Questions Tab -->

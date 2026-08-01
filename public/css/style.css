@@ -2902,6 +2902,44 @@ label {
   animation: fadeIn 0.2s ease;
 }
 
+.billing-plan-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-input);
+}
+
+.billing-plan-card h3 {
+  margin: 4px 0 8px;
+}
+
+.billing-status-badge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.18);
+  color: var(--cyan);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.billing-period-copy {
+  margin: 16px 0;
+}
+
+.billing-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
 /* Form Groups */
 .form-group {
   margin-bottom: 16px;

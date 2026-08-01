@@ -9,6 +9,7 @@ const QRCode = require('qrcode');
 const bcrypt = require('bcrypt');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
+const Stripe = require('stripe');
 const { rateLimit } = require('express-rate-limit');
 const db = require('./db');
 const {
@@ -51,6 +52,14 @@ const {
   isValidEmail,
   normalizeEmail
 } = require('./account-identity');
+const {
+  getHostedBillingFailure,
+  hasHostedRoomEntitlement
+} = require('./billing');
+const {
+  BillingRequestError,
+  createStripeBillingService
+} = require('./stripe-billing');
 
 const app = express();
 const server = http.createServer(app);
@@ -92,8 +101,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: '1mb' }));
-
 const vendorFiles = new Map([
   ['/vendor/marked.js', path.join(__dirname, 'node_modules', 'marked', 'marked.min.js')],
   ['/vendor/dompurify.js', path.join(__dirname, 'node_modules', 'dompurify', 'dist', 'purify.min.js')],
@@ -120,6 +127,11 @@ const HOSTED_MAX_PARTICIPANTS = resolvePersistentParticipantLimit({
   hostedMode: HOSTED_MODE,
   configuredLimit: process.env.HOSTED_MAX_PARTICIPANTS
 });
+const STRIPE_BILLING_ENABLED = process.env.STRIPE_BILLING_ENABLED === 'true';
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || '';
+const APP_BASE_URL = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
 const GUEST_TRIAL_ENABLED = process.env.GUEST_TRIAL_ENABLED !== 'false';
 const GUEST_TRIAL_TTL_MINUTES = Math.max(
   5,
@@ -149,10 +161,63 @@ if (isProduction) {
     || process.env.GUEST_TRIAL_JWT_SECRET === JWT_SECRET) {
     invalidConfiguration.push('GUEST_TRIAL_JWT_SECRET (32+ characters and different from JWT_SECRET)');
   }
+  if (STRIPE_BILLING_ENABLED) {
+    if (!HOSTED_MODE) invalidConfiguration.push('HOSTED_MODE=true when Stripe billing is enabled');
+    if (!/^(sk|rk)_/.test(STRIPE_SECRET_KEY)) invalidConfiguration.push('STRIPE_SECRET_KEY');
+    if (!STRIPE_WEBHOOK_SECRET.startsWith('whsec_')) invalidConfiguration.push('STRIPE_WEBHOOK_SECRET');
+    if (!STRIPE_PRICE_ID.startsWith('price_')) invalidConfiguration.push('STRIPE_PRICE_ID');
+    if (!APP_BASE_URL.startsWith('https://')) invalidConfiguration.push('APP_BASE_URL (HTTPS)');
+  }
   if (invalidConfiguration.length > 0) {
     throw new Error(`Unsafe production configuration: ${invalidConfiguration.join(', ')}`);
   }
 }
+
+const stripe = STRIPE_BILLING_ENABLED ? new Stripe(STRIPE_SECRET_KEY) : null;
+const stripeBilling = STRIPE_BILLING_ENABLED
+  ? createStripeBillingService({
+      stripe,
+      db,
+      priceId: STRIPE_PRICE_ID,
+      appBaseUrl: APP_BASE_URL
+    })
+  : null;
+
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
+  if (!stripeBilling) {
+    return res.status(404).json({ success: false, error: 'Stripe billing is not enabled' });
+  }
+
+  try {
+    const signature = req.get('stripe-signature');
+    const event = stripe.webhooks.constructEvent(
+      req.body,
+      signature,
+      STRIPE_WEBHOOK_SECRET
+    );
+    const payloadDigest = crypto.createHash('sha256').update(req.body).digest('hex');
+    const result = await stripeBilling.processEvent(event, payloadDigest);
+    if (result?.subscription && !hasHostedRoomEntitlement(result.subscription)) {
+      for (const socket of io.sockets.sockets.values()) {
+        if (socket.data.principal?.id === result.subscription.account_id) {
+          socket.emit('control_error', {
+            message: 'The hosted subscription is no longer active.'
+          });
+          socket.disconnect(true);
+        }
+      }
+    }
+    return res.json({ received: true, duplicate: Boolean(result?.duplicate) });
+  } catch (error) {
+    if (error?.type === 'StripeSignatureVerificationError') {
+      return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
+    }
+    console.error('Stripe webhook error:', error);
+    return res.status(500).json({ success: false, error: 'Webhook processing failed' });
+  }
+});
+
+app.use(express.json({ limit: '1mb' }));
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -176,6 +241,13 @@ const recoveryVerifyLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   message: { success: false, error: 'Too many recovery attempts. Please try again later.' }
+});
+const billingSessionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many billing requests. Please try again shortly.' }
 });
 const guestQuizMarkdown = fs.readFileSync(
   path.join(__dirname, 'demo-quizzes', 'quick-wins.md'),
@@ -474,6 +546,18 @@ function adminPrincipal(admin) {
   };
 }
 
+async function hostedBillingFailureForAdmin(admin) {
+  const subscription = STRIPE_BILLING_ENABLED
+    ? await db.getSubscriptionByAccountId(admin.id)
+    : null;
+  return getHostedBillingFailure({
+    billingEnabled: STRIPE_BILLING_ENABLED,
+    hostedMode: HOSTED_MODE,
+    admin,
+    subscription
+  });
+}
+
 function ownerFilterFor(admin) {
   return admin.role === 'master' ? null : admin.id;
 }
@@ -594,8 +678,93 @@ app.get('/api/admin/auth/config', (req, res) => {
     success: true,
     hostedMode: HOSTED_MODE,
     emailLogin: HOSTED_MODE,
-    publicSignup: false
+    publicSignup: false,
+    billingEnabled: STRIPE_BILLING_ENABLED,
+    hostedPlan: {
+      name: 'Markdown Mash Hosted',
+      amount: 15,
+      currency: 'USD',
+      interval: 'year'
+    }
   });
+});
+
+app.get('/api/admin/billing', async (req, res) => {
+  try {
+    const applicable = HOSTED_MODE
+      && req.admin.role !== 'master'
+      && req.admin.authSource === 'hosted';
+    const subscription = applicable
+      ? await db.getSubscriptionByAccountId(req.admin.id)
+      : null;
+
+    return res.json({
+      success: true,
+      enabled: STRIPE_BILLING_ENABLED,
+      applicable,
+      plan: {
+        name: 'Markdown Mash Hosted',
+        amount: 15,
+        currency: 'USD',
+        interval: 'year',
+        participantLimit: HOSTED_MAX_PARTICIPANTS
+      },
+      subscription: subscription
+        ? {
+            status: subscription.status,
+            currentPeriodEnd: subscription.current_period_end,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end
+          }
+        : null
+    });
+  } catch (error) {
+    console.error('Billing status error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to load billing status' });
+  }
+});
+
+app.post('/api/admin/billing/checkout', billingSessionLimiter, async (req, res) => {
+  if (!stripeBilling) {
+    return res.status(503).json({ success: false, error: 'Billing is not available yet' });
+  }
+
+  try {
+    const account = await db.getAdminById(req.admin.id);
+    const session = await stripeBilling.createCheckoutSession(account);
+    return res.json({ success: true, url: session.url });
+  } catch (error) {
+    if (error instanceof BillingRequestError) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        error: error.message
+      });
+    }
+    console.error('Stripe checkout error:', error);
+    return res.status(502).json({ success: false, error: 'Unable to start Stripe Checkout' });
+  }
+});
+
+app.post('/api/admin/billing/portal', billingSessionLimiter, async (req, res) => {
+  if (!stripeBilling) {
+    return res.status(503).json({ success: false, error: 'Billing is not available yet' });
+  }
+
+  try {
+    const account = await db.getAdminById(req.admin.id);
+    const session = await stripeBilling.createPortalSession(account);
+    return res.json({ success: true, url: session.url });
+  } catch (error) {
+    if (error instanceof BillingRequestError) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        error: error.message
+      });
+    }
+    console.error('Stripe portal error:', error);
+    return res.status(502).json({ success: false, error: 'Unable to open the billing portal' });
+  }
 });
 
 app.get('/api/trial/config', (req, res) => {
@@ -910,6 +1079,15 @@ app.post('/api/admin/session', async (req, res) => {
   const { markdown, courseName } = req.body;
   try {
     const quiz = parseQuizMarkdown(markdown);
+
+    const billingFailure = await hostedBillingFailureForAdmin(req.admin);
+    if (billingFailure) {
+      return res.status(402).json({
+        success: false,
+        code: billingFailure.code,
+        error: billingFailure.message
+      });
+    }
 
     // Create session in database
     const { id, code, quizData } = await db.createSession(
@@ -1993,7 +2171,10 @@ io.use(async (socket, next) => {
       const account = await db.getAdminById(payload.id);
       const failure = getAccountAuthenticationFailure(account, { hostedMode: HOSTED_MODE });
       if (failure) return next(new Error('Authentication expired'));
-      socket.data.principal = adminPrincipal(account);
+      const principal = adminPrincipal(account);
+      const billingFailure = await hostedBillingFailureForAdmin(principal);
+      if (billingFailure) return next(new Error('A hosted subscription is required'));
+      socket.data.principal = principal;
       return next();
     }
   } catch (error) {

@@ -457,6 +457,11 @@ pm2 save
 | `GUEST_TRIAL_STARTS_PER_IP_HOUR` | No | `5` | Trial starts allowed per IP each hour |
 | `HOSTED_MODE` | No | `false` | Enables hosted-service room guardrails; leave disabled for unrestricted self-hosting |
 | `HOSTED_MAX_PARTICIPANTS` | No | `50` | Participant limit for persistent rooms when `HOSTED_MODE=true` |
+| `STRIPE_BILLING_ENABLED` | No | `false` | Enables annual hosted billing and subscription entitlements after all Stripe values are configured |
+| `STRIPE_SECRET_KEY` | When billing is enabled | - | Stripe secret or restricted server key; store only in encrypted deployment settings |
+| `STRIPE_WEBHOOK_SECRET` | When billing is enabled | - | Signing secret for this deployment's `/api/stripe/webhook` endpoint |
+| `STRIPE_PRICE_ID` | When billing is enabled | - | Recurring yearly $15 USD Price for the Markdown Mash Hosted Product |
+| `APP_BASE_URL` | When billing is enabled | - | Public application origin used for Stripe return URLs; HTTPS is required in production |
 | `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
@@ -465,6 +470,17 @@ The included Render blueprint enables hosted mode with a 50-participant limit an
 The database-backed `master` account keeps the deployment-password login and is exempt from both hosted room guardrails. Self-hosted operators can leave `HOSTED_MODE=false` to retain the single-admin deployment login and unrestricted persistent rooms.
 
 An open room is a database session with `created` or `active` status. Ending, recovering, or deleting that room releases the hosted slot. Room creation uses a transaction-scoped PostgreSQL advisory lock, so simultaneous launch requests cannot bypass the limit even if the service later runs in more than one process.
+
+### Stripe Hosted Billing
+
+Markdown Mash uses Stripe-hosted Checkout and the Stripe Customer Portal; card details never pass through the application. Billing is deliberately off by default. To enable the $15/year plan:
+
+1. In a Stripe sandbox, create a **Markdown Mash Hosted** Product and one recurring **$15 USD yearly** Price.
+2. Configure and test the Customer Portal with payment-method updates, invoices, and cancellation at period end. Keep plan switching and quantity changes disabled.
+3. Add an HTTPS webhook destination at `https://YOUR_HOST/api/stripe/webhook` for `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, and `invoice.payment_action_required`.
+4. Apply the ordered SQL migrations, then add the five Stripe environment values above to Render's encrypted settings. Use sandbox values first and set `STRIPE_BILLING_ENABLED=true` last.
+
+Webhook signatures are verified against the untouched request body. Processed event IDs are stored for idempotency, and subscriptions are accepted only when both `app=markdown_mash` metadata and the configured Price ID match. This prevents other Ensemble Methods products in the same Stripe account from changing Markdown Mash access.
 
 ## Development
 

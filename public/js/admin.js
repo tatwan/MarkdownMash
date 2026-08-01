@@ -49,6 +49,7 @@ let currentAdmin = storedTrialToken
   ? JSON.parse(sessionStorage.getItem('trialPrincipal') || 'null')
   : JSON.parse(localStorage.getItem('currentAdmin') || 'null');
 let hostedAuthMode = false;
+let billingEnabled = false;
 
 const uploadSection = document.getElementById('upload-section');
 const quizMarkdown = document.getElementById('quiz-markdown');
@@ -280,7 +281,11 @@ function configureInstructorWorkspace() {
   builderCardDescription.textContent = 'Questions, options, timers and scoring stay in one readable file.';
   uploadBtnLabel.textContent = 'Load quiz';
 
-  const hostedInstructor = hostedAuthMode && currentAdmin?.role !== 'master';
+  const hostedInstructor = hostedAuthMode
+    && currentAdmin?.authSource === 'hosted'
+    && currentAdmin.role !== 'master';
+  const billingTab = document.querySelector('.settings-tab[data-tab="billing"]');
+  billingTab?.classList.toggle('hidden', !hostedInstructor || !billingEnabled);
   document.querySelector('.settings-tab[data-tab="security"]')?.classList.toggle('hidden', hostedInstructor);
   document.querySelector('.settings-tab[data-tab="email"]')?.classList.toggle('hidden', hostedInstructor);
 }
@@ -372,8 +377,10 @@ async function loadAuthConfig() {
     const response = await fetch('/api/admin/auth/config');
     const data = await response.json();
     hostedAuthMode = Boolean(data.hostedMode && data.emailLogin);
+    billingEnabled = Boolean(data.billingEnabled);
   } catch (error) {
     hostedAuthMode = false;
+    billingEnabled = false;
   }
 
   loginEmailField.classList.toggle('hidden', !hostedAuthMode);
@@ -1963,6 +1970,12 @@ function truncateText(text, maxLength) {
 function openSettings() {
   settingsModal.classList.remove('hidden');
   loadAdminSettings();
+  if (billingEnabled
+    && hostedAuthMode
+    && currentAdmin?.authSource === 'hosted'
+    && currentAdmin.role !== 'master') {
+    loadBillingStatus();
+  }
 }
 
 // Close settings modal
@@ -1977,8 +1990,78 @@ function switchSettingsTab(tabName) {
     t.classList.toggle('active', t.dataset.tab === tabName);
   });
   document.getElementById('settings-password').classList.toggle('hidden', tabName !== 'password');
+  document.getElementById('settings-billing').classList.toggle('hidden', tabName !== 'billing');
   document.getElementById('settings-security').classList.toggle('hidden', tabName !== 'security');
   document.getElementById('settings-email').classList.toggle('hidden', tabName !== 'email');
+}
+
+function billingDate(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }).format(new Date(value));
+}
+
+async function loadBillingStatus() {
+  const badge = document.getElementById('billing-status-badge');
+  const periodCopy = document.getElementById('billing-period-copy');
+  const planDetails = document.getElementById('billing-plan-details');
+  const startBtn = document.getElementById('start-subscription-btn');
+  const manageBtn = document.getElementById('manage-billing-btn');
+
+  try {
+    const res = await authFetch('/api/admin/billing');
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Unable to load billing');
+
+    const subscription = data.subscription;
+    const status = subscription?.status || 'not_subscribed';
+    const managed = ['active', 'trialing', 'past_due'].includes(status);
+    const active = ['active', 'trialing'].includes(status);
+    planDetails.textContent = `$${data.plan.amount} ${data.plan.currency} per year · up to ${data.plan.participantLimit} participants · one open room at a time`;
+
+    badge.textContent = status === 'not_subscribed'
+      ? 'Not subscribed'
+      : status.replaceAll('_', ' ');
+    startBtn.classList.toggle('hidden', managed);
+    manageBtn.classList.toggle('hidden', !subscription?.status);
+
+    if (subscription?.currentPeriodEnd) {
+      periodCopy.textContent = subscription.cancelAtPeriodEnd
+        ? `Access continues through ${billingDate(subscription.currentPeriodEnd)}.`
+        : `${active ? 'Renews' : 'Current period ends'} ${billingDate(subscription.currentPeriodEnd)}.`;
+    } else if (status === 'past_due') {
+      periodCopy.textContent = 'A renewal payment needs attention. Your classroom access is in its grace period.';
+    } else {
+      periodCopy.textContent = 'An entire year of hosted Markdown Mash for $15.';
+    }
+  } catch (error) {
+    badge.textContent = 'Unavailable';
+    periodCopy.textContent = '';
+    showStatus('billing-status-message', error.message, false);
+  }
+}
+
+async function openStripeBilling(path, button) {
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Opening Stripe…';
+  hideStatus('billing-status-message');
+
+  try {
+    const res = await authFetch(path, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.success || !data.url) {
+      throw new Error(data.error || 'Unable to open Stripe');
+    }
+    window.location.assign(data.url);
+  } catch (error) {
+    showStatus('billing-status-message', error.message, false);
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 // Load admin settings
@@ -2010,6 +2093,7 @@ function clearSettingsForms() {
   hideStatus('password-status');
   hideStatus('security-status');
   hideStatus('email-status');
+  hideStatus('billing-status-message');
 }
 
 // Show status message
@@ -2039,6 +2123,14 @@ settingsModal.addEventListener('click', (e) => {
 // Settings tab switching
 settingsTabs.forEach(tab => {
   tab.addEventListener('click', () => switchSettingsTab(tab.dataset.tab));
+});
+
+document.getElementById('start-subscription-btn')?.addEventListener('click', (event) => {
+  openStripeBilling('/api/admin/billing/checkout', event.currentTarget);
+});
+
+document.getElementById('manage-billing-btn')?.addEventListener('click', (event) => {
+  openStripeBilling('/api/admin/billing/portal', event.currentTarget);
 });
 
 // Change password form
