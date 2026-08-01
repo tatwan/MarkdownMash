@@ -31,6 +31,7 @@ build/
 
 # Database
 data/
+supabase/.temp/
 
 # Internal documentation (not for public repo)
 CLAUDE.md

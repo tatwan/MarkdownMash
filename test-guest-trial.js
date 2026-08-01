@@ -82,18 +82,21 @@ async function run() {
     }
   });
   const persistent = createPersistentSessionRepository(fakeDb, 44, 'REAL44');
-  await persistent.createParticipant('Persisted');
+  await persistent.createParticipant('Persisted', null, 'shades');
+  await persistent.updateParticipantAvatar('db-participant', 'boo');
   await persistent.recordAnswer('db-participant', 0, 1, true, 1200);
-  assert.equal(persistentCalls, 2);
+  assert.equal(persistentCalls, 3);
 
   const transient = createTransientSessionRepository({
     idFactory: () => 'memory-participant'
   });
-  const transientParticipant = await transient.createParticipant('Temporary');
+  const transientParticipant = await transient.createParticipant('Temporary', null, 'zap');
   assert.equal(transientParticipant.id, 'memory-participant');
+  assert.equal(transientParticipant.avatarId, 'zap');
+  await transient.updateParticipantAvatar('memory-participant', 'stella');
   await transient.recordAnswer('memory-participant', 0, 2, true, 900);
   await transient.updateParticipantScore('memory-participant', 20, 1);
-  assert.equal(persistentCalls, 2, 'Transient activity must not call the database');
+  assert.equal(persistentCalls, 3, 'Transient activity must not call the database');
 
   await transient.kickParticipant('memory-participant');
   assert.equal(await transient.isParticipantKicked('memory-participant'), true);

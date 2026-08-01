@@ -3,14 +3,17 @@ const crypto = require('crypto');
 function createPersistentSessionRepository(db, sessionId, sessionCode) {
   return {
     kind: 'persistent',
-    createParticipant(name, socketId = null) {
-      return db.createParticipant(sessionId, name, socketId);
+    createParticipant(name, socketId = null, avatarId = null) {
+      return db.createParticipant(sessionId, name, socketId, avatarId);
     },
     updateStatus(status) {
       return db.updateSessionStatus(sessionCode, status);
     },
     updateParticipantSocket(participantId, socketId) {
       return db.updateParticipantSocket(participantId, socketId);
+    },
+    updateParticipantAvatar(participantId, avatarId) {
+      return db.updateParticipantAvatar(participantId, avatarId);
     },
     isParticipantKicked(participantId) {
       return db.isParticipantKicked(participantId);
@@ -44,14 +47,16 @@ function createTransientSessionRepository(options = {}) {
 
   return {
     kind: 'transient',
-    async createParticipant(name) {
+    async createParticipant(name, socketId = null, avatarId = null) {
       return {
         id: idFactory(),
-        name
+        name,
+        avatarId
       };
     },
     async updateStatus() {},
     async updateParticipantSocket() {},
+    async updateParticipantAvatar() {},
     async isParticipantKicked(participantId) {
       return kickedParticipants.has(participantId);
     },

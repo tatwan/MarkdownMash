@@ -37,6 +37,11 @@ const {
   resolveParticipantLimitForAdmin,
   resolvePersistentParticipantLimit
 } = require('./participant-capacity');
+const {
+  createSidekickState,
+  drawSidekick,
+  getShuffleAvailability
+} = require('./sidekick-assignment');
 
 const app = express();
 const server = http.createServer(app);
@@ -90,6 +95,7 @@ const vendorFiles = new Map([
 for (const [route, file] of vendorFiles) {
   app.get(route, (req, res) => res.sendFile(file));
 }
+app.use('/assets/sidekicks', express.static(path.join(__dirname, 'assets', 'sidekicks')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================
@@ -234,6 +240,7 @@ function createSessionState({
     expiresAt,
     participantLimit,
     pendingParticipantJoins: 0,
+    sidekickState: createSidekickState(),
     participants: Object.create(null),
     quizState: {
       isRunning: false,
@@ -1032,6 +1039,7 @@ app.get('/api/admin/session/:code/participants', authorizeAdminSession, (req, re
     id: p.id,
     name: p.name,
     score: p.score,
+    avatarId: p.avatarId,
     answeredCount: Object.keys(p.answers).length
   }));
 
@@ -1112,16 +1120,19 @@ app.post('/api/session/:code/join', async (req, res) => {
       participantId: existingParticipantId,
       participantToken: existingParticipantToken,
       sessionCode: code,
-      quizTitle: session.quiz.title
+      quizTitle: session.quiz.title,
+      avatarId: existing.avatarId,
+      canShuffleAvatar: getShuffleAvailability(session, existing).allowed
     });
   }
 
   // Reserve the seat before the async write so concurrent joins cannot oversubscribe the room.
   session.pendingParticipantJoins += 1;
+  const avatarId = drawSidekick(session.sidekickState);
   let participantRecord;
   try {
     // Persistent sessions write through PostgreSQL; trials allocate only in memory.
-    participantRecord = await session.repository.createParticipant(name.trim());
+    participantRecord = await session.repository.createParticipant(name.trim(), null, avatarId);
   } finally {
     session.pendingParticipantJoins -= 1;
   }
@@ -1140,6 +1151,8 @@ app.post('/api/session/:code/join', async (req, res) => {
     answers: {},
     responseTimes: {},
     socketId: null,
+    avatarId: participantRecord.avatarId || avatarId,
+    avatarShuffled: false,
     accessTokenDigest: participantCredential.digest
   };
 
@@ -1147,6 +1160,7 @@ app.post('/api/session/:code/join', async (req, res) => {
   io.to(`admin:${code}`).emit('participant_joined', {
     id,
     name: name.trim(),
+    avatarId: session.participants[id].avatarId,
     count: Object.keys(session.participants).length
   });
   io.to(`presenter:${code}`).emit('participant_joined', {
@@ -1158,7 +1172,65 @@ app.post('/api/session/:code/join', async (req, res) => {
     participantId: id,
     participantToken: participantCredential.token,
     sessionCode: code,
-    quizTitle: session.quiz.title
+    quizTitle: session.quiz.title,
+    avatarId: session.participants[id].avatarId,
+    canShuffleAvatar: getShuffleAvailability(session, session.participants[id]).allowed
+  });
+});
+
+app.post('/api/session/:code/sidekick/shuffle', async (req, res) => {
+  const code = String(req.params.code || '').trim().toUpperCase();
+  const { participantId, participantToken } = req.body || {};
+  const session = activeSessions.get(code);
+  const participant = session?.participants?.[participantId];
+
+  if (!session || !participant) {
+    return res.status(404).json({ success: false, error: 'Session or participant not found' });
+  }
+  if (!verifyOpaqueToken(participantToken, participant.accessTokenDigest)) {
+    return res.status(403).json({ success: false, error: 'Participant access expired' });
+  }
+
+  const availability = getShuffleAvailability(session, participant);
+  if (!availability.allowed) {
+    const messages = {
+      SIDEKICKS_DISABLED: 'Sidekicks are disabled for this room',
+      QUIZ_ALREADY_STARTED: 'Sidekicks can only be shuffled before the quiz starts',
+      SIDEKICK_SHUFFLE_USED: 'You already used your Sidekick shuffle'
+    };
+    return res.status(409).json({
+      success: false,
+      code: availability.code,
+      error: messages[availability.code]
+    });
+  }
+
+  // Reserve the one-time shuffle before the async database write.
+  const previousAvatarId = participant.avatarId;
+  participant.avatarShuffled = true;
+  const avatarId = drawSidekick(session.sidekickState, { excludeId: previousAvatarId });
+
+  try {
+    await session.repository.updateParticipantAvatar(participantId, avatarId);
+    participant.avatarId = avatarId;
+  } catch (error) {
+    participant.avatarShuffled = false;
+    participant.avatarId = previousAvatarId;
+    console.error('Sidekick shuffle persistence error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Unable to save your Sidekick shuffle'
+    });
+  }
+
+  const update = { participantId, avatarId };
+  io.to(`admin:${code}`).emit('participant_avatar_updated', update);
+  io.to(`presenter:${code}`).emit('participant_avatar_updated', update);
+
+  return res.json({
+    success: true,
+    avatarId,
+    canShuffleAvatar: false
   });
 });
 
@@ -1905,7 +1977,8 @@ io.on('connection', (socket) => {
       socket.emit('participant_roster', {
         participants: Object.values(session.participants).map(participant => ({
           id: participant.id,
-          name: participant.name
+          name: participant.name,
+          avatarId: participant.avatarId
         })),
         count: Object.keys(session.participants).length
       });
@@ -1989,7 +2062,9 @@ io.on('connection', (socket) => {
     await session.repository.updateParticipantSocket(participantId, socket.id);
     socket.emit('participant_ready', {
       participantId,
-      sessionCode
+      sessionCode,
+      avatarId: participant.avatarId,
+      canShuffleAvatar: getShuffleAvailability(session, participant).allowed
     });
 
     console.log(

@@ -144,6 +144,54 @@ async function run() {
     });
     assert.ok(participantA.participantToken);
     assert.notEqual(participantA.participantToken, participantB.participantToken);
+    assert.ok(participantA.avatarId);
+    assert.ok(participantB.avatarId);
+    assert.notEqual(participantA.avatarId, participantB.avatarId);
+    assert.equal(participantA.canShuffleAvatar, true);
+
+    const shuffledA = await jsonFetch(baseUrl, `/api/session/${sessionCode}/sidekick/shuffle`, {
+      method: 'POST',
+      headers: joinHeaders,
+      body: JSON.stringify({
+        participantId: participantA.participantId,
+        participantToken: participantA.participantToken
+      })
+    });
+    assert.notEqual(shuffledA.avatarId, participantA.avatarId);
+    assert.equal(shuffledA.canShuffleAvatar, false);
+
+    const repeatedShuffle = await fetch(`${baseUrl}/api/session/${sessionCode}/sidekick/shuffle`, {
+      method: 'POST',
+      headers: joinHeaders,
+      body: JSON.stringify({
+        participantId: participantA.participantId,
+        participantToken: participantA.participantToken
+      })
+    });
+    assert.equal(repeatedShuffle.status, 409);
+    assert.equal((await repeatedShuffle.json()).code, 'SIDEKICK_SHUFFLE_USED');
+
+    const rejoinedA = await jsonFetch(baseUrl, `/api/session/${sessionCode}/join`, {
+      method: 'POST',
+      headers: joinHeaders,
+      body: JSON.stringify({
+        name: 'Security Alpha',
+        existingParticipantId: participantA.participantId,
+        existingParticipantToken: participantA.participantToken
+      })
+    });
+    assert.equal(rejoinedA.avatarId, shuffledA.avatarId);
+    assert.equal(rejoinedA.canShuffleAvatar, false);
+
+    const forgedShuffle = await fetch(`${baseUrl}/api/session/${sessionCode}/sidekick/shuffle`, {
+      method: 'POST',
+      headers: joinHeaders,
+      body: JSON.stringify({
+        participantId: participantA.participantId,
+        participantToken: participantB.participantToken
+      })
+    });
+    assert.equal(forgedShuffle.status, 403);
 
     const [admin, presenter, unauthorizedPresenter, playerA, playerB, impersonator] =
       await Promise.all([
@@ -190,7 +238,11 @@ async function run() {
       participantId: participantB.participantId,
       sessionCode
     });
-    await Promise.all([readyA, readyB]);
+    const [readyPayloadA, readyPayloadB] = await Promise.all([readyA, readyB]);
+    assert.equal(readyPayloadA.avatarId, shuffledA.avatarId);
+    assert.equal(readyPayloadA.canShuffleAvatar, false);
+    assert.equal(readyPayloadB.avatarId, participantB.avatarId);
+    assert.equal(readyPayloadB.canShuffleAvatar, true);
 
     const impersonationRejected = waitForSocket(impersonator, 'session_invalid');
     impersonator.emit('participant_join', {
@@ -202,6 +254,17 @@ async function run() {
     const quizStarted = waitForSocket(admin, 'quiz_started');
     admin.emit('start_quiz', sessionCode);
     await quizStarted;
+
+    const lateShuffle = await fetch(`${baseUrl}/api/session/${sessionCode}/sidekick/shuffle`, {
+      method: 'POST',
+      headers: joinHeaders,
+      body: JSON.stringify({
+        participantId: participantB.participantId,
+        participantToken: participantB.participantToken
+      })
+    });
+    assert.equal(lateShuffle.status, 409);
+    assert.equal((await lateShuffle.json()).code, 'QUIZ_ALREADY_STARTED');
 
     const presenterControlRejected = waitForSocket(presenter, 'control_error');
     presenter.emit('next_question', sessionCode);

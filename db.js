@@ -97,7 +97,8 @@ async function initializeDatabase(retries = 5, delay = 3000) {
         score INTEGER DEFAULT 0,
         correct_count INTEGER DEFAULT 0,
         joined_at TIMESTAMP DEFAULT NOW(),
-        socket_id TEXT
+        socket_id TEXT,
+        avatar_id TEXT
       );
 
       -- Answers: Individual answer records for analytics
@@ -167,6 +168,11 @@ async function runMigrations(client) {
     {
       check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'participants' AND column_name = 'kicked_at'",
       migrate: "ALTER TABLE participants ADD COLUMN kicked_at TIMESTAMP"
+    },
+    // Add avatar_id to participants
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'participants' AND column_name = 'avatar_id'",
+      migrate: "ALTER TABLE participants ADD COLUMN avatar_id TEXT"
     }
   ];
 
@@ -310,13 +316,13 @@ const dbApi = {
   },
 
   // Participant operations
-  async createParticipant(sessionId, name, socketId = null) {
+  async createParticipant(sessionId, name, socketId = null, avatarId = null) {
     const id = generateParticipantId();
     await pool.query(
-      'INSERT INTO participants (id, session_id, name, socket_id) VALUES ($1, $2, $3, $4)',
-      [id, sessionId, name, socketId]
+      'INSERT INTO participants (id, session_id, name, socket_id, avatar_id) VALUES ($1, $2, $3, $4, $5)',
+      [id, sessionId, name, socketId, avatarId]
     );
-    return { id, sessionId, name };
+    return { id, sessionId, name, avatarId };
   },
 
   async getParticipant(id) {
@@ -338,6 +344,10 @@ const dbApi = {
 
   async updateParticipantSocket(id, socketId) {
     return pool.query('UPDATE participants SET socket_id = $1 WHERE id = $2', [socketId, id]);
+  },
+
+  async updateParticipantAvatar(id, avatarId) {
+    return pool.query('UPDATE participants SET avatar_id = $1 WHERE id = $2', [avatarId, id]);
   },
 
   // Answer operations
