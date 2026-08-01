@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test-presentation.js && node test-participant-identity.js && node test-participant-capacity.js && node test-sidekick-assets.js && node test-sidekick-assignment.js && node test-guest-trial.js && node test-security.js",
+    "test": "node test-presentation.js && node test-participant-identity.js && node test-participant-capacity.js && node test-hosted-room-guard.js && node test-sidekick-assets.js && node test-sidekick-assignment.js && node test-guest-trial.js && node test-security.js",
     "simulate": "node test-simulation.js",
     "simulate:help": "node test-simulation.js"
   },

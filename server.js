@@ -42,6 +42,10 @@ const {
   drawSidekick,
   getShuffleAvailability
 } = require('./sidekick-assignment');
+const {
+  HOSTED_ROOM_LIMIT_CODE,
+  shouldEnforceSingleOpenRoom
+} = require('./hosted-room-guard');
 
 const app = express();
 const server = http.createServer(app);
@@ -851,7 +855,17 @@ app.post('/api/admin/session', async (req, res) => {
     const quiz = parseQuizMarkdown(markdown);
 
     // Create session in database
-    const { id, code, quizData } = await db.createSession(quiz, courseName, req.admin.id);
+    const { id, code, quizData } = await db.createSession(
+      quiz,
+      courseName,
+      req.admin.id,
+      {
+        enforceSingleOpenRoom: shouldEnforceSingleOpenRoom({
+          hostedMode: HOSTED_MODE,
+          admin: req.admin
+        })
+      }
+    );
 
     // Create in-memory session state
     const sessionState = createSessionState({
@@ -875,6 +889,14 @@ app.post('/api/admin/session', async (req, res) => {
     });
   } catch (err) {
     console.error('Session creation error:', err);
+    if (err.code === HOSTED_ROOM_LIMIT_CODE) {
+      return res.status(409).json({
+        success: false,
+        code: HOSTED_ROOM_LIMIT_CODE,
+        error: err.message,
+        activeSession: err.existingSession
+      });
+    }
     res.status(400).json({ success: false, error: err.message });
   }
 });

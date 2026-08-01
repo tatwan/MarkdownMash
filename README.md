@@ -457,10 +457,12 @@ pm2 save
 | `GUEST_TRIAL_STARTS_PER_IP_HOUR` | No | `5` | Trial starts allowed per IP each hour |
 | `HOSTED_MODE` | No | `false` | Enables hosted-service room guardrails; leave disabled for unrestricted self-hosting |
 | `HOSTED_MAX_PARTICIPANTS` | No | `50` | Participant limit for persistent rooms when `HOSTED_MODE=true` |
-
-The included Render blueprint enables hosted mode with a 50-participant limit. The database-backed `master` account is exempt, while normal hosted instructor accounts retain the limit. Self-hosted operators can leave `HOSTED_MODE=false` for unrestricted persistent rooms.
 | `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
+
+The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. The database-backed `master` account is exempt from both guardrails. Self-hosted operators can leave `HOSTED_MODE=false` for unrestricted persistent rooms.
+
+An open room is a database session with `created` or `active` status. Ending, recovering, or deleting that room releases the hosted slot. Room creation uses a transaction-scoped PostgreSQL advisory lock, so simultaneous launch requests cannot bypass the limit even if the service later runs in more than one process.
 
 ## Development
 

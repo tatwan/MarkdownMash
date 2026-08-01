@@ -2,6 +2,7 @@ require('dotenv').config();
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const dns = require('dns');
+const { assertHostedRoomAvailable } = require('./hosted-room-guard');
 
 // Force IPv4 to avoid IPv6 connection issues
 dns.setDefaultResultOrder('ipv4first');
@@ -192,6 +193,11 @@ async function runMigrations(client) {
   // Create index for owner_id if it doesn't exist
   try {
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_owner ON sessions(owner_id)');
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sessions_open_owner
+      ON sessions(owner_id, created_at DESC)
+      WHERE owner_id IS NOT NULL AND status IN ('created', 'active')
+    `);
   } catch (err) {
     // Ignore
   }
@@ -221,42 +227,65 @@ function generateParticipantId() {
 // Database API
 const dbApi = {
   // Session operations
-  async createSession(quizData, courseName = null, ownerId = null) {
+  async createSession(quizData, courseName = null, ownerId = null, options = {}) {
+    const enforceSingleOpenRoom = options.enforceSingleOpenRoom === true;
+    const client = enforceSingleOpenRoom ? await pool.connect() : null;
+    const database = client || pool;
     let code;
     let attempts = 0;
 
-    while (attempts < 10) {
-      code = generateSessionCode();
-      const existing = await pool.query('SELECT id FROM sessions WHERE code = $1', [code]);
-      if (existing.rows.length === 0) break;
-      attempts++;
-    }
+    try {
+      if (client) {
+        await client.query('BEGIN');
+        await assertHostedRoomAvailable(client, ownerId);
+      }
 
-    if (attempts >= 10) {
-      throw new Error('Failed to generate unique session code');
-    }
+      while (attempts < 10) {
+        code = generateSessionCode();
+        const existing = await database.query('SELECT id FROM sessions WHERE code = $1', [code]);
+        if (existing.rows.length === 0) break;
+        attempts++;
+      }
 
-    const result = await pool.query(
-      `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score, course_name, is_test, owner_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
-       RETURNING id`,
-      [
+      if (attempts >= 10) {
+        throw new Error('Failed to generate unique session code');
+      }
+
+      const result = await database.query(
+        `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score, course_name, is_test, owner_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+         RETURNING id`,
+        [
+          code,
+          quizData.title || 'Untitled Quiz',
+          JSON.stringify(quizData),
+          quizData.questions.length,
+          quizData.passingPercent || 70,
+          quizData.totalScore || 100,
+          courseName,
+          ownerId
+        ]
+      );
+
+      if (client) await client.query('COMMIT');
+
+      return {
+        id: result.rows[0].id,
         code,
-        quizData.title || 'Untitled Quiz',
-        JSON.stringify(quizData),
-        quizData.questions.length,
-        quizData.passingPercent || 70,
-        quizData.totalScore || 100,
-        courseName,
-        ownerId
-      ]
-    );
-
-    return {
-      id: result.rows[0].id,
-      code,
-      quizData
-    };
+        quizData
+      };
+    } catch (error) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Session creation rollback failed:', rollbackError.message);
+        }
+      }
+      throw error;
+    } finally {
+      if (client) client.release();
+    }
   },
 
   async getSession(code) {
