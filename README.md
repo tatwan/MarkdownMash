@@ -6,7 +6,7 @@
 ![Node.js](https://img.shields.io/badge/Node.js-18+-success?logo=nodedotjs&style=flat-square)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-336791?logo=postgresql&style=flat-square)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-Real--time-black?logo=socketdotio&style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
@@ -455,6 +455,10 @@ pm2 save
 | `GUEST_TRIAL_MAX_PARTICIPANTS` | No | `8` | Participant limit per trial |
 | `GUEST_TRIAL_MAX_CONCURRENT` | No | `25` | Maximum active trials per app instance |
 | `GUEST_TRIAL_STARTS_PER_IP_HOUR` | No | `5` | Trial starts allowed per IP each hour |
+| `HOSTED_MODE` | No | `false` | Enables hosted-service room guardrails; leave disabled for unrestricted self-hosting |
+| `HOSTED_MAX_PARTICIPANTS` | No | `50` | Participant limit for persistent rooms when `HOSTED_MODE=true` |
+
+The included Render blueprint enables hosted mode with a 50-participant limit. The database-backed `master` account is exempt, while normal hosted instructor accounts retain the limit. Self-hosted operators can leave `HOSTED_MODE=false` for unrestricted persistent rooms.
 | `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
@@ -530,4 +534,7 @@ All data includes proper foreign keys and indexes for performance.
 
 ## License
 
-MIT
+The Markdown Mash source code is licensed under the [Apache License 2.0](LICENSE).
+Sidekick artwork is licensed separately under [CC BY 4.0](assets/sidekicks/LICENSE).
+The Markdown Mash name, logo, lightning-bolt brand mark, and product identity are
+covered by the [trademark policy](TRADEMARKS.md).

@@ -32,6 +32,11 @@ const {
   hashOpaqueToken,
   verifyOpaqueToken
 } = require('./security-utils');
+const {
+  getParticipantAdmission,
+  resolveParticipantLimitForAdmin,
+  resolvePersistentParticipantLimit
+} = require('./participant-capacity');
 
 const app = express();
 const server = http.createServer(app);
@@ -95,6 +100,11 @@ const JWT_SECRET = process.env.JWT_SECRET
   || (isProduction ? '' : 'markdown-mash-secret-key-change-in-production');
 const JWT_EXPIRY = '24h';
 const SALT_ROUNDS = 10;
+const HOSTED_MODE = process.env.HOSTED_MODE === 'true';
+const HOSTED_MAX_PARTICIPANTS = resolvePersistentParticipantLimit({
+  hostedMode: HOSTED_MODE,
+  configuredLimit: process.env.HOSTED_MAX_PARTICIPANTS
+});
 const GUEST_TRIAL_ENABLED = process.env.GUEST_TRIAL_ENABLED !== 'false';
 const GUEST_TRIAL_TTL_MINUTES = Math.max(
   5,
@@ -223,6 +233,7 @@ function createSessionState({
     repository,
     expiresAt,
     participantLimit,
+    pendingParticipantJoins: 0,
     participants: Object.create(null),
     quizState: {
       isRunning: false,
@@ -516,6 +527,7 @@ function sessionResponse(req, session, qrCode) {
     joinUrl: `${req.protocol}://${req.get('host')}/play.html?session=${session.code}`,
     presenterUrl: `${req.protocol}://${req.get('host')}/present.html#session=${session.code}&token=${encodeURIComponent(presenterToken)}`,
     kind: session.kind,
+    participantLimit: session.participantLimit,
     expiresAt: session.expiresAt
   };
 }
@@ -840,7 +852,8 @@ app.post('/api/admin/session', async (req, res) => {
       quiz,
       kind: 'persistent',
       controller: { type: 'admin', id: req.admin.id },
-      repository: createPersistentSessionRepository(db, id, code)
+      repository: createPersistentSessionRepository(db, id, code),
+      participantLimit: resolveParticipantLimitForAdmin(req.admin, HOSTED_MAX_PARTICIPANTS)
     });
     activeSessions.set(code, sessionState);
 
@@ -1072,13 +1085,26 @@ app.post('/api/session/:code/join', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Cannot join - quiz is ending' });
   }
 
-  // Check if this is a rejoin with an existing participant ID
-  if (existingParticipantId
+  const isValidRejoin = Boolean(existingParticipantId
     && canReuseParticipantCredential(
       session.participants[existingParticipantId],
       name,
       existingParticipantToken
-    )) {
+    ));
+  const admission = getParticipantAdmission(session, { isValidRejoin });
+
+  if (!admission.allowed) {
+    return res.status(429).json({
+      success: false,
+      code: admission.code,
+      error: `This room has reached its ${admission.participantLimit}-participant limit`,
+      participantCount: admission.participantCount,
+      participantLimit: admission.participantLimit
+    });
+  }
+
+  // A verified reconnect keeps its original slot even when the room is full.
+  if (isValidRejoin) {
     const existing = session.participants[existingParticipantId];
 
     return res.json({
@@ -1090,16 +1116,17 @@ app.post('/api/session/:code/join', async (req, res) => {
     });
   }
 
-  if (session.participantLimit
-    && Object.keys(session.participants).length >= session.participantLimit) {
-    return res.status(429).json({
-      success: false,
-      error: `This practice room is limited to ${session.participantLimit} participants`
-    });
+  // Reserve the seat before the async write so concurrent joins cannot oversubscribe the room.
+  session.pendingParticipantJoins += 1;
+  let participantRecord;
+  try {
+    // Persistent sessions write through PostgreSQL; trials allocate only in memory.
+    participantRecord = await session.repository.createParticipant(name.trim());
+  } finally {
+    session.pendingParticipantJoins -= 1;
   }
 
-  // Persistent sessions write through PostgreSQL; trials allocate only in memory.
-  const { id } = await session.repository.createParticipant(name.trim());
+  const { id } = participantRecord;
   const participantCredential = createParticipantCredential();
 
   // Add to in-memory session

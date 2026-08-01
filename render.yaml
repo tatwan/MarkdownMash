@@ -26,3 +26,7 @@ services:
         value: "25"
       - key: GUEST_TRIAL_STARTS_PER_IP_HOUR
         value: "5"
+      - key: HOSTED_MODE
+        value: "true"
+      - key: HOSTED_MAX_PARTICIPANTS
+        value: "50"
