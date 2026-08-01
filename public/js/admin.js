@@ -84,6 +84,7 @@ const participantList = document.getElementById('participant-list');
 const presenterUrl = document.getElementById('presenter-url');
 
 const controlsSection = document.getElementById('controls-section');
+const sidekicksToggle = document.getElementById('sidekicks-toggle');
 const startBtn = document.getElementById('start-btn');
 const nextBtn = document.getElementById('next-btn');
 const endQuestionBtn = document.getElementById('end-question-btn');
@@ -558,7 +559,7 @@ function initSocket(code) {
     participantCount.textContent = data.count;
     totalParticipants.textContent = data.count;
     if (data.name) {
-      addParticipantChip(data.name, data.id);
+      addParticipantChip(data.name, data.id, data.avatarId);
     }
     updateResponseProgress(Number(answersReceived.textContent || 0), data.count);
   });
@@ -566,11 +567,22 @@ function initSocket(code) {
   socket.on('participant_roster', (data) => {
     participantList.innerHTML = '';
     (data.participants || []).forEach(participant => {
-      addParticipantChip(participant.name, participant.id);
+      addParticipantChip(participant.name, participant.id, participant.avatarId);
     });
     participantCount.textContent = data.count || 0;
     totalParticipants.textContent = data.count || 0;
     updateResponseProgress(Number(answersReceived.textContent || 0), data.count || 0);
+  });
+
+  socket.on('participant_avatar_updated', data => {
+    const image = participantList.querySelector(`[data-id="${data.participantId}"] .participant-sidekick`);
+    if (image && data.avatarId) image.src = sidekickAsset(data.avatarId, 128);
+  });
+
+  socket.on('sidekicks_setting_changed', data => {
+    const enabled = data.enabled !== false;
+    sidekicksToggle.checked = enabled;
+    document.body.classList.toggle('sidekicks-disabled', !enabled);
   });
 
   socket.on('participant_kicked', (data) => {
@@ -964,6 +976,8 @@ function showSessionInfo(session) {
 function resetToUploadState() {
   sessionCode = null;
   currentQuiz = null;
+  sidekicksToggle.checked = true;
+  document.body.classList.remove('sidekicks-disabled');
 
   stopKeepAlive(); // Stop pinging — session is over
 
@@ -995,6 +1009,15 @@ function resetToUploadState() {
 startBtn.addEventListener('click', () => {
   if (socket && sessionCode) {
     socket.emit('start_quiz', sessionCode);
+  }
+});
+
+sidekicksToggle.addEventListener('change', () => {
+  if (socket && sessionCode) {
+    socket.emit('set_sidekicks_enabled', {
+      sessionCode,
+      enabled: sidekicksToggle.checked
+    });
   }
 });
 
@@ -1102,9 +1125,9 @@ function startTimer(seconds) {
 }
 
 // Add participant chip (with kick button if we have participant ID)
-function addParticipantChip(name, id = null) {
+function addParticipantChip(name, id = null, avatarId = null) {
   if (id) {
-    addParticipantChipWithKick(id, name);
+    addParticipantChipWithKick(id, name, avatarId);
   } else {
     const chip = document.createElement('span');
     chip.className = 'participant-chip';
@@ -1124,6 +1147,10 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function sidekickAsset(id, size = 128) {
+  return `/assets/sidekicks/webp/${size}/${encodeURIComponent(id)}.webp`;
 }
 
 // ============================================
@@ -2151,16 +2178,21 @@ recoveryForm.addEventListener('submit', async (e) => {
 // ============================================
 
 // Add participant chip with kick button
-function addParticipantChipWithKick(id, name) {
+function addParticipantChipWithKick(id, name, avatarId = null) {
   // Prevent duplicate chips
   const existing = participantList.querySelector(`[data-id="${id}"]`);
-  if (existing) return;
+  if (existing) {
+    const image = existing.querySelector('.participant-sidekick');
+    if (image && avatarId) image.src = sidekickAsset(avatarId);
+    return;
+  }
 
   const chip = document.createElement('span');
   chip.className = 'participant-chip';
   chip.dataset.id = id;
   chip.innerHTML = `
-    ${escapeHtml(name)}
+    ${avatarId ? `<img class="participant-sidekick" src="${sidekickAsset(avatarId)}" alt="" width="28" height="28">` : ''}
+    <span>${escapeHtml(name)}</span>
     <button class="kick-btn" title="Remove participant">&times;</button>
   `;
 

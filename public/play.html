@@ -74,7 +74,18 @@
         <span class="brand-name">Markdown <strong>Mash</strong></span>
       </a>
       <div class="waiting-content">
-        <div class="waiting-check"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg></div>
+        <div id="waiting-sidekick-card" class="sidekick-welcome hidden">
+          <picture>
+            <source id="waiting-sidekick-source" type="image/webp">
+            <img id="waiting-sidekick" alt="" width="160" height="160">
+          </picture>
+          <div>
+            <p class="section-eyebrow">Your Sidekick</p>
+            <strong id="waiting-sidekick-name">Ready to mash</strong>
+            <button id="sidekick-shuffle-btn" class="sidekick-shuffle" type="button">Shuffle once</button>
+            <span id="sidekick-shuffle-status" class="sidekick-status" aria-live="polite"></span>
+          </div>
+        </div>
         <p class="section-eyebrow">You’re in</p>
         <h2 id="welcome-name">Welcome!</h2>
         <p id="quiz-title-display" class="quiz-title"></p>
@@ -109,6 +120,7 @@
     <!-- Results Section -->
     <div id="results-section" class="player-section hidden">
       <div class="result-display">
+        <img id="result-sidekick" class="personal-sidekick hidden" alt="" width="112" height="112">
         <div id="result-icon" class="result-icon"></div>
         <h2 id="result-text"></h2>
         <div class="result-score-display">
@@ -147,6 +159,7 @@
     <!-- Quiz Ended Section -->
     <div id="ended-section" class="player-section hidden">
       <div class="final-display">
+        <img id="final-sidekick" class="personal-sidekick final-sidekick hidden" alt="" width="144" height="144">
         <div id="final-icon" class="final-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg></div>
         <p class="section-eyebrow">Mash complete</p>
         <h2 id="final-status">Quiz Complete!</h2>

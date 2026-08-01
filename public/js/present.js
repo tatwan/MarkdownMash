@@ -58,6 +58,10 @@ function iconHref(icon) {
   return `/assets/icons.svg#${icon}`;
 }
 
+function sidekickAsset(id, size = 128) {
+  return `/assets/sidekicks/webp/${size}/${encodeURIComponent(id)}.webp`;
+}
+
 function init() {
   createConfetti();
   const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -154,6 +158,10 @@ function initSocket() {
 
   socket.on('participant_kicked', data => {
     updateParticipantCount(data.count);
+  });
+
+  socket.on('sidekicks_setting_changed', data => {
+    document.body.classList.toggle('sidekicks-disabled', data.enabled === false);
   });
 
   socket.on('quiz_loaded', data => {
@@ -324,7 +332,17 @@ function renderCorrectResponders(participants) {
   visibleParticipants.forEach(participant => {
     const chip = document.createElement('span');
     chip.className = 'responder-chip';
-    chip.textContent = participant.name;
+    if (participant.avatarId) {
+      const image = document.createElement('img');
+      image.src = sidekickAsset(participant.avatarId);
+      image.alt = '';
+      image.width = 34;
+      image.height = 34;
+      chip.appendChild(image);
+    }
+    const name = document.createElement('span');
+    name.textContent = participant.name;
+    chip.appendChild(name);
     correctResponders.appendChild(chip);
   });
 
@@ -380,6 +398,9 @@ function populateFinale() {
     const rank = Number(place.dataset.rank);
     const participant = leaderboard[rank - 1];
     place.classList.toggle('absent', !participant);
+    const avatar = place.querySelector('[data-podium-avatar]');
+    avatar.classList.toggle('hidden', !participant?.avatarId);
+    if (participant?.avatarId) avatar.src = sidekickAsset(participant.avatarId, 256);
     place.querySelector('[data-podium-name]').textContent = participant?.name || '';
     place.querySelector('[data-podium-score]').textContent = participant
       ? `${participant.correctCount} correct · ${participant.score} pts`
@@ -392,6 +413,7 @@ function populateFinale() {
     card.className = 'runner-up-card';
     card.innerHTML = `
       <span class="runner-rank">${participant.rank}</span>
+      ${participant.avatarId ? `<img class="runner-sidekick" src="${sidekickAsset(participant.avatarId)}" alt="" width="52" height="52">` : ''}
       <div>
         <strong></strong>
         <span>${participant.correctCount} correct · ${participant.score} pts</span>

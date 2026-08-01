@@ -16,6 +16,7 @@ function rankParticipants(session) {
     .map(participant => ({
       id: participant.id,
       name: participant.name,
+      avatarId: participant.avatarId || null,
       correctCount: participant.correctCount || 0,
       currentStreak: participant.currentStreak || 0,
       bestStreak: participant.bestStreak || 0,
@@ -125,6 +126,7 @@ function buildQuestionPresentation(session, question) {
     .map(participant => ({
       id: participant.id,
       name: participant.name,
+      avatarId: participant.avatarId || null,
       responseTimeMs: participant.responseTimes?.[question.id] ?? null
     }))
     .sort((a, b) => {

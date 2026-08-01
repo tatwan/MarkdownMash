@@ -251,6 +251,23 @@ async function run() {
     });
     assert.match((await impersonationRejected).message, /access expired/i);
 
+    const [adminSidekicksOff, presenterSidekicksOff, playerSidekicksOff] = [
+      waitForSocket(admin, 'sidekicks_setting_changed'),
+      waitForSocket(presenter, 'sidekicks_setting_changed'),
+      waitForSocket(playerA, 'sidekicks_setting_changed')
+    ];
+    admin.emit('set_sidekicks_enabled', { sessionCode, enabled: false });
+    const sidekickUpdates = await Promise.all([
+      adminSidekicksOff,
+      presenterSidekicksOff,
+      playerSidekicksOff
+    ]);
+    sidekickUpdates.forEach(update => assert.equal(update.enabled, false));
+
+    const presenterToggleRejected = waitForSocket(presenter, 'control_error');
+    presenter.emit('set_sidekicks_enabled', { sessionCode, enabled: true });
+    assert.match((await presenterToggleRejected).message, /permission/i);
+
     const quizStarted = waitForSocket(admin, 'quiz_started');
     admin.emit('start_quiz', sessionCode);
     await quizStarted;

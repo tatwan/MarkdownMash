@@ -16,6 +16,12 @@ const waitingSection = document.getElementById('waiting-section');
 const welcomeName = document.getElementById('welcome-name');
 const quizTitleDisplay = document.getElementById('quiz-title-display');
 const waitingSessionCode = document.getElementById('waiting-session-code');
+const waitingSidekickCard = document.getElementById('waiting-sidekick-card');
+const waitingSidekickSource = document.getElementById('waiting-sidekick-source');
+const waitingSidekick = document.getElementById('waiting-sidekick');
+const waitingSidekickName = document.getElementById('waiting-sidekick-name');
+const sidekickShuffleBtn = document.getElementById('sidekick-shuffle-btn');
+const sidekickShuffleStatus = document.getElementById('sidekick-shuffle-status');
 
 const questionSection = document.getElementById('question-section');
 const currentQNum = document.getElementById('current-q-num');
@@ -38,6 +44,7 @@ const resultStreak = document.getElementById('result-streak');
 const resultMovement = document.getElementById('result-movement');
 const resultResponseTotal = document.getElementById('result-response-total');
 const resultsDistribution = document.getElementById('results-distribution');
+const resultSidekick = document.getElementById('result-sidekick');
 
 const endedSection = document.getElementById('ended-section');
 const finalIcon = document.getElementById('final-icon');
@@ -49,6 +56,7 @@ const finalMessage = document.getElementById('final-message');
 const finalRank = document.getElementById('final-rank');
 const finalCorrect = document.getElementById('final-correct');
 const finalStreak = document.getElementById('final-streak');
+const finalSidekick = document.getElementById('final-sidekick');
 const participantStore = MarkdownMashParticipantStorage.createParticipantStore(
   window.sessionStorage,
   window.localStorage
@@ -64,6 +72,8 @@ let selectedAnswer = null;
 let timerInterval = null;
 let timerDuration = 20;
 let currentScore = 0;
+let avatarId = null;
+let canShuffleAvatar = false;
 let isFirstConnect = true; // Tracks whether this is the initial connection or a reconnect
 
 // Motivating messages
@@ -138,6 +148,36 @@ function escapeText(value) {
   return div.innerHTML;
 }
 
+function sidekickName(id) {
+  if (!id) return '';
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+function sidekickAsset(id, size = 256, format = 'webp') {
+  return `/assets/sidekicks/${format}/${size}/${encodeURIComponent(id)}.${format}`;
+}
+
+function renderPersonalSidekick() {
+  if (!avatarId) {
+    waitingSidekickCard.classList.add('hidden');
+    resultSidekick.classList.add('hidden');
+    finalSidekick.classList.add('hidden');
+    return;
+  }
+
+  waitingSidekickSource.srcset = sidekickAsset(avatarId, 256);
+  waitingSidekick.src = `/assets/sidekicks/png/256/${encodeURIComponent(avatarId)}.png`;
+  waitingSidekickName.textContent = `You’re ${sidekickName(avatarId)}!`;
+  waitingSidekickCard.classList.remove('hidden');
+  sidekickShuffleBtn.disabled = !canShuffleAvatar;
+  sidekickShuffleBtn.textContent = canShuffleAvatar ? 'Shuffle once' : 'Sidekick locked in';
+
+  [resultSidekick, finalSidekick].forEach(image => {
+    image.src = sidekickAsset(avatarId, 256);
+    image.classList.remove('hidden');
+  });
+}
+
 function clearCurrentIdentity({ forgetRecovery = false, clearSession = false } = {}) {
   const code = sessionCode || sessionCodeInput.value.trim().toUpperCase();
   const active = code ? participantStore.getActive(code) : null;
@@ -196,6 +236,8 @@ async function attemptJoin(
       participantId = data.participantId;
       participantToken = data.participantToken;
       sessionCode = data.sessionCode;
+      avatarId = data.avatarId || null;
+      canShuffleAvatar = Boolean(data.canShuffleAvatar);
 
       participantStore.setActive(
         sessionCode,
@@ -216,6 +258,8 @@ async function attemptJoin(
       welcomeName.textContent = `Welcome, ${name}!`;
       quizTitleDisplay.textContent = data.quizTitle;
       waitingSessionCode.textContent = sessionCode;
+      sidekickShuffleStatus.textContent = '';
+      renderPersonalSidekick();
 
       initSocket();
     } else {
@@ -235,6 +279,39 @@ async function attemptJoin(
 joinForm.addEventListener('submit', (e) => {
   e.preventDefault();
   attemptJoin();
+});
+
+sidekickShuffleBtn.addEventListener('click', async () => {
+  if (!canShuffleAvatar || !avatarId || !participantId || !participantToken || !sessionCode) return;
+
+  canShuffleAvatar = false;
+  sidekickShuffleBtn.disabled = true;
+  sidekickShuffleBtn.setAttribute('aria-busy', 'true');
+  sidekickShuffleStatus.textContent = 'Finding a new Sidekick…';
+
+  try {
+    const response = await fetch(`/api/session/${sessionCode}/sidekick/shuffle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantId, participantToken })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      canShuffleAvatar = response.status >= 500;
+      sidekickShuffleStatus.textContent = data.error || 'Unable to shuffle your Sidekick.';
+      renderPersonalSidekick();
+      return;
+    }
+
+    avatarId = data.avatarId;
+    canShuffleAvatar = false;
+    sidekickShuffleStatus.textContent = `${sidekickName(avatarId)} is ready!`;
+    renderPersonalSidekick();
+  } catch (error) {
+    sidekickShuffleStatus.textContent = 'Connection interrupted. Your current Sidekick is safe.';
+  } finally {
+    sidekickShuffleBtn.removeAttribute('aria-busy');
+  }
 });
 
 sessionCodeInput.addEventListener('input', () => {
@@ -291,6 +368,18 @@ function initSocket() {
     participantId = null;
     participantToken = null;
     sessionCode = null;
+    avatarId = null;
+    canShuffleAvatar = false;
+  });
+
+  socket.on('participant_ready', data => {
+    avatarId = data.avatarId || avatarId;
+    canShuffleAvatar = Boolean(data.canShuffleAvatar);
+    renderPersonalSidekick();
+  });
+
+  socket.on('sidekicks_setting_changed', data => {
+    document.body.classList.toggle('sidekicks-disabled', data.enabled === false);
   });
 
   socket.on('kicked', (data) => {
@@ -299,6 +388,8 @@ function initSocket() {
     participantId = null;
     participantToken = null;
     sessionCode = null;
+    avatarId = null;
+    canShuffleAvatar = false;
 
     // Show kicked message
     hideAllSections();
@@ -324,6 +415,8 @@ function initSocket() {
     participantId = null;
     participantToken = null;
     sessionCode = null;
+    avatarId = null;
+    canShuffleAvatar = false;
   });
 
   socket.on('trial_expired', (data) => {
@@ -335,6 +428,8 @@ function initSocket() {
     participantId = null;
     participantToken = null;
     sessionCode = null;
+    avatarId = null;
+    canShuffleAvatar = false;
   });
 
   socket.on('quiz_started', (data) => {
@@ -342,6 +437,8 @@ function initSocket() {
     totalQNum.textContent = data.totalQuestions;
     currentScore = 0;
     scoreDisplay.textContent = '0';
+    canShuffleAvatar = false;
+    renderPersonalSidekick();
   });
 
   socket.on('question_started', (data) => {

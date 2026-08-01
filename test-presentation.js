@@ -22,6 +22,7 @@ function makeSession() {
       a: {
         id: 'a',
         name: 'Amina',
+        avatarId: 'shades',
         correctCount: 3,
         currentStreak: 3,
         bestStreak: 3,
@@ -31,6 +32,7 @@ function makeSession() {
       b: {
         id: 'b',
         name: 'Basil',
+        avatarId: 'boo',
         correctCount: 2,
         currentStreak: 0,
         bestStreak: 2,
@@ -79,6 +81,7 @@ function run() {
   );
   assert.equal(ranked[0].movement, 2, 'rank movement should compare with the prior snapshot');
   assert.equal(ranked[0].score, 100, 'points should follow the quiz total score');
+  assert.equal(ranked[0].avatarId, 'shades', 'ranking payloads should retain Sidekicks');
 
   const questionPresentation = buildQuestionPresentation(session, session.quiz.questions[2]);
   assert.deepEqual(
@@ -86,6 +89,7 @@ function run() {
     ['Amina', 'Basil', 'Carla'],
     'correct responders should be ordered by response time'
   );
+  assert.equal(questionPresentation.correctParticipants[0].avatarId, 'shades');
   assert.ok(
     questionPresentation.highlights.some(highlight => highlight.type === 'streak'),
     'a multi-answer streak should produce a streak highlight'

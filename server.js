@@ -241,6 +241,7 @@ function createSessionState({
     participantLimit,
     pendingParticipantJoins: 0,
     sidekickState: createSidekickState(),
+    sidekicksEnabled: true,
     participants: Object.create(null),
     quizState: {
       isRunning: false,
@@ -1916,6 +1917,10 @@ function rejectSocketControl(socket) {
 }
 
 function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin') {
+  socket.emit('sidekicks_setting_changed', {
+    enabled: session.sidekicksEnabled !== false
+  });
+
   socket.emit('participant_joined', {
     count: Object.keys(session.participants).length
   });
@@ -1986,6 +1991,19 @@ io.on('connection', (socket) => {
     } else {
       rejectSocketControl(socket);
     }
+  });
+
+  socket.on('set_sidekicks_enabled', ({ sessionCode, enabled } = {}) => {
+    const session = activeSessions.get(sessionCode);
+    if (!session || !socketCanControl(socket, sessionCode)) {
+      return rejectSocketControl(socket);
+    }
+
+    session.sidekicksEnabled = enabled !== false;
+    const update = { enabled: session.sidekicksEnabled };
+    io.to(`session:${sessionCode}`).emit('sidekicks_setting_changed', update);
+    io.to(`admin:${sessionCode}`).emit('sidekicks_setting_changed', update);
+    io.to(`presenter:${sessionCode}`).emit('sidekicks_setting_changed', update);
   });
 
   // Presenter joins a read-only display room with a session-bound capability.
@@ -2065,6 +2083,9 @@ io.on('connection', (socket) => {
       sessionCode,
       avatarId: participant.avatarId,
       canShuffleAvatar: getShuffleAvailability(session, participant).allowed
+    });
+    socket.emit('sidekicks_setting_changed', {
+      enabled: session.sidekicksEnabled !== false
     });
 
     console.log(

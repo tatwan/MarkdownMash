@@ -1710,6 +1710,203 @@ label {
   }
 }
 
+/* Sidekicks */
+.sidekick-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 4vw, 2rem);
+  width: min(560px, 100%);
+  margin: 0 auto 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.16), rgba(34, 211, 238, 0.08));
+  text-align: left;
+}
+
+.sidekick-welcome picture,
+.sidekick-welcome img {
+  width: clamp(112px, 24vw, 160px);
+  height: clamp(112px, 24vw, 160px);
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.sidekick-welcome strong {
+  display: block;
+  margin: 0.1rem 0 0.7rem;
+  color: var(--text);
+  font-size: clamp(1.25rem, 4vw, 1.8rem);
+}
+
+.sidekick-shuffle {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.sidekick-shuffle:hover:not(:disabled) {
+  border-color: var(--primary-light);
+  background: rgba(124, 92, 255, 0.22);
+}
+
+.sidekick-shuffle:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.sidekick-status {
+  display: block;
+  min-height: 1.1rem;
+  margin-top: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.personal-sidekick {
+  display: block;
+  width: 112px;
+  height: 112px;
+  margin: 0 auto 0.5rem;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.2));
+}
+
+.personal-sidekick.final-sidekick {
+  width: 144px;
+  height: 144px;
+}
+
+.participant-sidekick {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.responder-chip img {
+  width: 34px;
+  height: 34px;
+  margin-right: 0.35rem;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.podium-sidekick {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 0.35rem;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.25));
+}
+
+.podium-first .podium-sidekick {
+  width: 104px;
+  height: 104px;
+}
+
+.runner-up-card {
+  align-items: center;
+}
+
+.runner-sidekick {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.sidekick-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sidekick-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.sidekick-toggle-track {
+  position: relative;
+  width: 2.35rem;
+  height: 1.3rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.sidekick-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 0.16rem;
+  left: 0.18rem;
+  width: 0.86rem;
+  height: 0.86rem;
+  border-radius: 50%;
+  background: var(--text-primary);
+  transition: transform 160ms ease;
+}
+
+.sidekick-toggle input:checked + .sidekick-toggle-track {
+  border-color: rgba(34, 211, 238, 0.58);
+  background: rgba(34, 211, 238, 0.28);
+}
+
+.sidekick-toggle input:checked + .sidekick-toggle-track::after {
+  transform: translateX(1rem);
+}
+
+.sidekick-toggle input:focus-visible + .sidekick-toggle-track {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 3px;
+}
+
+.sidekicks-disabled #waiting-sidekick-card,
+.sidekicks-disabled .personal-sidekick,
+.sidekicks-disabled .participant-sidekick,
+.sidekicks-disabled .responder-sidekick,
+.sidekicks-disabled .podium-sidekick,
+.sidekicks-disabled .runner-sidekick {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .sidekick-welcome {
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .podium-sidekick {
+    width: 70px;
+    height: 70px;
+  }
+
+  .podium-first .podium-sidekick {
+    width: 82px;
+    height: 82px;
+  }
+}
+
 /* ============================================
    PLAYER VIEW (for participants)
    ============================================ */
