@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "license": "CC-BY-4.0",
+  "sidekicks": [
+    {
+      "id": "shades",
+      "name": "Shades",
+      "tagline": "Cool, calm, and quiz-ready.",
+      "assets": {
+        "png": "/assets/sidekicks/png/shades.png",
+        "webp512": "/assets/sidekicks/webp/512/shades.webp",
+        "webp256": "/assets/sidekicks/webp/256/shades.webp",
+        "webp128": "/assets/sidekicks/webp/128/shades.webp"
+      }
+    },
+    {
+      "id": "boo",
+      "name": "Boo",
+      "tagline": "Happy ghost, zero fright.",
+      "assets": {
+        "png": "/assets/sidekicks/png/boo.png",
+        "webp512": "/assets/sidekicks/webp/512/boo.webp",
+        "webp256": "/assets/sidekicks/webp/256/boo.webp",
+        "webp128": "/assets/sidekicks/webp/128/boo.webp"
+      }
+    },
+    {
+      "id": "zap",
+      "name": "Zap",
+      "tagline": "Fast answers. Big energy.",
+      "assets": {
+        "png": "/assets/sidekicks/png/zap.png",
+        "webp512": "/assets/sidekicks/webp/512/zap.webp",
+        "webp256": "/assets/sidekicks/webp/256/zap.webp",
+        "webp128": "/assets/sidekicks/webp/128/zap.webp"
+      }
+    },
+    {
+      "id": "stella",
+      "name": "Stella",
+      "tagline": "Shine bright, ace tonight.",
+      "assets": {
+        "png": "/assets/sidekicks/png/stella.png",
+        "webp512": "/assets/sidekicks/webp/512/stella.webp",
+        "webp256": "/assets/sidekicks/webp/256/stella.webp",
+        "webp128": "/assets/sidekicks/webp/128/stella.webp"
+      }
+    },
+    {
+      "id": "byte",
+      "name": "Byte",
+      "tagline": "Beep boop. Big brain mode.",
+      "assets": {
+        "png": "/assets/sidekicks/png/byte.png",
+        "webp512": "/assets/sidekicks/webp/512/byte.webp",
+        "webp256": "/assets/sidekicks/webp/256/byte.webp",
+        "webp128": "/assets/sidekicks/webp/128/byte.webp"
+      }
+    },
+    {
+      "id": "nimbus",
+      "name": "Nimbus",
+      "tagline": "Floating through trivia.",
+      "assets": {
+        "png": "/assets/sidekicks/png/nimbus.png",
+        "webp512": "/assets/sidekicks/webp/512/nimbus.webp",
+        "webp256": "/assets/sidekicks/webp/256/nimbus.webp",
+        "webp128": "/assets/sidekicks/webp/128/nimbus.webp"
+      }
+    },
+    {
+      "id": "zog",
+      "name": "Zog",
+      "tagline": "Out of this world curious.",
+      "assets": {
+        "png": "/assets/sidekicks/png/zog.png",
+        "webp512": "/assets/sidekicks/webp/512/zog.webp",
+        "webp256": "/assets/sidekicks/webp/256/zog.webp",
+        "webp128": "/assets/sidekicks/webp/128/zog.webp"
+      }
+    },
+    {
+      "id": "pixel",
+      "name": "Pixel",
+      "tagline": "Level up your knowledge.",
+      "assets": {
+        "png": "/assets/sidekicks/png/pixel.png",
+        "webp512": "/assets/sidekicks/webp/512/pixel.webp",
+        "webp256": "/assets/sidekicks/webp/256/pixel.webp",
+        "webp128": "/assets/sidekicks/webp/128/pixel.webp"
+      }
+    },
+    {
+      "id": "rocketo",
+      "name": "Rocketo",
+      "tagline": "Blast off to the top.",
+      "assets": {
+        "png": "/assets/sidekicks/png/rocketo.png",
+        "webp512": "/assets/sidekicks/webp/512/rocketo.webp",
+        "webp256": "/assets/sidekicks/webp/256/rocketo.webp",
+        "webp128": "/assets/sidekicks/webp/128/rocketo.webp"
+      }
+    },
+    {
+      "id": "luna",
+      "name": "Luna",
+      "tagline": "Bright idea, night or day.",
+      "assets": {
+        "png": "/assets/sidekicks/png/luna.png",
+        "webp512": "/assets/sidekicks/webp/512/luna.webp",
+        "webp256": "/assets/sidekicks/webp/256/luna.webp",
+        "webp128": "/assets/sidekicks/webp/128/luna.webp"
+      }
+    },
+    {
+      "id": "booky",
+      "name": "Booky",
+      "tagline": "Stories, smarts, and more.",
+      "assets": {
+        "png": "/assets/sidekicks/png/booky.png",
+        "webp512": "/assets/sidekicks/webp/512/booky.webp",
+        "webp256": "/assets/sidekicks/webp/256/booky.webp",
+        "webp128": "/assets/sidekicks/webp/128/booky.webp"
+      }
+    },
+    {
+      "id": "fitzy",
+      "name": "Fitzy",
+      "tagline": "Solves together, sticks together.",
+      "assets": {
+        "png": "/assets/sidekicks/png/fitzy.png",
+        "webp512": "/assets/sidekicks/webp/512/fitzy.webp",
+        "webp256": "/assets/sidekicks/webp/256/fitzy.webp",
+        "webp128": "/assets/sidekicks/webp/128/fitzy.webp"
+      }
+    },
+    {
+      "id": "comet",
+      "name": "Comet",
+      "tagline": "Zooming toward greatness.",
+      "assets": {
+        "png": "/assets/sidekicks/png/comet.png",
+        "webp512": "/assets/sidekicks/webp/512/comet.webp",
+        "webp256": "/assets/sidekicks/webp/256/comet.webp",
+        "webp128": "/assets/sidekicks/webp/128/comet.webp"
+      }
+    },
+    {
+      "id": "heartbeat",
+      "name": "Heartbeat",
+      "tagline": "Big feelings, lots of love.",
+      "assets": {
+        "png": "/assets/sidekicks/png/heartbeat.png",
+        "webp512": "/assets/sidekicks/webp/512/heartbeat.webp",
+        "webp256": "/assets/sidekicks/webp/256/heartbeat.webp",
+        "webp128": "/assets/sidekicks/webp/128/heartbeat.webp"
+      }
+    },
+    {
+      "id": "popstar",
+      "name": "Popstar",
+      "tagline": "Always ready for fun.",
+      "assets": {
+        "png": "/assets/sidekicks/png/popstar.png",
+        "webp512": "/assets/sidekicks/webp/512/popstar.webp",
+        "webp256": "/assets/sidekicks/webp/256/popstar.webp",
+        "webp128": "/assets/sidekicks/webp/128/popstar.webp"
+      }
+    },
+    {
+      "id": "chestie",
+      "name": "Chestie",
+      "tagline": "Little treasure, big rewards.",
+      "assets": {
+        "png": "/assets/sidekicks/png/chestie.png",
+        "webp512": "/assets/sidekicks/webp/512/chestie.webp",
+        "webp256": "/assets/sidekicks/webp/256/chestie.webp",
+        "webp128": "/assets/sidekicks/webp/128/chestie.webp"
+      }
+    }
+  ]
+}
