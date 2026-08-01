@@ -53,8 +53,41 @@ function createRankSnapshot(leaderboard) {
   return Object.fromEntries(leaderboard.map(entry => [entry.id, entry.rank]));
 }
 
+function selectLeadTransition(questionId) {
+  const transitions = ['swoop', 'high-five', 'spring-swap', 'rocket-pass'];
+  const seed = String(questionId || '')
+    .split('')
+    .reduce((total, character) => total + character.charCodeAt(0), 0);
+  return transitions[seed % transitions.length];
+}
+
 function buildHighlights(leaderboard, correctParticipants, questionId) {
   const highlights = [];
+
+  const currentLeader = leaderboard[0];
+  const previousLeader = leaderboard.find(entry => entry.previousRank === 1);
+  const leadChanged = Boolean(currentLeader
+    && previousLeader
+    && currentLeader.id !== previousLeader.id
+    && currentLeader.previousRank
+    && currentLeader.previousRank > 1);
+  if (leadChanged) {
+    highlights.push({
+      type: 'lead-change',
+      icon: 'trend-up',
+      eyebrow: 'New leader',
+      message: `${currentLeader.name} takes the lead from ${previousLeader.name}`,
+      transition: selectLeadTransition(questionId),
+      incoming: {
+        name: currentLeader.name,
+        avatarId: currentLeader.avatarId
+      },
+      outgoing: {
+        name: previousLeader.name,
+        avatarId: previousLeader.avatarId
+      }
+    });
+  }
 
   const streakLeader = leaderboard
     .filter(entry => entry.currentStreak >= 2)
@@ -70,7 +103,7 @@ function buildHighlights(leaderboard, correctParticipants, questionId) {
   }
 
   const biggestMover = leaderboard
-    .filter(entry => entry.movement > 0)
+    .filter(entry => entry.movement > 0 && (!leadChanged || entry.id !== currentLeader.id))
     .sort((a, b) => b.movement - a.movement || a.rank - b.rank)[0];
 
   if (biggestMover) {
@@ -211,5 +244,6 @@ module.exports = {
   buildQuestionPresentation,
   createRankSnapshot,
   getAverageResponseTime,
-  rankParticipants
+  rankParticipants,
+  selectLeadTransition
 };

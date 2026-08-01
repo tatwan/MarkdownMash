@@ -33,6 +33,9 @@ const momentCard = document.getElementById('moment-card');
 const momentIconUse = document.getElementById('moment-icon-use');
 const momentEyebrow = document.getElementById('moment-eyebrow');
 const momentMessage = document.getElementById('moment-message');
+const leadChangeScene = document.getElementById('lead-change-scene');
+const leadOutgoingSidekick = document.getElementById('lead-outgoing-sidekick');
+const leadIncomingSidekick = document.getElementById('lead-incoming-sidekick');
 const podiumScene = document.getElementById('podium-scene');
 const hardestScene = document.getElementById('hardest-scene');
 const podiumStage = document.getElementById('podium-stage');
@@ -366,10 +369,26 @@ function startHighlightRotation(highlights) {
 
   const showHighlight = () => {
     const highlight = items[index % items.length];
-    momentCard.className = `result-insight-card moment-card ${highlight.type}`;
+    const transitionClass = highlight.transition ? ` lead-${highlight.transition}` : '';
+    momentCard.className = `result-insight-card moment-card ${highlight.type}${transitionClass}`;
     momentIconUse.setAttribute('href', iconHref(highlight.icon));
     momentEyebrow.textContent = highlight.eyebrow;
     momentMessage.textContent = highlight.message;
+
+    const hasLeadChange = highlight.type === 'lead-change'
+      && (highlight.incoming?.avatarId || highlight.outgoing?.avatarId);
+    leadChangeScene.classList.toggle('hidden', !hasLeadChange);
+    if (hasLeadChange) {
+      leadOutgoingSidekick.classList.toggle('hidden', !highlight.outgoing?.avatarId);
+      leadIncomingSidekick.classList.toggle('hidden', !highlight.incoming?.avatarId);
+      if (highlight.outgoing?.avatarId) {
+        leadOutgoingSidekick.src = sidekickAsset(highlight.outgoing.avatarId);
+      }
+      if (highlight.incoming?.avatarId) {
+        leadIncomingSidekick.src = sidekickAsset(highlight.incoming.avatarId);
+      }
+    }
+
     momentCard.classList.remove('moment-enter');
     void momentCard.offsetWidth;
     momentCard.classList.add('moment-enter');

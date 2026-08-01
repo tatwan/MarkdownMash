@@ -3,7 +3,8 @@ const {
   buildFinaleSummary,
   buildHardestQuestions,
   buildQuestionPresentation,
-  rankParticipants
+  rankParticipants,
+  selectLeadTransition
 } = require('./presentation');
 
 function makeSession() {
@@ -95,12 +96,24 @@ function run() {
     'a multi-answer streak should produce a streak highlight'
   );
   assert.ok(
-    questionPresentation.highlights.some(highlight => highlight.type === 'rising'),
-    'an upward rank change should produce a movement highlight'
-  );
-  assert.ok(
     questionPresentation.highlights.some(highlight => highlight.type === 'speed'),
     'a correct response should produce a fastest-answer highlight'
+  );
+  const leadChange = questionPresentation.highlights.find(highlight => highlight.type === 'lead-change');
+  assert.equal(leadChange.incoming.name, 'Amina');
+  assert.equal(leadChange.incoming.avatarId, 'shades');
+  assert.equal(leadChange.outgoing.name, 'Basil');
+  assert.equal(leadChange.outgoing.avatarId, 'boo');
+  assert.ok(['swoop', 'high-five', 'spring-swap', 'rocket-pass'].includes(leadChange.transition));
+  assert.equal(selectLeadTransition(3), selectLeadTransition(3), 'lead transition selection should be deterministic');
+
+  const initialSession = makeSession();
+  initialSession.rankSnapshot = {};
+  const initialPresentation = buildQuestionPresentation(initialSession, initialSession.quiz.questions[0]);
+  assert.equal(
+    initialPresentation.highlights.some(highlight => highlight.type === 'lead-change'),
+    false,
+    'the first ranking should establish a leader without announcing a takeover'
   );
 
   const hardest = buildHardestQuestions(session);
