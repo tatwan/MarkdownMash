@@ -54,6 +54,7 @@ const {
 } = require('./account-identity');
 const {
   getHostedBillingFailure,
+  hasComplimentaryRoomEntitlement,
   hasHostedRoomEntitlement
 } = require('./billing');
 const {
@@ -67,6 +68,7 @@ const {
   maskEmail,
   resolveInviteTtlHours
 } = require('./account-invitations');
+const { createEmailService } = require('./email-service');
 
 const app = express();
 const server = http.createServer(app);
@@ -140,6 +142,11 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || '';
 const APP_BASE_URL = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
 const HOSTED_INVITE_TTL_HOURS = resolveInviteTtlHours(process.env.HOSTED_INVITE_TTL_HOURS);
+const PUBLIC_SIGNUP_ENABLED = process.env.PUBLIC_SIGNUP_ENABLED === 'true';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const EMAIL_FROM = process.env.EMAIL_FROM || '';
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || '';
+const RESEND_API_URL = process.env.RESEND_API_URL || 'https://api.resend.com/emails';
 const GUEST_TRIAL_ENABLED = process.env.GUEST_TRIAL_ENABLED !== 'false';
 const GUEST_TRIAL_TTL_MINUTES = Math.max(
   5,
@@ -176,6 +183,14 @@ if (isProduction) {
     if (!STRIPE_PRICE_ID.startsWith('price_')) invalidConfiguration.push('STRIPE_PRICE_ID');
     if (!APP_BASE_URL.startsWith('https://')) invalidConfiguration.push('APP_BASE_URL (HTTPS)');
   }
+  if (PUBLIC_SIGNUP_ENABLED) {
+    if (!HOSTED_MODE) invalidConfiguration.push('HOSTED_MODE=true when public signup is enabled');
+    if (!STRIPE_BILLING_ENABLED) invalidConfiguration.push('STRIPE_BILLING_ENABLED=true when public signup is enabled');
+    if (!RESEND_API_KEY.startsWith('re_')) invalidConfiguration.push('RESEND_API_KEY');
+    if (!EMAIL_FROM) invalidConfiguration.push('EMAIL_FROM');
+    if (!EMAIL_REPLY_TO) invalidConfiguration.push('EMAIL_REPLY_TO');
+    if (!APP_BASE_URL.startsWith('https://')) invalidConfiguration.push('APP_BASE_URL (HTTPS)');
+  }
   if (invalidConfiguration.length > 0) {
     throw new Error(`Unsafe production configuration: ${invalidConfiguration.join(', ')}`);
   }
@@ -190,6 +205,19 @@ const stripeBilling = STRIPE_BILLING_ENABLED
       appBaseUrl: APP_BASE_URL
     })
   : null;
+const emailService = createEmailService({
+  apiKey: RESEND_API_KEY,
+  from: EMAIL_FROM,
+  replyTo: EMAIL_REPLY_TO,
+  apiUrl: RESEND_API_URL
+});
+const publicRegistrationAvailable = Boolean(
+  HOSTED_MODE
+  && PUBLIC_SIGNUP_ENABLED
+  && stripeBilling
+  && emailService.configured
+  && APP_BASE_URL
+);
 
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
   if (!stripeBilling) {
@@ -206,8 +234,17 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '
     const payloadDigest = crypto.createHash('sha256').update(req.body).digest('hex');
     const result = await stripeBilling.processEvent(event, payloadDigest);
     if (result?.subscription && !hasHostedRoomEntitlement(result.subscription)) {
+      const accountId = result.subscription.account_id || result.subscription.accountId;
+      const account = accountId ? await db.getAdminById(accountId) : null;
+      const billingFailure = getHostedBillingFailure({
+        billingEnabled: STRIPE_BILLING_ENABLED,
+        hostedMode: HOSTED_MODE,
+        admin: account ? adminPrincipal(account) : null,
+        subscription: result.subscription
+      });
+      if (!billingFailure) return res.json({ received: true, duplicate: Boolean(result?.duplicate) });
       for (const socket of io.sockets.sockets.values()) {
-        if (socket.data.principal?.id === result.subscription.account_id) {
+        if (socket.data.principal?.id === accountId) {
           socket.emit('control_error', {
             message: 'The hosted subscription is no longer active.'
           });
@@ -278,6 +315,13 @@ const invitationCreateLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { success: false, error: 'Too many invitation creations. Please try again later.' }
+});
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many registration attempts. Please try again later.' }
 });
 const guestQuizMarkdown = fs.readFileSync(
   path.join(__dirname, 'demo-quizzes', 'quick-wins.md'),
@@ -572,7 +616,10 @@ function adminPrincipal(admin) {
     role: admin.role,
     username: admin.username,
     accountStatus: admin.account_status || admin.accountStatus || 'active',
-    authSource: admin.auth_source || admin.authSource || 'deployment'
+    authSource: admin.auth_source || admin.authSource || 'deployment',
+    provisioningSource: admin.provisioning_source || admin.provisioningSource || 'deployment',
+    accessOverride: admin.access_override || admin.accessOverride || 'none',
+    complimentaryAccessUntil: admin.complimentary_access_until || admin.complimentaryAccessUntil || null
   };
 }
 
@@ -699,6 +746,7 @@ app.use('/api/admin', (req, res, next) => {
   const publicAdminPaths = new Set([
     '/auth/config',
     '/login',
+    '/register',
     '/invite/inspect',
     '/invite/activate',
     '/recovery/questions',
@@ -717,7 +765,8 @@ app.get('/api/admin/auth/config', (req, res) => {
     success: true,
     hostedMode: HOSTED_MODE,
     emailLogin: HOSTED_MODE,
-    publicSignup: false,
+    publicSignup: publicRegistrationAvailable,
+    publicRegistration: publicRegistrationAvailable,
     invitationActivation: HOSTED_MODE,
     billingEnabled: STRIPE_BILLING_ENABLED,
     hostedPlan: {
@@ -727,6 +776,53 @@ app.get('/api/admin/auth/config', (req, res) => {
       interval: 'year'
     }
   });
+});
+
+app.post('/api/admin/register', registrationLimiter, async (req, res) => {
+  if (!publicRegistrationAvailable) {
+    return res.status(404).json({ success: false, error: 'Public registration is not enabled' });
+  }
+  const email = normalizeEmail(req.body?.email);
+  const displayName = String(req.body?.displayName || '').trim();
+  if (!isValidEmail(email) || !displayName || displayName.length > 120) {
+    return res.status(400).json({ success: false, error: 'Enter a valid name and email address' });
+  }
+
+  const genericResponse = {
+    success: true,
+    message: 'If this email can be registered, a verification link is on its way.'
+  };
+  try {
+    const token = createOpaqueToken();
+    const result = await db.createSelfServiceRegistration({
+      email,
+      displayName,
+      username: `hosted_${crypto.randomUUID()}`,
+      passwordHash: await bcrypt.hash(createOpaqueToken(), SALT_ROUNDS),
+      tokenHash: hashOpaqueToken(token),
+      expiresAt: invitationExpiry(HOSTED_INVITE_TTL_HOURS)
+    });
+    if (!result) return res.status(202).json(genericResponse);
+
+    const inviteUrl = buildInvitationUrl(APP_BASE_URL, token);
+    await emailService.sendAccountVerification({
+      to: result.account.email,
+      displayName: result.account.display_name,
+      inviteUrl,
+      invitationId: result.invitation.id,
+      expiresAt: result.invitation.expires_at
+    });
+    try {
+      await db.logActivity(result.account.id, 'self_service_verification_sent', {}, req.ip);
+    } catch (auditError) {
+      console.error('Registration audit error:', auditError);
+    }
+    return res.status(202).json(genericResponse);
+  } catch (error) {
+    if (error.code === '23505') return res.status(202).json(genericResponse);
+    console.error('Public registration error:', error);
+    return res.status(503).json({ success: false, error: 'Unable to send a verification email right now' });
+  }
 });
 
 app.post('/api/admin/invite/inspect', invitationInspectLimiter, async (req, res) => {
@@ -789,7 +885,8 @@ app.post('/api/admin/invite/activate', invitationActivateLimiter, async (req, re
     return res.json({
       success: true,
       email: activated.email,
-      message: 'Your hosted instructor account is ready.'
+      message: 'Your hosted instructor account is ready.',
+      checkoutAfterActivation: activated.purpose === 'self_signup' && STRIPE_BILLING_ENABLED
     });
   } catch (error) {
     console.error('Invitation activation error:', error);
@@ -868,6 +965,9 @@ app.get('/api/admin/instructors', requireMaster, async (req, res) => {
         email: instructor.email,
         displayName: instructor.display_name,
         accountStatus: instructor.account_status,
+        provisioningSource: instructor.provisioning_source,
+        accessOverride: instructor.access_override,
+        complimentaryAccessUntil: instructor.complimentary_access_until,
         emailVerified: Boolean(instructor.email_verified_at),
         subscriptionStatus: instructor.subscription_status,
         currentPeriodEnd: instructor.current_period_end,
@@ -880,6 +980,38 @@ app.get('/api/admin/instructors', requireMaster, async (req, res) => {
   } catch (error) {
     console.error('Hosted instructor list error:', error);
     return res.status(500).json({ success: false, error: 'Unable to load hosted instructors' });
+  }
+});
+
+app.patch('/api/admin/instructors/:accountId/access', requireMaster, async (req, res) => {
+  const accountId = Number.parseInt(req.params.accountId, 10);
+  const mode = req.body?.mode;
+  if (!Number.isInteger(accountId) || accountId <= 0
+    || !['none', 'temporary', 'permanent'].includes(mode)) {
+    return res.status(400).json({ success: false, error: 'Choose a valid access mode' });
+  }
+  let expiresAt = null;
+  if (mode === 'temporary') {
+    expiresAt = new Date(req.body?.expiresAt);
+    if (!Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      return res.status(400).json({ success: false, error: 'Choose a future expiration date' });
+    }
+  }
+  try {
+    const override = await db.setHostedAccessOverride(accountId, { mode, expiresAt });
+    if (!override) return res.status(404).json({ success: false, error: 'Hosted instructor not found' });
+    await db.logActivity(req.admin.id, 'hosted_access_override_updated', {
+      accountId,
+      mode,
+      expiresAt: expiresAt?.toISOString() || null
+    }, req.ip);
+    return res.json({ success: true, access: {
+      mode,
+      expiresAt: override.complimentary_access_until
+    } });
+  } catch (error) {
+    console.error('Hosted access override error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to update complimentary access' });
   }
 });
 
@@ -909,6 +1041,9 @@ app.get('/api/admin/billing', async (req, res) => {
             currentPeriodEnd: subscription.current_period_end,
             cancelAtPeriodEnd: subscription.cancel_at_period_end
           }
+        : null,
+      complimentaryAccess: hasComplimentaryRoomEntitlement(req.admin)
+        ? { until: req.admin.complimentaryAccessUntil }
         : null
     });
   } catch (error) {

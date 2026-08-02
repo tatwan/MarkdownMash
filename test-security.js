@@ -94,7 +94,9 @@ async function run() {
       JWT_SECRET: 'a'.repeat(64),
       NODE_ENV: 'production',
       PORT: String(port),
-      SKIP_DATABASE_INIT: 'true'
+      PUBLIC_SIGNUP_ENABLED: 'false',
+      SKIP_DATABASE_INIT: 'true',
+      STRIPE_BILLING_ENABLED: 'false'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });

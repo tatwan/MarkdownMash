@@ -35,6 +35,17 @@ async function createInvitation({ email, displayName, masterId, expiresAt, token
   });
 }
 
+async function createSelfRegistration({ email, displayName, expiresAt, token }) {
+  return db.createSelfServiceRegistration({
+    email,
+    displayName,
+    username: `hosted_${createOpaqueToken(12)}`,
+    passwordHash: await bcrypt.hash(createOpaqueToken(), 4),
+    tokenHash: hashOpaqueToken(token),
+    expiresAt
+  });
+}
+
 async function run() {
   await waitForSchema();
   const suffix = createOpaqueToken(8).toLowerCase();
@@ -103,12 +114,73 @@ async function run() {
   });
   assert.equal(await db.getHostedAccountInvitation(hashOpaqueToken(expiredToken)), null);
 
+  const selfEmail = `self-${suffix}@example.com`;
+  const selfToken = createOpaqueToken();
+  const selfRegistration = await createSelfRegistration({
+    email: selfEmail,
+    displayName: 'Self Registered',
+    expiresAt: new Date(Date.now() + 60_000),
+    token: selfToken
+  });
+  assert.equal(selfRegistration.account.provisioning_source, 'self_service');
+  assert.equal(selfRegistration.invitation.purpose, 'self_signup');
+  assert.equal(
+    (await db.getHostedAccountInvitation(hashOpaqueToken(selfToken))).purpose,
+    'self_signup'
+  );
+
+  const replacementSelfToken = createOpaqueToken();
+  await createSelfRegistration({
+    email: selfEmail,
+    displayName: 'Self Registered Updated',
+    expiresAt: new Date(Date.now() + 60_000),
+    token: replacementSelfToken
+  });
+  assert.equal(await db.getHostedAccountInvitation(hashOpaqueToken(selfToken)), null);
+  const selfActivation = await db.activateHostedAccountInvitation({
+    tokenHash: hashOpaqueToken(replacementSelfToken),
+    passwordHash: await bcrypt.hash('self service password', 4)
+  });
+  assert.equal(selfActivation.purpose, 'self_signup');
+
+  const permanent = await db.setHostedAccessOverride(selfActivation.account_id, { mode: 'permanent' });
+  assert.equal(permanent.access_override, 'complimentary');
+  assert.equal(permanent.complimentary_access_until, null);
+  const temporaryUntil = new Date(Date.now() + 86_400_000);
+  const temporary = await db.setHostedAccessOverride(selfActivation.account_id, {
+    mode: 'temporary',
+    expiresAt: temporaryUntil
+  });
+  assert.equal(temporary.access_override, 'complimentary');
+  assert.equal(temporary.complimentary_access_until.toISOString(), temporaryUntil.toISOString());
+  const cleared = await db.setHostedAccessOverride(selfActivation.account_id, { mode: 'none' });
+  assert.equal(cleared.access_override, 'none');
+  assert.equal(cleared.complimentary_access_until, null);
+
+  const protectedEmail = `protected-${suffix}@example.com`;
+  const protectedToken = createOpaqueToken();
+  await createInvitation({
+    email: protectedEmail,
+    displayName: 'Master Invited',
+    masterId: master.id,
+    expiresAt: new Date(Date.now() + 60_000),
+    token: protectedToken
+  });
+  const selfTakeover = await createSelfRegistration({
+    email: protectedEmail,
+    displayName: 'Attempted Takeover',
+    expiresAt: new Date(Date.now() + 60_000),
+    token: createOpaqueToken()
+  });
+  assert.equal(selfTakeover, null);
+  assert.ok(await db.getHostedAccountInvitation(hashOpaqueToken(protectedToken)));
+
   const rls = await inspectionPool.query(
     "SELECT relrowsecurity FROM pg_class WHERE oid = 'public.account_invitations'::regclass"
   );
   assert.equal(rls.rows[0].relrowsecurity, true);
 
-  console.log('Hosted invitation database integration tests passed');
+  console.log('Hosted registration and invitation database integration tests passed');
 }
 
 run()

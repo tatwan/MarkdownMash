@@ -80,6 +80,11 @@
           <p id="login-error" class="form-message error-text hidden" role="alert"></p>
           <p id="login-success" class="status-message success hidden" role="status"></p>
           <p id="login-recovery-help" class="login-help"><a href="#" id="forgot-password-link">Forgot password?</a></p>
+          <div id="signup-entry" class="trial-entry hidden">
+            <div class="login-divider"><span>new to hosted Markdown Mash?</span></div>
+            <button id="create-account-btn" type="button" class="btn btn-primary btn-block btn-lg">Create instructor account · $15/year</button>
+            <p>Verify your email before payment · 7-day money-back guarantee</p>
+          </div>
           <div id="trial-entry" class="trial-entry hidden">
             <div class="login-divider"><span>or explore first</span></div>
             <button id="try-it-out-btn" type="button" class="btn btn-trial btn-block btn-lg">
@@ -88,6 +93,34 @@
             </button>
             <p>No account needed · Temporary 20-minute room</p>
           </div>
+        </div>
+      </section>
+
+      <!-- Public hosted registration -->
+      <section id="signup-section" class="admin-login-wrap hidden">
+        <div class="admin-login-intro">
+          <p class="brand-kicker"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Markdown Mash Hosted</p>
+          <h1>Your classroom Mash, always ready.</h1>
+          <p>One instructor account, one open room at a time, and up to 50 participants for $15 per year.</p>
+        </div>
+        <div class="card admin-login-card">
+          <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg></div>
+          <p class="section-eyebrow">Create your account</p>
+          <h2>Start with email verification</h2>
+          <form id="signup-form">
+            <div class="form-group">
+              <label for="signup-name">Your name</label>
+              <input type="text" id="signup-name" maxlength="120" autocomplete="name" required>
+            </div>
+            <div class="form-group">
+              <label for="signup-email">Email address</label>
+              <input type="email" id="signup-email" maxlength="254" autocomplete="email" required>
+            </div>
+            <button id="signup-submit-btn" type="submit" class="btn btn-primary btn-block btn-lg">Email my verification link</button>
+          </form>
+          <p id="signup-status" class="status-message hidden" role="status"></p>
+          <p class="login-field-help">You will create your password after verifying your email, then continue to secure Stripe Checkout.</p>
+          <p class="login-help"><a href="/admin.html" id="signup-sign-in-link">Already have an account? Sign in</a></p>
         </div>
       </section>
 

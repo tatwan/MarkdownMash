@@ -91,6 +91,33 @@ async function run() {
   });
   assert.equal(blockedRoom.response.status, 402);
 
+  const complimentary = await request(`/api/admin/instructors/${instructorLogin.data.admin.id}/access`, {
+    token: masterToken,
+    method: 'PATCH',
+    body: { mode: 'permanent' }
+  });
+  assert.equal(complimentary.response.status, 200);
+  assert.equal(complimentary.data.access.mode, 'permanent');
+
+  const complimentaryBilling = await request('/api/admin/billing', { token: instructorToken });
+  assert.deepEqual(complimentaryBilling.data.complimentaryAccess, { until: null });
+  const complimentaryRoom = await request('/api/admin/session', {
+    token: instructorToken,
+    body: { markdown }
+  });
+  assert.equal(complimentaryRoom.response.status, 200);
+  await request(`/api/admin/session/${complimentaryRoom.data.session.code}/end`, {
+    token: instructorToken,
+    method: 'POST'
+  });
+
+  const paymentRequired = await request(`/api/admin/instructors/${instructorLogin.data.admin.id}/access`, {
+    token: masterToken,
+    method: 'PATCH',
+    body: { mode: 'none' }
+  });
+  assert.equal(paymentRequired.response.status, 200);
+
   const masterRoom = await request('/api/admin/session', {
     token: masterToken,
     body: { markdown }

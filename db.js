@@ -67,6 +67,11 @@ async function initializeDatabase(retries = 5, delay = 3000) {
           CHECK (account_status IN ('invited', 'active', 'past_due', 'suspended', 'deleted')),
         auth_source TEXT NOT NULL DEFAULT 'deployment'
           CHECK (auth_source IN ('deployment', 'hosted')),
+        provisioning_source TEXT NOT NULL DEFAULT 'deployment'
+          CHECK (provisioning_source IN ('deployment', 'master_invite', 'self_service')),
+        access_override TEXT NOT NULL DEFAULT 'none'
+          CHECK (access_override IN ('none', 'complimentary')),
+        complimentary_access_until TIMESTAMPTZ,
         security_question_1 TEXT,
         security_answer_1 TEXT,
         security_question_2 TEXT,
@@ -167,6 +172,8 @@ async function initializeDatabase(retries = 5, delay = 3000) {
         expires_at TIMESTAMPTZ NOT NULL,
         used_at TIMESTAMPTZ,
         created_by INTEGER REFERENCES admins(id) ON DELETE SET NULL,
+        purpose TEXT NOT NULL DEFAULT 'master_invite'
+          CHECK (purpose IN ('master_invite', 'self_signup')),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
@@ -243,6 +250,22 @@ async function runMigrations(client) {
     {
       check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'auth_source'",
       migrate: "ALTER TABLE admins ADD COLUMN auth_source TEXT NOT NULL DEFAULT 'deployment' CHECK (auth_source IN ('deployment', 'hosted'))"
+    },
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'provisioning_source'",
+      migrate: "ALTER TABLE admins ADD COLUMN provisioning_source TEXT NOT NULL DEFAULT 'deployment' CHECK (provisioning_source IN ('deployment', 'master_invite', 'self_service'))"
+    },
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'access_override'",
+      migrate: "ALTER TABLE admins ADD COLUMN access_override TEXT NOT NULL DEFAULT 'none' CHECK (access_override IN ('none', 'complimentary'))"
+    },
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'admins' AND column_name = 'complimentary_access_until'",
+      migrate: "ALTER TABLE admins ADD COLUMN complimentary_access_until TIMESTAMPTZ"
+    },
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'account_invitations' AND column_name = 'purpose'",
+      migrate: "ALTER TABLE account_invitations ADD COLUMN purpose TEXT NOT NULL DEFAULT 'master_invite' CHECK (purpose IN ('master_invite', 'self_signup'))"
     }
   ];
 
@@ -276,6 +299,11 @@ async function runMigrations(client) {
       CREATE INDEX IF NOT EXISTS idx_admins_hosted_created_at
       ON admins(created_at DESC)
       WHERE auth_source = 'hosted'
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_admins_complimentary_expiry
+      ON admins(complimentary_access_until)
+      WHERE access_override = 'complimentary' AND complimentary_access_until IS NOT NULL
     `);
   } catch (err) {
     // Ignore
@@ -664,16 +692,17 @@ const dbApi = {
     role,
     accountStatus = 'active',
     authSource = 'deployment',
+    provisioningSource = 'deployment',
     createdBy
   }) {
     const result = await pool.query(
       `INSERT INTO admins (
          username, password_hash, email, email_verified_at, display_name, role,
-         account_status, auth_source, created_by
+         account_status, auth_source, provisioning_source, created_by
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id, username, email, email_verified_at, display_name, role,
-                 account_status, auth_source, created_at`,
+                 account_status, auth_source, provisioning_source, created_at`,
       [
         username,
         passwordHash,
@@ -683,6 +712,7 @@ const dbApi = {
         role || 'admin',
         accountStatus,
         authSource,
+        provisioningSource,
         createdBy
       ]
     );
@@ -758,19 +788,22 @@ const dbApi = {
         }
         const updated = await client.query(
           `UPDATE admins
-           SET display_name = $1, updated_at = NOW()
-           WHERE id = $2
+           SET display_name = $1,
+               provisioning_source = 'master_invite',
+               created_by = $2,
+               updated_at = NOW()
+           WHERE id = $3
            RETURNING *`,
-          [displayName, account.id]
+          [displayName, createdBy, account.id]
         );
         account = updated.rows[0];
       } else {
         const inserted = await client.query(
           `INSERT INTO admins (
              username, password_hash, email, display_name, role, account_status,
-             auth_source, created_by
+             auth_source, provisioning_source, created_by
            )
-           VALUES ($1, $2, $3, $4, 'admin', 'invited', 'hosted', $5)
+           VALUES ($1, $2, $3, $4, 'admin', 'invited', 'hosted', 'master_invite', $5)
            RETURNING *`,
           [username, passwordHash, normalizedEmail, displayName, createdBy]
         );
@@ -785,9 +818,9 @@ const dbApi = {
       );
       const invitation = await client.query(
         `INSERT INTO account_invitations (
-           account_id, token_hash, expires_at, created_by
+           account_id, token_hash, expires_at, created_by, purpose
          )
-         VALUES ($1, $2, $3, $4)
+         VALUES ($1, $2, $3, $4, 'master_invite')
          RETURNING id, account_id, expires_at, created_at`,
         [account.id, tokenHash, expiresAt, createdBy]
       );
@@ -806,9 +839,78 @@ const dbApi = {
     }
   },
 
+  async createSelfServiceRegistration({
+    email,
+    displayName,
+    username,
+    passwordHash,
+    tokenHash,
+    expiresAt
+  }) {
+    const client = await pool.connect();
+    const normalizedEmail = normalizeEmail(email);
+    try {
+      await client.query('BEGIN');
+      const existingResult = await client.query(
+        'SELECT * FROM admins WHERE LOWER(email) = $1 FOR UPDATE',
+        [normalizedEmail]
+      );
+      let account = existingResult.rows[0];
+      if (account) {
+        const canReissue = account.auth_source === 'hosted'
+          && account.provisioning_source === 'self_service'
+          && account.account_status === 'invited'
+          && !account.email_verified_at;
+        if (!canReissue) {
+          await client.query('COMMIT');
+          return null;
+        }
+        const updated = await client.query(
+          `UPDATE admins SET display_name = $1, updated_at = NOW()
+           WHERE id = $2 RETURNING *`,
+          [displayName, account.id]
+        );
+        account = updated.rows[0];
+      } else {
+        const inserted = await client.query(
+          `INSERT INTO admins (
+             username, password_hash, email, display_name, role, account_status,
+             auth_source, provisioning_source, created_by
+           )
+           VALUES ($1, $2, $3, $4, 'admin', 'invited', 'hosted', 'self_service', NULL)
+           RETURNING *`,
+          [username, passwordHash, normalizedEmail, displayName]
+        );
+        account = inserted.rows[0];
+      }
+
+      await client.query(
+        `UPDATE account_invitations SET used_at = NOW()
+         WHERE account_id = $1 AND used_at IS NULL`,
+        [account.id]
+      );
+      const invitation = await client.query(
+        `INSERT INTO account_invitations (
+           account_id, token_hash, expires_at, created_by, purpose
+         ) VALUES ($1, $2, $3, NULL, 'self_signup')
+         RETURNING id, account_id, expires_at, purpose, created_at`,
+        [account.id, tokenHash, expiresAt]
+      );
+      await client.query('COMMIT');
+      return { account, invitation: invitation.rows[0] };
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch (rollbackError) {
+        console.error('Self-service registration rollback failed:', rollbackError.message);
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async getHostedAccountInvitation(tokenHash) {
     const result = await pool.query(
-      `SELECT i.id, i.account_id, i.expires_at, a.email, a.display_name
+      `SELECT i.id, i.account_id, i.expires_at, i.purpose, a.email, a.display_name
        FROM account_invitations i
        JOIN admins a ON a.id = i.account_id
        WHERE i.token_hash = $1
@@ -828,7 +930,7 @@ const dbApi = {
     try {
       await client.query('BEGIN');
       const invitationResult = await client.query(
-        `SELECT i.id, i.account_id, a.email, a.display_name
+        `SELECT i.id, i.account_id, i.purpose, a.email, a.display_name
          FROM account_invitations i
          JOIN admins a ON a.id = i.account_id
          WHERE i.token_hash = $1
@@ -878,7 +980,8 @@ const dbApi = {
   async listHostedInstructors() {
     const result = await pool.query(
       `SELECT a.id, a.email, a.display_name, a.account_status,
-              a.email_verified_at, a.created_at,
+              a.email_verified_at, a.created_at, a.provisioning_source,
+              a.access_override, a.complimentary_access_until,
               s.status AS subscription_status,
               s.current_period_end,
               s.cancel_at_period_end,
@@ -899,6 +1002,21 @@ const dbApi = {
       []
     );
     return result.rows;
+  },
+
+  async setHostedAccessOverride(accountId, { mode, expiresAt = null }) {
+    const result = await pool.query(
+      `UPDATE admins
+       SET access_override = $1,
+           complimentary_access_until = $2,
+           updated_at = NOW()
+       WHERE id = $3
+         AND auth_source = 'hosted'
+         AND role <> 'master'
+       RETURNING id, access_override, complimentary_access_until`,
+      [mode === 'none' ? 'none' : 'complimentary', mode === 'temporary' ? expiresAt : null, accountId]
+    );
+    return result.rows[0] || null;
   },
 
   // ============================================

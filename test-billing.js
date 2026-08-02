@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const {
   getHostedBillingFailure,
+  hasComplimentaryRoomEntitlement,
   hasHostedRoomEntitlement,
   invoiceSubscriptionId,
   normalizeStripeSubscription,
@@ -43,6 +44,16 @@ function stripeSubscription(overrides = {}) {
 assert.equal(hasHostedRoomEntitlement({ status: 'active' }), true);
 assert.equal(hasHostedRoomEntitlement({ status: 'past_due' }), true);
 assert.equal(hasHostedRoomEntitlement({ status: 'canceled' }), false);
+assert.equal(hasComplimentaryRoomEntitlement({ accessOverride: 'none' }), false);
+assert.equal(hasComplimentaryRoomEntitlement({ accessOverride: 'complimentary' }), true);
+assert.equal(hasComplimentaryRoomEntitlement({
+  accessOverride: 'complimentary',
+  complimentaryAccessUntil: '2030-01-02T00:00:00.000Z'
+}, Date.parse('2030-01-01T00:00:00.000Z')), true);
+assert.equal(hasComplimentaryRoomEntitlement({
+  accessOverride: 'complimentary',
+  complimentaryAccessUntil: '2029-12-31T23:59:59.000Z'
+}, Date.parse('2030-01-01T00:00:00.000Z')), false);
 assert.equal(subscriptionAccountStatus('active'), 'active');
 assert.equal(subscriptionAccountStatus('past_due'), 'past_due');
 assert.equal(
@@ -68,6 +79,21 @@ assert.equal(
   }),
   null,
   'the deployment master remains exempt from billing guardrails'
+);
+assert.equal(
+  getHostedBillingFailure({
+    billingEnabled: true,
+    hostedMode: true,
+    admin: {
+      role: 'admin',
+      authSource: 'hosted',
+      accessOverride: 'complimentary',
+      complimentaryAccessUntil: null
+    },
+    subscription: null
+  }),
+  null,
+  'a complimentary instructor can open a room without a Stripe subscription'
 );
 
 const normalized = normalizeStripeSubscription(stripeSubscription(), priceId);

@@ -3,6 +3,7 @@ const markdown = MarkdownMashMarkdown;
 // DOM Elements
 const loginSection = document.getElementById('login-section');
 const inviteSection = document.getElementById('invite-section');
+const signupSection = document.getElementById('signup-section');
 const dashboardSection = document.getElementById('dashboard-section');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
@@ -18,6 +19,8 @@ const passwordInput = document.getElementById('password');
 const passwordHelp = document.getElementById('password-help');
 const trialEntry = document.getElementById('trial-entry');
 const tryItOutBtn = document.getElementById('try-it-out-btn');
+const signupEntry = document.getElementById('signup-entry');
+const createAccountBtn = document.getElementById('create-account-btn');
 const trialBanner = document.getElementById('trial-banner');
 const trialCountdown = document.getElementById('trial-countdown');
 const trialCompletionCta = document.getElementById('trial-completion-cta');
@@ -54,6 +57,7 @@ let currentAdmin = storedTrialToken
 let hostedAuthMode = false;
 let billingEnabled = false;
 let invitationActivationEnabled = false;
+let publicSignupEnabled = false;
 let hostedInvitationToken = (() => {
   try {
     return new URLSearchParams(window.location.hash.slice(1)).get('invite');
@@ -265,6 +269,7 @@ function sessionApiPath(suffix = '') {
 function showAuthenticatedWorkspace() {
   loginSection.classList.add('hidden');
   inviteSection?.classList.add('hidden');
+  signupSection?.classList.add('hidden');
   dashboardSection.classList.remove('hidden');
   logoutBtn.classList.remove('hidden');
 
@@ -393,10 +398,12 @@ async function loadAuthConfig() {
     hostedAuthMode = Boolean(data.hostedMode && data.emailLogin);
     billingEnabled = Boolean(data.billingEnabled);
     invitationActivationEnabled = Boolean(data.invitationActivation);
+    publicSignupEnabled = Boolean(data.publicRegistration || data.publicSignup);
   } catch (error) {
     hostedAuthMode = false;
     billingEnabled = false;
     invitationActivationEnabled = false;
+    publicSignupEnabled = false;
   }
 
   loginEmailField.classList.toggle('hidden', !hostedAuthMode);
@@ -411,9 +418,42 @@ async function loadAuthConfig() {
   passwordHelp.textContent = hostedAuthMode
     ? 'Use the password for your Markdown Mash Hosted account.'
     : 'Use the password configured for this Markdown Mash deployment.';
+  signupEntry?.classList.toggle('hidden', !publicSignupEnabled);
 }
 
 const authConfigReady = loadAuthConfig();
+
+createAccountBtn?.addEventListener('click', () => {
+  loginSection.classList.add('hidden');
+  signupSection.classList.remove('hidden');
+  document.getElementById('signup-name').focus({ preventScroll: true });
+});
+
+document.getElementById('signup-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const displayName = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const button = document.getElementById('signup-submit-btn');
+  button.disabled = true;
+  button.textContent = 'Sending…';
+  hideStatus('signup-status');
+  try {
+    const response = await fetch('/api/admin/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName, email })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Unable to register right now');
+    showStatus('signup-status', data.message, true);
+    event.currentTarget.reset();
+  } catch (error) {
+    showStatus('signup-status', error.message, false);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Email my verification link';
+  }
+});
 
 async function initializeInviteActivation() {
   if (!hostedInvitationToken) return;
@@ -485,6 +525,29 @@ document.getElementById('invite-activation-form')?.addEventListener('submit', as
 
     hostedInvitationToken = null;
     window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}`);
+    if (data.checkoutAfterActivation) {
+      const loginResponse = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email, password })
+      });
+      const loginData = await loginResponse.json();
+      if (loginResponse.ok && loginData.success) {
+        authToken = loginData.token;
+        currentAdmin = loginData.admin;
+        const checkoutResponse = await authFetch('/api/admin/billing/checkout', { method: 'POST' });
+        const checkoutData = await checkoutResponse.json();
+        if (checkoutResponse.ok && checkoutData.success && checkoutData.url) {
+          localStorage.setItem('authToken', authToken);
+          localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
+          window.location.assign(checkoutData.url);
+          return;
+        }
+        authToken = null;
+        currentAdmin = null;
+        data.message = 'Your account is ready. Sign in to start your $15/year subscription.';
+      }
+    }
     inviteSection.classList.add('hidden');
     loginSection.classList.remove('hidden');
     loginEmail.value = data.email;
@@ -654,6 +717,7 @@ function logout() {
   localStorage.removeItem('currentAdmin');
   loginSection.classList.remove('hidden');
   inviteSection?.classList.add('hidden');
+  signupSection?.classList.add('hidden');
   dashboardSection.classList.add('hidden');
   analyticsBtn.classList.add('hidden');
   settingsBtn.classList.add('hidden');
@@ -2126,18 +2190,25 @@ async function loadBillingStatus() {
     if (!res.ok || !data.success) throw new Error(data.error || 'Unable to load billing');
 
     const subscription = data.subscription;
+    const complimentary = data.complimentaryAccess;
     const status = subscription?.status || 'not_subscribed';
     const managed = ['active', 'trialing', 'past_due'].includes(status);
     const active = ['active', 'trialing'].includes(status);
     planDetails.textContent = `$${data.plan.amount} ${data.plan.currency} per year · up to ${data.plan.participantLimit} participants · one open room at a time`;
 
-    badge.textContent = status === 'not_subscribed'
+    badge.textContent = complimentary
+      ? 'Complimentary'
+      : status === 'not_subscribed'
       ? 'Not subscribed'
       : status.replaceAll('_', ' ');
-    startBtn.classList.toggle('hidden', managed);
+    startBtn.classList.toggle('hidden', managed || Boolean(complimentary));
     manageBtn.classList.toggle('hidden', !subscription?.status);
 
-    if (subscription?.currentPeriodEnd) {
+    if (complimentary) {
+      periodCopy.textContent = complimentary.until
+        ? `Complimentary classroom access continues through ${billingDate(complimentary.until)}.`
+        : 'Complimentary classroom access does not expire.';
+    } else if (subscription?.currentPeriodEnd) {
       periodCopy.textContent = subscription.cancelAtPeriodEnd
         ? `Access continues through ${billingDate(subscription.currentPeriodEnd)}.`
         : `${active ? 'Renews' : 'Current period ends'} ${billingDate(subscription.currentPeriodEnd)}.`;
@@ -2197,9 +2268,64 @@ function createInstructorAccountRow(instructor) {
       : 'Invitation pending';
   const billingStatus = document.createElement('span');
   billingStatus.textContent = `Billing: ${(instructor.subscriptionStatus || 'not subscribed').replaceAll('_', ' ')}`;
-  meta.append(accountStatus, billingStatus);
+  const source = document.createElement('span');
+  source.textContent = `Source: ${(instructor.provisioningSource || 'deployment').replaceAll('_', ' ')}`;
+  meta.append(accountStatus, billingStatus, source);
 
-  row.append(identity, meta);
+  const accessControls = document.createElement('div');
+  accessControls.className = 'instructor-access-controls';
+  const accessSelect = document.createElement('select');
+  accessSelect.setAttribute('aria-label', `Access for ${instructor.email}`);
+  [
+    ['none', 'Payment required'],
+    ['temporary', 'Complimentary until date'],
+    ['permanent', 'Permanent complimentary']
+  ].forEach(([value, label]) => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    accessSelect.appendChild(option);
+  });
+  accessSelect.value = instructor.accessOverride !== 'complimentary'
+    ? 'none'
+    : instructor.complimentaryAccessUntil ? 'temporary' : 'permanent';
+  const expiryInput = document.createElement('input');
+  expiryInput.type = 'date';
+  expiryInput.setAttribute('aria-label', `Complimentary access expiration for ${instructor.email}`);
+  expiryInput.value = instructor.complimentaryAccessUntil
+    ? new Date(instructor.complimentaryAccessUntil).toISOString().slice(0, 10)
+    : '';
+  expiryInput.classList.toggle('hidden', accessSelect.value !== 'temporary');
+  accessSelect.addEventListener('change', () => {
+    expiryInput.classList.toggle('hidden', accessSelect.value !== 'temporary');
+  });
+  const saveAccess = document.createElement('button');
+  saveAccess.type = 'button';
+  saveAccess.className = 'btn btn-secondary btn-sm';
+  saveAccess.textContent = 'Save access';
+  saveAccess.addEventListener('click', async () => {
+    const expiresAt = accessSelect.value === 'temporary' && expiryInput.value
+      ? new Date(`${expiryInput.value}T23:59:59.999Z`).toISOString()
+      : null;
+    saveAccess.disabled = true;
+    try {
+      const response = await authFetch(`/api/admin/instructors/${instructor.id}/access`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: accessSelect.value, expiresAt })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Unable to update access');
+      showStatus('invitation-status', `Access updated for ${instructor.email}`, true);
+      await loadHostedInstructors();
+    } catch (error) {
+      showStatus('invitation-status', error.message, false);
+      saveAccess.disabled = false;
+    }
+  });
+  accessControls.append(accessSelect, expiryInput, saveAccess);
+
+  row.append(identity, accessControls, meta);
   return row;
 }
 

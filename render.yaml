@@ -2,7 +2,7 @@ services:
   - type: web
     name: markdown-mash
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm ci
     startCommand: npm start
     envVars:
@@ -32,5 +32,21 @@ services:
         value: "50"
       - key: HOSTED_INVITE_TTL_HOURS
         value: "72"
+      - key: PUBLIC_SIGNUP_ENABLED
+        value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "Markdown Mash <info@mail.markdownmash.com>"
+      - key: EMAIL_REPLY_TO
+        value: "info@markdownmash.com"
       - key: STRIPE_BILLING_ENABLED
         value: "false"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: APP_BASE_URL
+        value: "https://markdownmash.com"

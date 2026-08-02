@@ -28,6 +28,13 @@ function hasHostedRoomEntitlement(subscription) {
   );
 }
 
+function hasComplimentaryRoomEntitlement(admin, now = Date.now()) {
+  if (admin?.accessOverride !== 'complimentary') return false;
+  if (!admin.complimentaryAccessUntil) return true;
+  const expiresAt = new Date(admin.complimentaryAccessUntil).getTime();
+  return Number.isFinite(expiresAt) && expiresAt > now;
+}
+
 function getHostedBillingFailure({ billingEnabled, hostedMode, admin, subscription }) {
   if (!billingEnabled
     || !hostedMode
@@ -36,7 +43,7 @@ function getHostedBillingFailure({ billingEnabled, hostedMode, admin, subscripti
     return null;
   }
 
-  if (hasHostedRoomEntitlement(subscription)) return null;
+  if (hasHostedRoomEntitlement(subscription) || hasComplimentaryRoomEntitlement(admin)) return null;
 
   return {
     code: 'SUBSCRIPTION_REQUIRED',
@@ -88,6 +95,7 @@ module.exports = {
   BILLING_PROVIDER,
   ROOM_ENTITLED_SUBSCRIPTION_STATUSES,
   getHostedBillingFailure,
+  hasComplimentaryRoomEntitlement,
   hasHostedRoomEntitlement,
   invoiceSubscriptionId,
   normalizeStripeSubscription,

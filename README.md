@@ -457,7 +457,11 @@ pm2 save
 | `GUEST_TRIAL_STARTS_PER_IP_HOUR` | No | `5` | Trial starts allowed per IP each hour |
 | `HOSTED_MODE` | No | `false` | Enables hosted-service room guardrails; leave disabled for unrestricted self-hosting |
 | `HOSTED_MAX_PARTICIPANTS` | No | `50` | Participant limit for persistent rooms when `HOSTED_MODE=true` |
-| `HOSTED_INVITE_TTL_HOURS` | No | `72` | Lifetime of a master-created one-time instructor setup link; capped at 168 hours |
+| `HOSTED_INVITE_TTL_HOURS` | No | `72` | Lifetime of an instructor verification/setup link; capped at 168 hours |
+| `PUBLIC_SIGNUP_ENABLED` | No | `false` | Shows self-registration and sends verification email; requires hosted mode and Stripe billing |
+| `RESEND_API_KEY` | When public signup is enabled | - | Send-only Resend API key scoped to the verified sending domain |
+| `EMAIL_FROM` | When public signup is enabled | - | Verified sender, for example `Markdown Mash <info@mail.markdownmash.com>` |
+| `EMAIL_REPLY_TO` | When public signup is enabled | - | Customer-facing support mailbox, `info@markdownmash.com` |
 | `STRIPE_BILLING_ENABLED` | No | `false` | Enables annual hosted billing and subscription entitlements after all Stripe values are configured |
 | `STRIPE_SECRET_KEY` | When billing is enabled | - | Stripe secret or restricted server key; store only in encrypted deployment settings |
 | `STRIPE_WEBHOOK_SECRET` | When billing is enabled | - | Signing secret for this deployment's `/api/stripe/webhook` endpoint |
@@ -466,7 +470,7 @@ pm2 save
 | `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
-The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. Hosted instructors sign in with a verified, normalized email address; account lifecycle changes are checked on every authenticated API request and Socket.IO connection. Public account creation remains disabled: the deployment master provisions each beta instructor from **Settings → Instructors**.
+The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. Hosted instructors sign in with a verified, normalized email address; account lifecycle changes are checked on every authenticated API request and Socket.IO connection. Public account creation remains off in the blueprint until the operator explicitly enables it.
 
 The database-backed `master` account keeps the deployment-password login and is exempt from both hosted room guardrails. Self-hosted operators can leave `HOSTED_MODE=false` to retain the single-admin deployment login and unrestricted persistent rooms.
 
@@ -476,7 +480,13 @@ An open room is a database session with `created` or `active` status. Ending, re
 
 In hosted mode, sign in as the deployment master, open **Settings → Instructors**, enter the instructor's name and email, and create a setup link. Copy and share that link directly with the intended instructor. The raw one-time token is returned only in the URL fragment and is never stored in the database; PostgreSQL stores its SHA-256 digest. Activating the link sets the instructor's password, verifies the invited email, and consumes every outstanding link for that account atomically. Creating a replacement link invalidates the earlier one.
 
-Email delivery is intentionally manual during the invite-only beta. Set `APP_BASE_URL` to the canonical public HTTPS origin so generated links do not depend on the request host. The master account can list invitation and billing states but remains exempt from the 50-participant and one-open-room guardrails.
+Master-created invitation delivery is intentionally manual, which makes it suitable for beta and special customers. Set `APP_BASE_URL` to the canonical public HTTPS origin so generated links do not depend on the request host. The master can grant any hosted instructor permanent or date-limited complimentary access from **Settings → Instructors**, and remains exempt from the 50-participant, billing, and one-open-room guardrails.
+
+### Public Hosted Registration
+
+When `PUBLIC_SIGNUP_ENABLED=true`, the sign-in page offers self-registration. The server creates a pending hosted account, sends a one-time verification link through Resend, lets the instructor choose a password, signs them in, and sends them directly to Stripe Checkout. Responses do not reveal whether an email already belongs to an account, replacement links invalidate earlier links, and self-registration cannot replace a master-created invitation.
+
+For the verified Resend subdomain `mail.markdownmash.com`, use `EMAIL_FROM=Markdown Mash <info@mail.markdownmash.com>` and `EMAIL_REPLY_TO=info@markdownmash.com`. The sending address does not need to be the paid mailbox; replies are routed to the real support mailbox through `EMAIL_REPLY_TO`.
 
 ### Stripe Hosted Billing
 
@@ -486,6 +496,8 @@ Markdown Mash uses Stripe-hosted Checkout and the Stripe Customer Portal; card d
 2. Configure and test the Customer Portal with payment-method updates, invoices, and cancellation at period end. Keep plan switching and quantity changes disabled.
 3. Add an HTTPS webhook destination at `https://YOUR_HOST/api/stripe/webhook` for `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, and `invoice.payment_action_required`.
 4. Apply the ordered SQL migrations, then add the five Stripe environment values above to Render's encrypted settings. Use sandbox values first and set `STRIPE_BILLING_ENABLED=true` last.
+
+The charge is immediate; this is not a free trial. The customer-facing policy is a **7-day money-back guarantee**. After that window, customers may cancel in the Stripe Customer Portal to prevent renewal at the next annual billing date.
 
 Webhook signatures are verified against the untouched request body. Processed event IDs are stored for idempotency, and subscriptions are accepted only when both `app=markdown_mash` metadata and the configured Price ID match. This prevents other Ensemble Methods products in the same Stripe account from changing Markdown Mash access.
 
