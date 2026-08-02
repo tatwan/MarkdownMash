@@ -10,22 +10,24 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
-## What's New in v1.2.3
+## What's New in v1.3.0
 
-### The Projector-Ready Presenter Update
+### Hosted Accounts, Sidekicks, and a Friendlier Host Studio
 
-Version 1.2.3 brings the presenter lobby into the same polished visual system as the instructor and participant experiences, while ensuring the complete room invitation remains visible on common classroom projectors.
+Version 1.3.0 adds an optional managed-hosting foundation while keeping normal self-hosted deployments open, unrestricted, and free to operate without Stripe or Resend.
 
 #### Key Highlights
 
-- **Modern Presenter Lobby** - A new two-column composition gives the quiz title, session code, participant status, and joining instructions a clear projector-friendly hierarchy.
-- **Always-Visible QR Code** - The QR card and join destination now remain fully visible without scrolling at a standard 1280×720 classroom resolution.
-- **Live Room Energy** - Participant arrivals update the lobby counter in real time with a subtle celebration animation and singular/plural labels.
-- **Consistent Product Identity** - The presenter now uses the same SVG brand lockup, icon system, color language, cards, and status treatments as the rest of Markdown Mash.
-- **Clear Secure Access** - Opening the presenter without a signed room link now explains how to launch it securely from the instructor studio instead of showing an unusable code form.
-- **Responsive and Accessible** - Compact-height, tablet, and mobile layouts are included, together with reduced-motion behavior for lobby animations.
+- **Self-Service Hosted Accounts** - Email verification through Resend, secure password setup, Stripe Checkout, annual billing, and Customer Portal access.
+- **Simple Hosted Plan** - One $15/year plan with one open room at a time and up to 50 participants; the deployment master remains exempt.
+- **20 Sticker Sidekicks** - Participants receive friendly avatars that appear across the waiting room, response highlights, rankings, and finale.
+- **Animated Lead Changes** - Swoop, high-five, spring-swap, and rocket-pass animations celebrate a new leader between questions.
+- **Host Home** - A focused signed-in launcher for hosting, analytics, account settings, and billing.
+- **Editable Starter Mashes** - Six three-question templates for math, Python, data science, Marvel, music, and history.
+- **Public Policies and Support** - Terms, privacy, refunds, and `info@markdownmash.com` are linked throughout the hosted experience.
+- **Shared-Browser Privacy Hardening** - Switching from the master account to a hosted account clears master-only Settings data and recalculates tab access.
 
-This release does not change the PostgreSQL schema or existing classroom data.
+Existing classroom sessions remain compatible. Hosted billing and public signup stay disabled unless an operator explicitly configures and enables them.
 
 ## Features
 
