@@ -486,6 +486,8 @@ Master-created invitation delivery is intentionally manual, which makes it suita
 
 When `PUBLIC_SIGNUP_ENABLED=true`, the sign-in page offers self-registration. The server creates a pending hosted account, sends a one-time verification link through Resend, lets the instructor choose a password, signs them in, and sends them directly to Stripe Checkout. Responses do not reveal whether an email already belongs to an account, replacement links invalidate earlier links, and self-registration cannot replace a master-created invitation.
 
+The subscription experience is deployment-specific. A copy launched from GitHub does not show public signup or collect payments unless its operator explicitly configures hosted mode, Stripe, Resend, and `PUBLIC_SIGNUP_ENABLED=true`. The official hosted service publishes its [Terms](public/terms.html), [Privacy Policy](public/privacy.html), [Refund Policy](public/refunds.html), and support address at `info@markdownmash.com`; independent self-hosted operators should provide policies for their own deployment and data practices.
+
 For the verified Resend subdomain `mail.markdownmash.com`, use `EMAIL_FROM=Markdown Mash <info@mail.markdownmash.com>` and `EMAIL_REPLY_TO=info@markdownmash.com`. The sending address does not need to be the paid mailbox; replies are routed to the real support mailbox through `EMAIL_REPLY_TO`.
 
 ### Stripe Hosted Billing

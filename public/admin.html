@@ -12,6 +12,7 @@
   <script defer src="/js/markdown.js"></script>
   <script defer src="/vendor/chart.js"></script>
   <script defer src="/socket.io/socket.io.js"></script>
+  <script defer src="/js/settings-state.js"></script>
   <script defer src="/js/admin.js"></script>
 </head>
 <body class="admin-body">
@@ -84,6 +85,7 @@
             <div class="login-divider"><span>new to Markdown Mash?</span></div>
             <button id="create-account-btn" type="button" class="btn btn-primary btn-block btn-lg">Create host account · $15/year</button>
             <p>Email verification required · 7-day money-back guarantee</p>
+            <p class="account-legal-links"><a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a> · <a href="/refunds.html">Refunds</a> · <a href="mailto:info@markdownmash.com">Support</a></p>
           </div>
           <div id="trial-entry" class="trial-entry hidden">
             <div class="login-divider"><span>or explore first</span></div>
@@ -120,6 +122,7 @@
           </form>
           <p id="signup-status" class="status-message hidden" role="status"></p>
           <p class="login-field-help">You will create your password after verifying your email, then continue to secure Stripe Checkout.</p>
+          <p class="account-legal-consent">By continuing, you agree to the <a href="/terms.html">Terms</a> and acknowledge the <a href="/privacy.html">Privacy Policy</a>. Questions? <a href="mailto:info@markdownmash.com">Contact support</a>.</p>
           <p class="login-help"><a href="/admin.html" id="signup-sign-in-link">Already have an account? Sign in</a></p>
         </div>
       </section>
@@ -586,6 +589,7 @@
             <button id="manage-billing-btn" type="button" class="btn btn-secondary hidden">Manage billing</button>
           </div>
           <p class="login-field-help">Stripe securely handles payment details. Cancellation takes effect at the end of the paid year.</p>
+          <p class="account-legal-links"><a href="/refunds.html">7-day refund policy</a> · <a href="mailto:info@markdownmash.com">Billing support</a></p>
           <p id="billing-status-message" class="status-message hidden"></p>
         </div>
 

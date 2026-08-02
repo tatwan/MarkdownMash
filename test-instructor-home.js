@@ -44,6 +44,7 @@ assert.match(adminHtml, /Music &amp; Lyrics/);
 assert.match(adminHtml, /History Highlights/);
 assert.match(adminJs, /const STARTER_TEMPLATES = Object\.freeze/);
 assert.match(adminJs, /Replace the Markdown currently in the editor/);
+assert.match(adminHtml, /\/js\/settings-state\.js/);
 assert.doesNotMatch(adminJs, /event\.currentTarget\.reset\(\)/);
 
 console.log('Host home, starter templates, and empty analytics contract passed');

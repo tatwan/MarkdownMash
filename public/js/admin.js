@@ -48,6 +48,14 @@ const logoutBtn = document.getElementById('logout-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings-btn');
 const settingsTabs = document.querySelectorAll('.settings-tab');
+const settingsPanels = {
+  password: document.getElementById('settings-password'),
+  billing: document.getElementById('settings-billing'),
+  instructors: document.getElementById('settings-instructors'),
+  security: document.getElementById('settings-security'),
+  email: document.getElementById('settings-email')
+};
+const instructorList = document.getElementById('instructor-list');
 const changePasswordForm = document.getElementById('change-password-form');
 const securityQuestionsForm = document.getElementById('security-questions-form');
 const emailForm = document.getElementById('email-form');
@@ -507,15 +515,10 @@ function configureInstructorWorkspace() {
   uploadBtnLabel.textContent = 'Load quiz';
   openTemplateBtn.classList.remove('hidden');
 
-  const hostedInstructor = hostedAuthMode
-    && currentAdmin?.authSource === 'hosted'
-    && currentAdmin.role !== 'master';
-  const billingTab = document.querySelector('.settings-tab[data-tab="billing"]');
-  billingTab?.classList.toggle('hidden', !hostedInstructor || !billingEnabled);
-  const instructorTab = document.querySelector('.settings-tab[data-tab="instructors"]');
-  instructorTab?.classList.toggle('hidden', !(hostedAuthMode && currentAdmin?.role === 'master'));
-  document.querySelector('.settings-tab[data-tab="security"]')?.classList.toggle('hidden', hostedInstructor);
-  document.querySelector('.settings-tab[data-tab="email"]')?.classList.toggle('hidden', hostedInstructor);
+  window.MarkdownMashSettings.resetForAccount(
+    { settingsModal, settingsTabs, settingsPanels, instructorList },
+    { hostedAuthMode, billingEnabled, admin: currentAdmin }
+  );
 }
 
 function configureTrialWorkspace(data) {
@@ -2431,14 +2434,15 @@ function closeSettings() {
 
 // Switch settings tabs
 function switchSettingsTab(tabName) {
+  const requestedTab = Array.from(settingsTabs).find(tab => tab.dataset.tab === tabName);
+  if (!requestedTab || requestedTab.classList.contains('hidden')) tabName = 'password';
   settingsTabs.forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tabName);
+    t.setAttribute('aria-selected', String(t.dataset.tab === tabName));
   });
-  document.getElementById('settings-password').classList.toggle('hidden', tabName !== 'password');
-  document.getElementById('settings-billing').classList.toggle('hidden', tabName !== 'billing');
-  document.getElementById('settings-instructors').classList.toggle('hidden', tabName !== 'instructors');
-  document.getElementById('settings-security').classList.toggle('hidden', tabName !== 'security');
-  document.getElementById('settings-email').classList.toggle('hidden', tabName !== 'email');
+  Object.entries(settingsPanels).forEach(([name, panel]) => {
+    panel.classList.toggle('hidden', name !== tabName);
+  });
 }
 
 function billingDate(value) {
@@ -2603,7 +2607,7 @@ function createInstructorAccountRow(instructor) {
 }
 
 async function loadHostedInstructors() {
-  const list = document.getElementById('instructor-list');
+  const list = instructorList;
   if (!list || currentAdmin?.role !== 'master') return;
   list.replaceChildren();
   const loading = document.createElement('p');

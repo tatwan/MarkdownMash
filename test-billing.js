@@ -188,6 +188,8 @@ async function run() {
   assert.equal(checkout.url, 'https://checkout.stripe.test/session');
   assert.equal(calls[0].options.idempotencyKey, 'markdown_mash:customer:42');
   assert.deepEqual(calls[1].params.line_items, [{ price: priceId, quantity: 1 }]);
+  assert.equal(calls[1].params.allow_promotion_codes, true);
+  assert.equal(calls[1].params.payment_method_collection, 'always');
   assert.deepEqual(calls[1].params.subscription_data.metadata, {
     app: 'markdown_mash',
     account_id: '42'

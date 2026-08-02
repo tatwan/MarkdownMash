@@ -108,6 +108,8 @@ function createStripeBillingService({ stripe, db, priceId, appBaseUrl }) {
       customer: customerId,
       client_reference_id: String(account.id),
       line_items: [{ price: priceId, quantity: 1 }],
+      allow_promotion_codes: true,
+      payment_method_collection: 'always',
       success_url: `${baseUrl}/admin.html?billing=success`,
       cancel_url: `${baseUrl}/admin.html?billing=cancelled`,
       metadata: {
