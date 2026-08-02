@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard - Markdown Mash</title>
+  <title>Host Dashboard - Markdown Mash</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/vendor/highlight.css">
   <script defer src="/vendor/marked.js"></script>
@@ -23,10 +23,10 @@
       </a>
       <div class="admin-title" id="studio-title">
         <span class="live-dot" aria-hidden="true"></span>
-        <span id="studio-title-label">Instructor studio</span>
+        <span id="studio-title-label">Host studio</span>
       </div>
-      <nav class="header-actions" aria-label="Instructor navigation">
-        <a href="/" class="topbar-action">
+      <nav class="header-actions" aria-label="Host navigation">
+        <a href="/" id="instructor-home-link" class="topbar-action">
           <svg aria-hidden="true"><use href="/assets/icons.svg#home"></use></svg>
           <span>Home</span>
         </a>
@@ -49,41 +49,41 @@
       <!-- Login Section -->
       <section id="login-section" class="admin-login-wrap">
         <div class="admin-login-intro">
-          <p class="brand-kicker"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Instructor access</p>
+          <p class="brand-kicker"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Host access</p>
           <h1>Run the room with confidence.</h1>
           <p>Load your quiz, watch responses arrive, and keep the energy moving from one question to the next.</p>
         </div>
         <div class="card admin-login-card">
           <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg></div>
           <p class="section-eyebrow">Welcome back</p>
-          <h2>Instructor sign in</h2>
+          <h2>Host sign in</h2>
           <div id="login-account-context" class="login-account-context" aria-label="Account type: single-admin deployment">
             <span class="login-account-icon" aria-hidden="true">
               <svg><use href="/assets/icons.svg#check-circle"></use></svg>
             </span>
             <span class="login-account-copy">
-              <strong id="login-account-title">Instructor workspace</strong>
+              <strong id="login-account-title">Host workspace</strong>
               <span id="login-account-detail">Single-admin deployment</span>
             </span>
           </div>
           <form id="login-form">
             <div id="login-email-field" class="form-group hidden">
-              <label for="login-email">Instructor email</label>
+              <label for="login-email">Host email</label>
               <input type="email" id="login-email" placeholder="teacher@example.com" autocomplete="username">
-              <p class="login-field-help">Hosted instructors sign in by email. The deployment master may leave this blank.</p>
+              <p class="login-field-help">Hosted accounts sign in by email. The deployment owner may leave this blank.</p>
             </div>
-            <label for="password">Instructor password</label>
+            <label for="password">Host password</label>
             <input type="password" id="password" placeholder="Enter the deployment password" aria-describedby="password-help" required autocomplete="current-password">
             <p id="password-help" class="login-field-help">Use the password configured for this Markdown Mash deployment.</p>
-            <button type="submit" class="btn btn-primary btn-block btn-lg">Open instructor studio</button>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">Open studio</button>
           </form>
           <p id="login-error" class="form-message error-text hidden" role="alert"></p>
           <p id="login-success" class="status-message success hidden" role="status"></p>
           <p id="login-recovery-help" class="login-help"><a href="#" id="forgot-password-link">Forgot password?</a></p>
           <div id="signup-entry" class="trial-entry hidden">
-            <div class="login-divider"><span>new to hosted Markdown Mash?</span></div>
-            <button id="create-account-btn" type="button" class="btn btn-primary btn-block btn-lg">Create instructor account · $15/year</button>
-            <p>Verify your email before payment · 7-day money-back guarantee</p>
+            <div class="login-divider"><span>new to Markdown Mash?</span></div>
+            <button id="create-account-btn" type="button" class="btn btn-primary btn-block btn-lg">Create host account · $15/year</button>
+            <p>Email verification required · 7-day money-back guarantee</p>
           </div>
           <div id="trial-entry" class="trial-entry hidden">
             <div class="login-divider"><span>or explore first</span></div>
@@ -101,7 +101,7 @@
         <div class="admin-login-intro">
           <p class="brand-kicker"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Markdown Mash Hosted</p>
           <h1>Your classroom Mash, always ready.</h1>
-          <p>One instructor account, one open room at a time, and up to 50 participants for $15 per year.</p>
+          <p>One host account, one open room at a time, and up to 50 participants for $15 per year.</p>
         </div>
         <div class="card admin-login-card">
           <div class="panel-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg></div>
@@ -128,7 +128,7 @@
       <section id="invite-section" class="admin-login-wrap hidden">
         <div class="admin-login-intro">
           <p class="brand-kicker"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>You’re invited</p>
-          <h1>Set up your instructor account.</h1>
+          <h1>Set up your host account.</h1>
           <p>Create your password once, then sign in whenever you are ready to run a room.</p>
         </div>
         <div class="card admin-login-card">
@@ -146,7 +146,7 @@
               <label for="invite-confirm-password">Confirm password</label>
               <input type="password" id="invite-confirm-password" minlength="12" maxlength="72" autocomplete="new-password" required>
             </div>
-            <button id="activate-invite-btn" type="submit" class="btn btn-primary btn-block btn-lg">Activate instructor account</button>
+            <button id="activate-invite-btn" type="submit" class="btn btn-primary btn-block btn-lg">Activate host account</button>
           </form>
           <p id="invite-status" class="status-message hidden" role="alert"></p>
           <p class="login-help"><a href="/admin.html" id="invite-sign-in-link">Return to sign in</a></p>
@@ -165,6 +165,43 @@
             <strong id="trial-countdown">20:00</strong>
           </div>
         </aside>
+        <section id="instructor-home-section" class="instructor-home hidden" aria-labelledby="instructor-home-heading">
+          <div class="workspace-heading instructor-home-heading">
+            <div>
+              <p class="section-eyebrow">Host home</p>
+              <h1 id="instructor-home-heading" tabindex="-1">Ready for your next Mash?</h1>
+              <p id="instructor-home-welcome">Choose where you want to begin.</p>
+            </div>
+            <div class="workspace-heading-mark" aria-hidden="true"><svg><use href="/assets/icons.svg#brand-bolt"></use></svg></div>
+          </div>
+          <div class="instructor-launch-grid">
+            <button id="home-host-btn" type="button" class="instructor-launch-card instructor-launch-card-primary">
+              <span class="instructor-launch-copy">
+                <span class="section-eyebrow">Start here</span>
+                <strong id="home-host-title">Host a quiz</strong>
+                <span id="home-host-copy">Load your Markdown questions and open a live Mash for your group.</span>
+                <span id="home-host-action" class="instructor-launch-action">Build your Mash <svg aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></span>
+              </span>
+              <img src="/assets/sidekicks/webp/256/zap.webp" alt="" width="190" height="190">
+            </button>
+            <button id="home-analytics-btn" type="button" class="instructor-launch-card instructor-launch-card-analytics">
+              <span class="instructor-launch-copy">
+                <span class="section-eyebrow">Learning signals</span>
+                <strong>View analytics</strong>
+                <span>Review sessions, scores, and the questions that need another look.</span>
+              </span>
+              <img src="/assets/sidekicks/webp/256/booky.webp" alt="" width="132" height="132">
+            </button>
+            <button id="home-account-btn" type="button" class="instructor-launch-card instructor-launch-card-account">
+              <span class="instructor-launch-copy">
+                <span class="section-eyebrow">Your workspace</span>
+                <strong>Account &amp; billing</strong>
+                <span>Manage your profile, password, plan, and host access.</span>
+              </span>
+              <img src="/assets/sidekicks/webp/256/chestie.webp" alt="" width="132" height="132">
+            </button>
+          </div>
+        </section>
         <section id="upload-section" class="quiz-builder">
           <div class="workspace-heading">
             <div>
@@ -180,7 +217,13 @@
                 <h2 id="builder-card-heading">Quiz Markdown</h2>
                 <p id="builder-card-description" class="text-muted">Questions, options, timers and scoring stay in one readable file.</p>
               </div>
-              <input type="text" id="course-name-input" class="course-name-input" placeholder="Course name (optional)" aria-label="Course name">
+              <div class="builder-tools">
+                <button id="open-template-btn" type="button" class="btn btn-secondary">
+                  <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>
+                  Starter templates
+                </button>
+                <input type="text" id="course-name-input" class="course-name-input" placeholder="Mash group (optional)" aria-label="Mash group">
+              </div>
             </div>
             <textarea id="quiz-markdown" aria-label="Quiz Markdown" placeholder="# Quiz Title
 
@@ -338,7 +381,7 @@
             </div>
             <button id="back-to-dashboard-btn" class="btn btn-secondary">
               <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>
-              Back to studio
+              Back home
             </button>
           </div>
           <div class="analytics-tabs" role="tablist" aria-label="Analytics views">
@@ -347,22 +390,33 @@
           </div>
 
           <div id="analytics-overview" class="analytics-tab-content">
-            <div class="stats-grid analytics-stats-grid">
-              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="stat-value" id="total-sessions-stat">0</span><span class="stat-label">Total sessions</span></div>
-              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg><span class="stat-value" id="completed-sessions-stat">0</span><span class="stat-label">Completed</span></div>
-              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#users"></use></svg><span class="stat-value" id="total-participants-stat">0</span><span class="stat-label">Participants</span></div>
-              <div class="stat-card stat-card-highlight"><svg aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg><span class="stat-value" id="avg-score-stat">0%</span><span class="stat-label">Average score</span></div>
-              <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg><span class="stat-value" id="total-courses-stat">0</span><span class="stat-label">Courses</span></div>
+            <div id="analytics-empty-state" class="analytics-empty-state hidden">
+              <img src="/assets/sidekicks/webp/256/booky.webp" alt="" width="180" height="180">
+              <div>
+                <p class="section-eyebrow">Your story starts here</p>
+                <h2>Your analytics adventure begins after your first completed quiz.</h2>
+                <p>Host a Mash, finish the session, and this space will fill with participation, score, and learning insights.</p>
+                <button id="analytics-empty-host-btn" type="button" class="btn btn-primary">Host your first quiz <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
+              </div>
             </div>
-            <div class="analytics-chart-grid">
-              <article class="chart-card">
-                <div class="chart-card-heading"><div><p class="section-eyebrow">Activity</p><h3>Sessions per course</h3></div></div>
-                <div class="analytics-chart-canvas"><canvas id="course-sessions-chart"></canvas></div>
-              </article>
-              <article class="chart-card">
-                <div class="chart-card-heading"><div><p class="section-eyebrow">Reach</p><h3>Participants per course</h3></div></div>
-                <div class="analytics-chart-canvas"><canvas id="course-participants-chart"></canvas></div>
-              </article>
+            <div id="analytics-data-content">
+              <div class="stats-grid analytics-stats-grid">
+                <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="stat-value" id="total-sessions-stat">0</span><span class="stat-label">Total sessions</span></div>
+                <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg><span class="stat-value" id="completed-sessions-stat">0</span><span class="stat-label">Completed</span></div>
+                <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#users"></use></svg><span class="stat-value" id="total-participants-stat">0</span><span class="stat-label">Participants</span></div>
+                <div class="stat-card stat-card-highlight"><svg aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg><span class="stat-value" id="avg-score-stat">0%</span><span class="stat-label">Average score</span></div>
+                <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg><span class="stat-value" id="total-courses-stat">0</span><span class="stat-label">Mash groups</span></div>
+              </div>
+              <div class="analytics-chart-grid">
+                <article class="chart-card">
+                  <div class="chart-card-heading"><div><p class="section-eyebrow">Activity</p><h3>Sessions per Mash group</h3></div></div>
+                  <div class="analytics-chart-canvas"><canvas id="course-sessions-chart"></canvas></div>
+                </article>
+                <article class="chart-card">
+                  <div class="chart-card-heading"><div><p class="section-eyebrow">Reach</p><h3>Participants per Mash group</h3></div></div>
+                  <div class="analytics-chart-canvas"><canvas id="course-participants-chart"></canvas></div>
+                </article>
+              </div>
             </div>
           </div>
 
@@ -371,9 +425,9 @@
               <label class="search-field">
                 <span class="sr-only">Search sessions</span>
                 <svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg>
-                <input id="session-search-input" type="search" placeholder="Search code, quiz, or course">
+                <input id="session-search-input" type="search" placeholder="Search code, quiz, or Mash group">
               </label>
-              <select id="course-filter-select" aria-label="Filter by course"><option value="all">All courses</option></select>
+              <select id="course-filter-select" aria-label="Filter by Mash group"><option value="all">All Mash groups</option></select>
               <div class="filter-pills">
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="ended">Completed</button>
@@ -383,7 +437,7 @@
             </div>
             <div class="table-card table-scroll">
               <table class="results-table sessions-table">
-                <thead><tr><th>Session</th><th>Course</th><th>Quiz title</th><th>Participants</th><th>Avg score</th><th>Date</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <thead><tr><th>Session</th><th>Mash group</th><th>Quiz title</th><th>Participants</th><th>Avg score</th><th>Date</th><th><span class="sr-only">Actions</span></th></tr></thead>
                 <tbody id="analytics-sessions-body"></tbody>
               </table>
             </div>
@@ -457,7 +511,7 @@
         <div class="settings-tabs">
           <button class="settings-tab active" data-tab="password">Password</button>
           <button class="settings-tab hidden" data-tab="billing">Billing</button>
-          <button class="settings-tab hidden" data-tab="instructors">Instructors</button>
+          <button class="settings-tab hidden" data-tab="instructors">Hosts</button>
           <button class="settings-tab" data-tab="security">Security Questions</button>
           <button class="settings-tab" data-tab="email">Email</button>
         </div>
@@ -485,15 +539,15 @@
         <!-- Hosted Instructor Invitations Tab -->
         <div id="settings-instructors" class="settings-tab-content hidden">
           <p class="section-eyebrow">Invite-only beta</p>
-          <h3>Hosted instructors</h3>
-          <p class="text-muted mb-4">Create a one-time setup link, then share it directly with the instructor. Links expire automatically.</p>
+          <h3>Hosted accounts</h3>
+          <p class="text-muted mb-4">Create a one-time setup link, then share it directly with the host. Links expire automatically.</p>
           <form id="create-invitation-form">
             <div class="form-group">
-              <label for="invitation-display-name">Instructor name</label>
+              <label for="invitation-display-name">Host name</label>
               <input type="text" id="invitation-display-name" maxlength="120" autocomplete="name" required>
             </div>
             <div class="form-group">
-              <label for="invitation-email">Instructor email</label>
+              <label for="invitation-email">Host email</label>
               <input type="email" id="invitation-email" maxlength="254" autocomplete="email" required>
             </div>
             <button id="create-invitation-btn" type="submit" class="btn btn-primary">Create invitation link</button>
@@ -512,7 +566,7 @@
             <button id="refresh-instructors-btn" type="button" class="btn btn-secondary btn-sm">Refresh</button>
           </div>
           <div id="instructor-list" class="instructor-list" aria-live="polite">
-            <p class="text-muted">Loading hosted instructors…</p>
+            <p class="text-muted">Loading hosted accounts…</p>
           </div>
         </div>
 
@@ -618,6 +672,49 @@
     </div>
   </div>
 
+  <!-- Starter Templates Modal -->
+  <div id="template-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="template-modal-title">
+    <div class="modal-content template-modal-content">
+      <div class="modal-header">
+        <div>
+          <p class="section-eyebrow">Editable examples</p>
+          <h2 id="template-modal-title">Choose a starter Mash</h2>
+        </div>
+        <button id="close-template-btn" class="btn-close" type="button" aria-label="Close starter templates">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="template-modal-intro">Each template loads three ready-to-edit Markdown questions. Change anything you like before previewing or opening the room.</p>
+        <div class="template-card-grid">
+          <button type="button" class="template-card" data-template="math">
+            <img src="/assets/sidekicks/webp/128/zap.webp" alt="" width="88" height="88">
+            <span><strong>Quick Math</strong><small>Patterns, arithmetic, and fractions · 3 questions</small></span>
+          </button>
+          <button type="button" class="template-card" data-template="python">
+            <img src="/assets/sidekicks/webp/128/byte.webp" alt="" width="88" height="88">
+            <span><strong>Python Basics</strong><small>Functions, lists, and output · 3 questions</small></span>
+          </button>
+          <button type="button" class="template-card" data-template="data-science">
+            <img src="/assets/sidekicks/webp/128/booky.webp" alt="" width="88" height="88">
+            <span><strong>Data Science Foundations</strong><small>Statistics, labels, and overfitting · 3 questions</small></span>
+          </button>
+          <button type="button" class="template-card" data-template="marvel">
+            <img src="/assets/sidekicks/webp/128/rocketo.webp" alt="" width="88" height="88">
+            <span><strong>Marvel Movies &amp; TV</strong><small>Heroes, worlds, and memorable characters · 3 questions</small></span>
+          </button>
+          <button type="button" class="template-card" data-template="music">
+            <img src="/assets/sidekicks/webp/128/popstar.webp" alt="" width="88" height="88">
+            <span><strong>Music &amp; Lyrics</strong><small>Song structure, rhythm, and an original rhyme · 3 questions</small></span>
+          </button>
+          <button type="button" class="template-card" data-template="history">
+            <img src="/assets/sidekicks/webp/128/luna.webp" alt="" width="88" height="88">
+            <span><strong>History Highlights</strong><small>Ancient worlds and turning points · 3 questions</small></span>
+          </button>
+        </div>
+        <p class="template-replace-note"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Choosing a template replaces the current editor only after you confirm.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Preview Modal -->
   <div id="preview-modal" class="modal preview-modal hidden" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
     <div class="modal-content preview-modal-content">
@@ -665,7 +762,7 @@
         <form id="edit-metadata-form">
           <input type="hidden" id="edit-session-code">
           <div class="form-group">
-            <label for="edit-course-name">Course Name</label>
+            <label for="edit-course-name">Mash group</label>
             <input type="text" id="edit-course-name" placeholder="Leave blank for none">
           </div>
           <div class="form-group" style="display: flex; align-items: center; gap: 10px;">

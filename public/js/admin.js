@@ -5,6 +5,16 @@ const loginSection = document.getElementById('login-section');
 const inviteSection = document.getElementById('invite-section');
 const signupSection = document.getElementById('signup-section');
 const dashboardSection = document.getElementById('dashboard-section');
+const instructorHomeLink = document.getElementById('instructor-home-link');
+const instructorHomeSection = document.getElementById('instructor-home-section');
+const instructorHomeHeading = document.getElementById('instructor-home-heading');
+const instructorHomeWelcome = document.getElementById('instructor-home-welcome');
+const homeHostBtn = document.getElementById('home-host-btn');
+const homeHostTitle = document.getElementById('home-host-title');
+const homeHostCopy = document.getElementById('home-host-copy');
+const homeHostAction = document.getElementById('home-host-action');
+const homeAnalyticsBtn = document.getElementById('home-analytics-btn');
+const homeAccountBtn = document.getElementById('home-account-btn');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
 const loginSuccess = document.getElementById('login-success');
@@ -91,6 +101,151 @@ const previewQuestionText = document.getElementById('preview-question-text');
 const previewOptionsContainer = document.getElementById('preview-options-container');
 const previewPrevBtn = document.getElementById('preview-prev-btn');
 const previewNextBtn = document.getElementById('preview-next-btn');
+const openTemplateBtn = document.getElementById('open-template-btn');
+const templateModal = document.getElementById('template-modal');
+const closeTemplateBtn = document.getElementById('close-template-btn');
+const templateCards = document.querySelectorAll('.template-card[data-template]');
+
+const STARTER_TEMPLATES = Object.freeze({
+  math: `# Quick Math Mash
+# Score 100
+
+## Q1: What is 8 × 7?
+- [ ] 48
+- [x] 56
+- [ ] 64
+- [ ] 72
+::time=20
+
+## Q2: Which fraction is equivalent to one half?
+- [ ] 1/3
+- [x] 2/4
+- [ ] 3/8
+- [ ] 4/10
+::time=20
+
+## Q3: What number comes next: 2, 4, 8, 16, ...?
+- [ ] 18
+- [ ] 24
+- [x] 32
+- [ ] 64
+::time=20`,
+  python: `# Python Basics Mash
+# Score 100
+
+## Q1: What does len([4, 7, 9]) return?
+- [ ] 2
+- [x] 3
+- [ ] 4
+- [ ] 20
+::time=20
+
+## Q2: Which keyword starts a function definition in Python?
+- [ ] function
+- [x] def
+- [ ] func
+- [ ] define
+::time=20
+
+## Q3: Which Python value is mutable?
+- [ ] A string
+- [ ] A tuple
+- [x] A list
+- [ ] An integer
+::time=20`,
+  'data-science': `# Data Science Foundations Mash
+# Score 100
+
+## Q1: What is the median of 2, 4, and 9?
+- [ ] 2
+- [x] 4
+- [ ] 5
+- [ ] 9
+::time=20
+
+## Q2: In supervised learning, what does the model learn from?
+- [ ] Unlabeled examples only
+- [x] Examples paired with target labels
+- [ ] Random guesses
+- [ ] Database passwords
+::time=25
+
+## Q3: What is overfitting?
+- [ ] A model is too small to run
+- [ ] A dataset has no columns
+- [x] A model memorizes training patterns and generalizes poorly
+- [ ] A chart contains too many colors
+::time=25`,
+  marvel: `# Marvel Movies & TV Mash
+# Score 100
+
+## Q1: What is the name of Black Panther's home nation?
+- [ ] Sokovia
+- [x] Wakanda
+- [ ] Asgard
+- [ ] Latveria
+::time=20
+
+## Q2: In the Loki series, Loki is best known as the god of what?
+- [ ] Thunder
+- [ ] Wisdom
+- [x] Mischief
+- [ ] Speed
+::time=20
+
+## Q3: Which Guardians of the Galaxy character says “I am Groot”?
+- [ ] Rocket
+- [ ] Drax
+- [x] Groot
+- [ ] Star-Lord
+::time=20`,
+  music: `# Music & Lyrics Mash
+# Score 100
+
+## Q1: Which song section usually repeats the main musical and lyrical idea?
+- [ ] Verse
+- [x] Chorus
+- [ ] Bridge
+- [ ] Intro
+::time=20
+
+## Q2: How many beats are in one bar of common 4/4 time?
+- [ ] 2
+- [ ] 3
+- [x] 4
+- [ ] 8
+::time=20
+
+## Q3: Complete this original rhyme: “Stars light the night; dreams take their ___.”
+- [x] flight
+- [ ] road
+- [ ] song
+- [ ] time
+::time=25`,
+  history: `# History Highlights Mash
+# Score 100
+
+## Q1: Which ancient civilization built the pyramids at Giza?
+- [x] Ancient Egyptians
+- [ ] Ancient Romans
+- [ ] Vikings
+- [ ] Maya
+::time=20
+
+## Q2: In which year was Magna Carta sealed?
+- [ ] 1066
+- [x] 1215
+- [ ] 1492
+- [ ] 1776
+::time=25
+
+## Q3: Where did the Industrial Revolution begin?
+- [ ] Brazil
+- [ ] Japan
+- [x] Great Britain
+- [ ] Canada
+::time=20`
+});
 
 let previewQuizData = null;
 let previewCurrentQuestionIndex = 0;
@@ -147,6 +302,9 @@ const analyticsSessions = document.getElementById('analytics-sessions');
 const analyticsSessionsBody = document.getElementById('analytics-sessions-body');
 const noSessionsMsg = document.getElementById('no-sessions-msg');
 const sessionSearchInput = document.getElementById('session-search-input');
+const analyticsEmptyState = document.getElementById('analytics-empty-state');
+const analyticsDataContent = document.getElementById('analytics-data-content');
+const analyticsEmptyHostBtn = document.getElementById('analytics-empty-host-btn');
 
 // Analytics stats elements
 const totalSessionsStat = document.getElementById('total-sessions-stat');
@@ -206,7 +364,7 @@ function setLobbyPanel(mode = 'ready') {
     ? {
         eyebrow: 'Mash complete',
         title: 'The presenter is revealing the final leaderboard.',
-        copy: 'Use “Show final results” for the instructor table, or keep the shared screen on the podium and hardest-question recap.'
+        copy: 'Use “Show final results” for the host table, or keep the shared screen on the podium and hardest-question recap.'
       }
     : isTrialMode()
       ? {
@@ -261,6 +419,50 @@ function isTrialMode() {
   return currentAdmin?.role === 'trial';
 }
 
+function updateInstructorHome() {
+  const displayName = String(currentAdmin?.displayName || '').trim();
+  const firstName = displayName.split(/\s+/)[0];
+  instructorHomeWelcome.textContent = firstName
+    ? `Welcome back, ${firstName}. Choose where you want to begin.`
+    : 'Choose where you want to begin.';
+
+  const hasLiveRoom = Boolean(sessionCode);
+  homeHostTitle.textContent = hasLiveRoom ? 'Return to your live room' : 'Host a quiz';
+  homeHostCopy.textContent = hasLiveRoom
+    ? `Room ${sessionCode} is still open and ready for you.`
+    : 'Load your Markdown questions and open a live Mash for your group.';
+  homeHostAction.firstChild.textContent = hasLiveRoom ? 'Open control room ' : 'Build your Mash ';
+}
+
+function showInstructorHome() {
+  if (isTrialMode()) {
+    showInstructorStudio();
+    return;
+  }
+
+  uploadSection.classList.add('hidden');
+  liveWorkspace.classList.add('hidden');
+  analyticsSection.classList.add('hidden');
+  sessionDetailSection.classList.add('hidden');
+  instructorHomeSection.classList.remove('hidden');
+  studioTitleLabel.textContent = 'Host home';
+  updateInstructorHome();
+}
+
+function showInstructorStudio() {
+  instructorHomeSection.classList.add('hidden');
+  analyticsSection.classList.add('hidden');
+  sessionDetailSection.classList.add('hidden');
+  if (sessionCode) {
+    uploadSection.classList.add('hidden');
+    liveWorkspace.classList.remove('hidden');
+  } else {
+    liveWorkspace.classList.add('hidden');
+    uploadSection.classList.remove('hidden');
+  }
+  studioTitleLabel.textContent = isTrialMode() ? 'Guest studio' : 'Host studio';
+}
+
 function sessionApiPath(suffix = '') {
   const base = isTrialMode() ? '/api/trial/session' : '/api/admin/session';
   return `${base}${suffix}`;
@@ -282,7 +484,13 @@ function showAuthenticatedWorkspace() {
   const logoutLabel = logoutBtn.querySelector('span');
   if (logoutLabel) logoutLabel.textContent = trialMode ? 'Leave trial' : 'Logout';
   if (studioTitle && studioTitleLabel) {
-    studioTitleLabel.textContent = trialMode ? 'Guest studio' : 'Instructor studio';
+    studioTitleLabel.textContent = trialMode ? 'Guest studio' : 'Host studio';
+  }
+
+  if (trialMode) {
+    showInstructorStudio();
+  } else {
+    showInstructorHome();
   }
 }
 
@@ -297,6 +505,7 @@ function configureInstructorWorkspace() {
   builderCardHeading.textContent = 'Quiz Markdown';
   builderCardDescription.textContent = 'Questions, options, timers and scoring stay in one readable file.';
   uploadBtnLabel.textContent = 'Load quiz';
+  openTemplateBtn.classList.remove('hidden');
 
   const hostedInstructor = hostedAuthMode
     && currentAdmin?.authSource === 'hosted'
@@ -326,6 +535,7 @@ function configureTrialWorkspace(data) {
   builderCardHeading.textContent = data.template.title || 'Mini Mash: Quick Wins';
   builderCardDescription.textContent = `${data.template.questionCount} quick questions · Nothing is saved`;
   uploadBtnLabel.textContent = 'Launch practice room';
+  openTemplateBtn.classList.add('hidden');
   showAuthenticatedWorkspace();
   startTrialCountdown();
 }
@@ -391,6 +601,43 @@ async function loadTrialAvailability() {
 
 loadTrialAvailability();
 
+function closeTemplateModal() {
+  templateModal.classList.add('hidden');
+}
+
+openTemplateBtn?.addEventListener('click', () => {
+  templateModal.classList.remove('hidden');
+  const firstTemplate = templateCards[0];
+  firstTemplate?.focus({ preventScroll: true });
+});
+
+closeTemplateBtn?.addEventListener('click', closeTemplateModal);
+
+templateModal?.addEventListener('click', event => {
+  if (event.target === templateModal) closeTemplateModal();
+});
+
+templateCards.forEach(card => {
+  card.addEventListener('click', () => {
+    const markdown = STARTER_TEMPLATES[card.dataset.template];
+    if (!markdown) return;
+    if (quizMarkdown.value.trim()
+      && !confirm('Replace the Markdown currently in the editor with this starter template?')) {
+      return;
+    }
+    quizMarkdown.value = markdown;
+    closeTemplateModal();
+    showStatus('upload-status', 'Starter template loaded. Edit anything you like, then preview your questions.', true);
+    quizMarkdown.focus({ preventScroll: true });
+  });
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !templateModal?.classList.contains('hidden')) {
+    closeTemplateModal();
+  }
+});
+
 async function loadAuthConfig() {
   try {
     const response = await fetch('/api/admin/auth/config');
@@ -410,10 +657,10 @@ async function loadAuthConfig() {
   loginRecoveryHelp.classList.toggle('hidden', hostedAuthMode);
   loginAccountContext.setAttribute(
     'aria-label',
-    hostedAuthMode ? 'Account type: hosted instructor account' : 'Account type: single-admin deployment'
+    hostedAuthMode ? 'Account type: hosted account' : 'Account type: single-host deployment'
   );
-  loginAccountTitle.textContent = hostedAuthMode ? 'Markdown Mash Hosted' : 'Instructor workspace';
-  loginAccountDetail.textContent = hostedAuthMode ? 'Email-secured instructor account' : 'Single-admin deployment';
+  loginAccountTitle.textContent = hostedAuthMode ? 'Markdown Mash Hosted' : 'Host workspace';
+  loginAccountDetail.textContent = hostedAuthMode ? 'Email-secured host account' : 'Single-host deployment';
   passwordInput.placeholder = hostedAuthMode ? 'Enter your account password' : 'Enter the deployment password';
   passwordHelp.textContent = hostedAuthMode
     ? 'Use the password for your Markdown Mash Hosted account.'
@@ -559,7 +806,7 @@ document.getElementById('invite-activation-form')?.addEventListener('submit', as
   } catch (error) {
     showStatus('invite-status', error.message, false);
     button.disabled = false;
-    button.textContent = 'Activate instructor account';
+    button.textContent = 'Activate host account';
   }
 });
 
@@ -1382,9 +1629,31 @@ analyticsBtn.addEventListener('click', () => {
   showAnalytics();
 });
 
+instructorHomeLink?.addEventListener('click', event => {
+  if (!authToken || isTrialMode()) return;
+  event.preventDefault();
+  showInstructorHome();
+  instructorHomeHeading.focus({ preventScroll: true });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+homeHostBtn?.addEventListener('click', () => {
+  showInstructorStudio();
+  if (!sessionCode) builderHeading.focus({ preventScroll: true });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+homeAnalyticsBtn?.addEventListener('click', showAnalytics);
+homeAccountBtn?.addEventListener('click', openSettings);
+analyticsEmptyHostBtn?.addEventListener('click', () => {
+  showInstructorStudio();
+  builderHeading.focus({ preventScroll: true });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
 // Back to dashboard from analytics
 backToDashboardBtn.addEventListener('click', () => {
-  hideAnalytics();
+  showInstructorHome();
 });
 
 // Tab switching
@@ -1436,18 +1705,16 @@ exportCsvBtn.addEventListener('click', async () => {
 
 // Show analytics view
 async function showAnalytics() {
-  // Hide dashboard elements
+  // Hide the instructor launcher and active workspace without disturbing
+  // the live room's internal state.
+  instructorHomeSection.classList.add('hidden');
   uploadSection.classList.add('hidden');
   liveWorkspace.classList.add('hidden');
-  sessionInfoSection.classList.add('hidden');
-  participantsSection.classList.add('hidden');
-  controlsSection.classList.add('hidden');
-  questionSection.classList.add('hidden');
-  resultsSection.classList.add('hidden');
 
   // Show analytics
   analyticsSection.classList.remove('hidden');
   sessionDetailSection.classList.add('hidden');
+  studioTitleLabel.textContent = 'Analytics';
 
   // Reset to overview tab
   analyticsTabs.forEach(t => t.classList.remove('active'));
@@ -1461,18 +1728,7 @@ async function showAnalytics() {
 
 // Hide analytics and return to dashboard
 function hideAnalytics() {
-  analyticsSection.classList.add('hidden');
-  sessionDetailSection.classList.add('hidden');
-
-  // Show session info if there's an active session
-  if (sessionCode) {
-    liveWorkspace.classList.remove('hidden');
-    sessionInfoSection.classList.remove('hidden');
-    participantsSection.classList.remove('hidden');
-    controlsSection.classList.remove('hidden');
-  } else {
-    uploadSection.classList.remove('hidden');
-  }
+  showInstructorHome();
 }
 
 // Load platform overview stats
@@ -1489,6 +1745,22 @@ async function loadPlatformStats() {
       avgScoreStat.textContent = `${Math.round(data.stats.overallAvgScore || 0)}%`;
       if (totalCoursesStat) {
         totalCoursesStat.textContent = data.stats.totalCourses;
+      }
+
+      const hasSessions = Number(data.stats.totalSessions) > 0;
+      analyticsEmptyState.classList.toggle('hidden', hasSessions);
+      analyticsDataContent.classList.toggle('hidden', !hasSessions);
+
+      if (!hasSessions) {
+        if (window.courseSessionsChart) {
+          window.courseSessionsChart.destroy();
+          window.courseSessionsChart = null;
+        }
+        if (window.courseParticipantsChart) {
+          window.courseParticipantsChart.destroy();
+          window.courseParticipantsChart = null;
+        }
+        return;
       }
       
       // Render Course Overview Charts
@@ -2251,7 +2523,7 @@ function createInstructorAccountRow(instructor) {
 
   const identity = document.createElement('div');
   const name = document.createElement('strong');
-  name.textContent = instructor.displayName || 'Hosted instructor';
+  name.textContent = instructor.displayName || 'Hosted account';
   const email = document.createElement('span');
   email.className = 'text-muted';
   email.textContent = instructor.email;
@@ -2336,19 +2608,19 @@ async function loadHostedInstructors() {
   list.replaceChildren();
   const loading = document.createElement('p');
   loading.className = 'text-muted';
-  loading.textContent = 'Loading hosted instructors…';
+  loading.textContent = 'Loading hosted accounts…';
   list.appendChild(loading);
 
   try {
     const response = await authFetch('/api/admin/instructors');
     const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.error || 'Unable to load hosted instructors');
+    if (!response.ok || !data.success) throw new Error(data.error || 'Unable to load hosted accounts');
 
     list.replaceChildren();
     if (!data.instructors.length) {
       const empty = document.createElement('p');
       empty.className = 'text-muted';
-      empty.textContent = 'No hosted instructor accounts yet.';
+      empty.textContent = 'No hosted accounts yet.';
       list.appendChild(empty);
       return;
     }

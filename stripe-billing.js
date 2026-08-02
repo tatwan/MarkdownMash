@@ -40,7 +40,7 @@ function assertHostedInstructor(account) {
     || !account.email_verified_at) {
     throw new BillingRequestError(
       'BILLING_ACCOUNT_INELIGIBLE',
-      'Billing is available only for verified hosted instructor accounts.',
+      'Billing is available only for verified hosted accounts.',
       403
     );
   }

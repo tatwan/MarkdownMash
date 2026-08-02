@@ -885,7 +885,7 @@ app.post('/api/admin/invite/activate', invitationActivateLimiter, async (req, re
     return res.json({
       success: true,
       email: activated.email,
-      message: 'Your hosted instructor account is ready.',
+      message: 'Your hosted account is ready.',
       checkoutAfterActivation: activated.purpose === 'self_signup' && STRIPE_BILLING_ENABLED
     });
   } catch (error) {
@@ -906,7 +906,7 @@ app.post(
     const email = normalizeEmail(req.body?.email);
     const displayName = String(req.body?.displayName || '').trim();
     if (!isValidEmail(email)) {
-      return res.status(400).json({ success: false, error: 'Enter a valid instructor email' });
+      return res.status(400).json({ success: false, error: 'Enter a valid host email' });
     }
     if (!displayName || displayName.length > 120) {
       return res.status(400).json({ success: false, error: 'Display name is required and must be 120 characters or fewer' });
@@ -947,7 +947,7 @@ app.post(
       });
     } catch (error) {
       if (error.code === 'ACCOUNT_ALREADY_EXISTS' || error.code === '23505') {
-        return res.status(409).json({ success: false, error: 'An instructor account already uses this email address' });
+        return res.status(409).json({ success: false, error: 'A host account already uses this email address' });
       }
       console.error('Invitation creation error:', error);
       return res.status(500).json({ success: false, error: 'Unable to create this invitation' });
@@ -979,7 +979,7 @@ app.get('/api/admin/instructors', requireMaster, async (req, res) => {
     });
   } catch (error) {
     console.error('Hosted instructor list error:', error);
-    return res.status(500).json({ success: false, error: 'Unable to load hosted instructors' });
+    return res.status(500).json({ success: false, error: 'Unable to load hosted accounts' });
   }
 });
 
@@ -999,7 +999,7 @@ app.patch('/api/admin/instructors/:accountId/access', requireMaster, async (req,
   }
   try {
     const override = await db.setHostedAccessOverride(accountId, { mode, expiresAt });
-    if (!override) return res.status(404).json({ success: false, error: 'Hosted instructor not found' });
+    if (!override) return res.status(404).json({ success: false, error: 'Hosted account not found' });
     await db.logActivity(req.admin.id, 'hosted_access_override_updated', {
       accountId,
       mode,
@@ -2631,7 +2631,7 @@ io.on('connection', (socket) => {
 
     if (!presenterCanView(socket.data.principal, session)) {
       socket.emit('presenter_unauthorized', {
-        message: 'Open the presenter from the instructor studio for this room.'
+        message: 'Open the presenter from the host studio for this room.'
       });
       return;
     }

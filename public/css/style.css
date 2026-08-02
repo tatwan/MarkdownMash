@@ -4206,9 +4206,18 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 0.32rem;
+  padding: 0.5rem 0.7rem;
   color: #6544e9;
+  background: rgba(101, 68, 233, 0.08);
+  border: 1px solid rgba(101, 68, 233, 0.15);
+  border-radius: 0.65rem;
   font-weight: 750;
   text-decoration: none;
+}
+
+.host-entry a:hover {
+  color: #4e31c9;
+  background: rgba(101, 68, 233, 0.14);
 }
 
 .host-entry svg {
@@ -4590,9 +4599,136 @@ select:focus-visible {
 }
 
 .quiz-builder,
+.instructor-home,
 .analytics-workspace {
   max-width: 1320px;
   margin: 0 auto;
+}
+
+/* Instructor home */
+.instructor-home-heading {
+  align-items: center;
+}
+
+.instructor-launch-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr);
+  grid-template-rows: repeat(2, minmax(190px, 1fr));
+  gap: 1rem;
+}
+
+.instructor-launch-card {
+  position: relative;
+  min-width: 0;
+  min-height: 190px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  color: var(--text);
+  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid rgba(167, 176, 208, 0.18);
+  border-radius: 1.35rem;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.instructor-launch-card:hover,
+.instructor-launch-card:focus-visible {
+  border-color: rgba(124, 92, 255, 0.55);
+  box-shadow: 0 24px 48px rgba(2, 6, 23, 0.3);
+  transform: translateY(-3px);
+}
+
+.instructor-launch-card-primary {
+  grid-row: 1 / 3;
+  min-height: 396px;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(45, 212, 255, 0.19), transparent 15rem),
+    linear-gradient(145deg, rgba(124, 92, 255, 0.2), rgba(20, 28, 65, 0.98));
+  border-color: rgba(124, 92, 255, 0.35);
+}
+
+.instructor-launch-card-analytics {
+  background:
+    radial-gradient(circle at 100% 100%, rgba(45, 212, 255, 0.13), transparent 10rem),
+    var(--bg-card);
+}
+
+.instructor-launch-card-account {
+  background:
+    radial-gradient(circle at 100% 100%, rgba(255, 216, 77, 0.12), transparent 10rem),
+    var(--bg-card);
+}
+
+.instructor-launch-copy {
+  position: relative;
+  z-index: 2;
+  width: min(72%, 560px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.instructor-launch-card strong {
+  display: block;
+  margin: 0.5rem 0 0.65rem;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.instructor-launch-card-primary strong {
+  max-width: 420px;
+  font-size: clamp(2.2rem, 4vw, 4rem);
+}
+
+.instructor-launch-copy > span:not(.section-eyebrow, .instructor-launch-action) {
+  color: #b5bdd8;
+  line-height: 1.55;
+}
+
+.instructor-launch-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 1.5rem;
+  color: var(--yellow);
+  font-weight: 800;
+}
+
+.instructor-launch-action svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.instructor-launch-card img {
+  position: absolute;
+  z-index: 1;
+  right: -0.5rem;
+  bottom: -0.75rem;
+  width: 132px;
+  height: 132px;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 18px rgba(2, 6, 23, 0.28));
+  transform: rotate(4deg);
+  transition: transform 0.22s ease;
+}
+
+.instructor-launch-card-primary img {
+  right: clamp(0.5rem, 3vw, 2.25rem);
+  bottom: 1.2rem;
+  width: clamp(170px, 24vw, 260px);
+  height: clamp(170px, 24vw, 260px);
+  transform: rotate(7deg);
+}
+
+.instructor-launch-card:hover img,
+.instructor-launch-card:focus-visible img {
+  transform: rotate(0deg) scale(1.04);
 }
 
 .workspace-heading,
@@ -4662,6 +4798,109 @@ select:focus-visible {
 
 .course-name-input {
   max-width: 300px;
+}
+
+.builder-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.builder-tools .course-name-input {
+  width: 260px;
+  margin: 0;
+}
+
+.template-modal-content {
+  max-width: 960px;
+}
+
+.template-modal-content .modal-header {
+  align-items: flex-start;
+}
+
+.template-modal-content .modal-header .section-eyebrow {
+  margin-bottom: 0.35rem;
+}
+
+.template-modal-content .modal-header h2 {
+  font-size: 1.7rem;
+}
+
+.template-modal-intro {
+  max-width: 720px;
+  margin-bottom: 1.25rem;
+  color: var(--text-muted);
+}
+
+.template-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.template-card {
+  min-width: 0;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 1rem;
+  color: var(--text);
+  text-align: left;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(124, 92, 255, 0.15), transparent 8rem),
+    rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(167, 176, 208, 0.16);
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.template-card:hover,
+.template-card:focus-visible {
+  background-color: rgba(124, 92, 255, 0.08);
+  border-color: rgba(124, 92, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.template-card img {
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 12px rgba(2, 6, 23, 0.25));
+}
+
+.template-card span {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.template-card strong {
+  font-size: 1.05rem;
+}
+
+.template-card small {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.template-replace-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.template-replace-note svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--cyan);
 }
 
 .builder-card textarea {
@@ -5221,6 +5460,47 @@ select:focus-visible {
 /* Analytics workspace */
 .analytics-workspace {
   padding-bottom: 3rem;
+}
+
+.analytics-empty-state {
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.5rem, 5vw, 4rem);
+  padding: clamp(2rem, 5vw, 4rem);
+  background:
+    radial-gradient(circle at 10% 100%, rgba(124, 92, 255, 0.18), transparent 18rem),
+    var(--bg-card);
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  border-radius: 1.35rem;
+  box-shadow: var(--shadow-card);
+}
+
+.analytics-empty-state img {
+  flex: 0 0 auto;
+  width: clamp(140px, 20vw, 220px);
+  height: clamp(140px, 20vw, 220px);
+  object-fit: contain;
+  filter: drop-shadow(0 18px 20px rgba(2, 6, 23, 0.3));
+  transform: rotate(-4deg);
+}
+
+.analytics-empty-state > div {
+  max-width: 620px;
+}
+
+.analytics-empty-state h2 {
+  margin: 0.5rem 0 0.75rem;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.analytics-empty-state p:not(.section-eyebrow) {
+  margin-bottom: 1.5rem;
+  color: var(--text-muted);
+  font-size: 1.02rem;
 }
 
 .analytics-header {
@@ -5996,8 +6276,23 @@ select:focus-visible {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .instructor-launch-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+  }
+
+  .instructor-launch-card-primary {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    min-height: 310px;
+  }
+
   .analytics-toolbar {
     flex-wrap: wrap;
+  }
+
+  .template-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .search-field {
@@ -6088,12 +6383,54 @@ select:focus-visible {
     display: none;
   }
 
+  .instructor-launch-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .instructor-launch-card-primary {
+    grid-column: auto;
+    min-height: 300px;
+  }
+
+  .instructor-launch-card:not(.instructor-launch-card-primary) {
+    min-height: 180px;
+  }
+
+  .analytics-empty-state {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .analytics-empty-state .section-eyebrow {
+    justify-content: center;
+  }
+
   .builder-toolbar {
+    flex-direction: column;
+  }
+
+  .builder-tools {
+    width: 100%;
+    align-items: stretch;
     flex-direction: column;
   }
 
   .course-name-input {
     max-width: none;
+  }
+
+  .builder-tools .course-name-input {
+    width: 100%;
+  }
+
+  .template-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .template-card {
+    min-height: 130px;
+    flex-direction: row;
+    align-items: center;
   }
 
   .trial-banner,

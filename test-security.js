@@ -228,7 +228,7 @@ async function run() {
 
     const unauthorized = waitForSocket(unauthorizedPresenter, 'presenter_unauthorized');
     unauthorizedPresenter.emit('presenter_join', sessionCode);
-    assert.match((await unauthorized).message, /instructor studio/i);
+    assert.match((await unauthorized).message, /host studio/i);
 
     const readyA = waitForSocket(playerA, 'participant_ready');
     const readyB = waitForSocket(playerB, 'participant_ready');
