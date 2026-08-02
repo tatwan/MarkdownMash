@@ -36,6 +36,9 @@ assert.match(adminJs, /homeHostBtn\?\.addEventListener\('click'/);
 assert.match(adminJs, /homeAnalyticsBtn\?\.addEventListener\('click', showAnalytics\)/);
 assert.match(adminJs, /homeAccountBtn\?\.addEventListener\('click', openSettings\)/);
 assert.match(adminJs, /analyticsEmptyState\.classList\.toggle\('hidden', hasSessions\)/);
+assert.match(adminJs, /Cancellation scheduled/);
+assert.match(adminJs, /Cancels on/);
+assert.match(adminJs, /Billing: cancellation scheduled/);
 for (const template of ['math', 'python', 'data-science', 'marvel', 'music', 'history']) {
   assert.match(adminHtml, new RegExp(`data-template=["']${template}["']`));
 }

@@ -1053,6 +1053,63 @@ const dbApi = {
     return result.rows[0];
   },
 
+  async syncStripeSubscription(subscription) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `UPDATE subscriptions
+         SET provider_subscription_id = $3,
+             price_id = $4,
+             status = $5,
+             current_period_end = $6,
+             cancel_at_period_end = $7,
+             last_event_created_at = GREATEST(
+               COALESCE(last_event_created_at, TO_TIMESTAMP(0)),
+               DATE_TRUNC('second', NOW())
+             ),
+             updated_at = NOW()
+         WHERE account_id = $1
+           AND provider = 'stripe'
+           AND provider_customer_id = $2
+           AND (provider_subscription_id IS NULL OR provider_subscription_id = $3)
+         RETURNING *`,
+        [
+          subscription.accountId,
+          subscription.providerCustomerId,
+          subscription.providerSubscriptionId,
+          subscription.priceId,
+          subscription.status,
+          subscription.currentPeriodEnd,
+          subscription.cancelAtPeriodEnd
+        ]
+      );
+      const storedSubscription = result.rows[0] || null;
+      if (storedSubscription) {
+        await client.query(
+          `UPDATE admins
+           SET account_status = $1, updated_at = NOW()
+           WHERE id = $2
+             AND auth_source = 'hosted'
+             AND role <> 'master'
+             AND account_status NOT IN ('suspended', 'deleted')`,
+          [subscription.accountStatus, subscription.accountId]
+        );
+      }
+      await client.query('COMMIT');
+      return storedSubscription;
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Stripe subscription sync rollback failed:', rollbackError.message);
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async applyStripeBillingEvent({
     eventId,
     eventType,

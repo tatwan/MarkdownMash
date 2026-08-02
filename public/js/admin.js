@@ -2465,12 +2465,15 @@ async function loadBillingStatus() {
     const subscription = data.subscription;
     const complimentary = data.complimentaryAccess;
     const status = subscription?.status || 'not_subscribed';
+    const cancellationScheduled = Boolean(subscription?.cancelAtPeriodEnd);
     const managed = ['active', 'trialing', 'past_due'].includes(status);
     const active = ['active', 'trialing'].includes(status);
     planDetails.textContent = `$${data.plan.amount} ${data.plan.currency} per year · up to ${data.plan.participantLimit} participants · one open room at a time`;
 
     badge.textContent = complimentary
       ? 'Complimentary'
+      : cancellationScheduled
+      ? 'Cancellation scheduled'
       : status === 'not_subscribed'
       ? 'Not subscribed'
       : status.replaceAll('_', ' ');
@@ -2482,8 +2485,8 @@ async function loadBillingStatus() {
         ? `Complimentary classroom access continues through ${billingDate(complimentary.until)}.`
         : 'Complimentary classroom access does not expire.';
     } else if (subscription?.currentPeriodEnd) {
-      periodCopy.textContent = subscription.cancelAtPeriodEnd
-        ? `Access continues through ${billingDate(subscription.currentPeriodEnd)}.`
+      periodCopy.textContent = cancellationScheduled
+        ? `Cancels on ${billingDate(subscription.currentPeriodEnd)}. Access remains available until then.`
         : `${active ? 'Renews' : 'Current period ends'} ${billingDate(subscription.currentPeriodEnd)}.`;
     } else if (status === 'past_due') {
       periodCopy.textContent = 'A renewal payment needs attention. Your classroom access is in its grace period.';
@@ -2540,7 +2543,9 @@ function createInstructorAccountRow(instructor) {
       ? 'Invitation expired'
       : 'Invitation pending';
   const billingStatus = document.createElement('span');
-  billingStatus.textContent = `Billing: ${(instructor.subscriptionStatus || 'not subscribed').replaceAll('_', ' ')}`;
+  billingStatus.textContent = instructor.cancelAtPeriodEnd
+    ? `Billing: cancellation scheduled · access through ${billingDate(instructor.currentPeriodEnd)}`
+    : `Billing: ${(instructor.subscriptionStatus || 'not subscribed').replaceAll('_', ' ')}`;
   const source = document.createElement('span');
   source.textContent = `Source: ${(instructor.provisioningSource || 'deployment').replaceAll('_', ' ')}`;
   meta.append(accountStatus, billingStatus, source);

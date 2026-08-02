@@ -145,6 +145,34 @@ function createStripeBillingService({ stripe, db, priceId, appBaseUrl }) {
     return { url: session.url };
   }
 
+  async function refreshSubscription(account) {
+    assertHostedInstructor(account);
+    const existing = await db.getSubscriptionByAccountId(account.id);
+    if (!existing?.provider_subscription_id) return existing;
+
+    const stripeSubscription = await stripe.subscriptions.retrieve(
+      existing.provider_subscription_id
+    );
+    const normalized = normalizeStripeSubscription(stripeSubscription, priceId);
+    if (!normalized || normalized.accountId !== account.id) {
+      throw new BillingRequestError(
+        'BILLING_SUBSCRIPTION_MISMATCH',
+        'Stripe returned billing data that does not match this hosted account.',
+        409
+      );
+    }
+
+    const stored = await db.syncStripeSubscription(normalized);
+    if (!stored) {
+      throw new BillingRequestError(
+        'BILLING_SUBSCRIPTION_MISMATCH',
+        'Stripe billing data no longer matches this hosted account.',
+        409
+      );
+    }
+    return stored;
+  }
+
   async function processEvent(event, payloadDigest) {
     if (!HANDLED_STRIPE_EVENTS.has(event.type)) {
       return { ignored: true, reason: 'event_type' };
@@ -193,7 +221,8 @@ function createStripeBillingService({ stripe, db, priceId, appBaseUrl }) {
   return {
     createCheckoutSession,
     createPortalSession,
-    processEvent
+    processEvent,
+    refreshSubscription
   };
 }
 

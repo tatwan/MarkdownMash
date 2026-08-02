@@ -1020,9 +1020,18 @@ app.get('/api/admin/billing', async (req, res) => {
     const applicable = HOSTED_MODE
       && req.admin.role !== 'master'
       && req.admin.authSource === 'hosted';
-    const subscription = applicable
-      ? await db.getSubscriptionByAccountId(req.admin.id)
-      : null;
+    let subscription = null;
+    if (applicable) {
+      subscription = await db.getSubscriptionByAccountId(req.admin.id);
+      if (stripeBilling && subscription?.provider_subscription_id) {
+        try {
+          const account = await db.getAdminById(req.admin.id);
+          subscription = await stripeBilling.refreshSubscription(account);
+        } catch (error) {
+          console.error('Stripe billing refresh error:', error.message);
+        }
+      }
+    }
 
     return res.json({
       success: true,

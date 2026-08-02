@@ -101,6 +101,12 @@ assert.equal(normalized.accountId, 42);
 assert.equal(normalized.providerCustomerId, 'cus_markdown_mash');
 assert.equal(normalized.currentPeriodEnd.toISOString(), '2027-05-11T01:46:40.000Z');
 assert.equal(
+  normalizeStripeSubscription(stripeSubscription({ cancel_at_period_end: true }), priceId)
+    .cancelAtPeriodEnd,
+  true,
+  'scheduled cancellation must be preserved from Stripe'
+);
+assert.equal(
   normalizeStripeSubscription(
     stripeSubscription({ metadata: { app: 'atollo_scout', account_id: '42' } }),
     priceId
@@ -129,6 +135,7 @@ assert.equal(
 async function run() {
   const calls = [];
   let storedSubscription = null;
+  let retrievedSubscription = stripeSubscription();
   const appliedEvents = [];
   const db = {
     async getSubscriptionByAccountId() {
@@ -139,6 +146,18 @@ async function run() {
         account_id: accountId,
         provider_customer_id: customerId,
         status: 'checkout_pending'
+      };
+      return storedSubscription;
+    },
+    async syncStripeSubscription(subscription) {
+      calls.push({ type: 'sync', subscription });
+      storedSubscription = {
+        account_id: subscription.accountId,
+        provider_customer_id: subscription.providerCustomerId,
+        provider_subscription_id: subscription.providerSubscriptionId,
+        status: subscription.status,
+        current_period_end: subscription.currentPeriodEnd,
+        cancel_at_period_end: subscription.cancelAtPeriodEnd
       };
       return storedSubscription;
     },
@@ -173,7 +192,7 @@ async function run() {
     subscriptions: {
       async retrieve(id) {
         calls.push({ type: 'retrieve', id });
-        return stripeSubscription({ id });
+        return { ...retrievedSubscription, id };
       }
     }
   };
@@ -205,6 +224,17 @@ async function run() {
   const portal = await service.createPortalSession(account);
   assert.equal(portal.url, 'https://billing.stripe.test/session');
   assert.equal(calls.at(-1).params.customer, 'cus_markdown_mash');
+
+  storedSubscription = {
+    account_id: 42,
+    provider_customer_id: 'cus_markdown_mash',
+    provider_subscription_id: 'sub_markdown_mash',
+    status: 'active'
+  };
+  retrievedSubscription = stripeSubscription({ cancel_at_period_end: true });
+  const refreshed = await service.refreshSubscription(account);
+  assert.equal(refreshed.cancel_at_period_end, true);
+  assert.equal(calls.at(-1).subscription.cancelAtPeriodEnd, true);
 
   await service.processEvent({
     id: 'evt_checkout',
