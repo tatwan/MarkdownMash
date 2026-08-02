@@ -472,7 +472,7 @@ pm2 save
 | `NODE_ENV` | **Yes in production** | - | Set to `production` on Render or another public host |
 | `PORT` | No | `3000` | Server port (Render sets this automatically) |
 
-The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. Hosted instructors sign in with a verified, normalized email address; account lifecycle changes are checked on every authenticated API request and Socket.IO connection. Public account creation remains off in the blueprint until the operator explicitly enables it.
+The included Render blueprint enables hosted mode with a 50-participant limit and one open room at a time per instructor. Hosted instructors sign in with a verified, normalized email address and password. The deployment master signs in with the configured password and may leave the email field blank. Account lifecycle changes are checked on every authenticated API request and Socket.IO connection. Public account creation remains off in the blueprint until the operator explicitly enables it.
 
 The database-backed `master` account keeps the deployment-password login and is exempt from both hosted room guardrails. Self-hosted operators can leave `HOSTED_MODE=false` to retain the single-admin deployment login and unrestricted persistent rooms.
 

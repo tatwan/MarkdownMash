@@ -26,7 +26,6 @@ const loginAccountTitle = document.getElementById('login-account-title');
 const loginAccountDetail = document.getElementById('login-account-detail');
 const loginRecoveryHelp = document.getElementById('login-recovery-help');
 const passwordInput = document.getElementById('password');
-const passwordHelp = document.getElementById('password-help');
 const trialEntry = document.getElementById('trial-entry');
 const tryItOutBtn = document.getElementById('try-it-out-btn');
 const signupEntry = document.getElementById('signup-entry');
@@ -665,9 +664,6 @@ async function loadAuthConfig() {
   loginAccountTitle.textContent = hostedAuthMode ? 'Markdown Mash Hosted' : 'Host workspace';
   loginAccountDetail.textContent = hostedAuthMode ? 'Email-secured host account' : 'Single-host deployment';
   passwordInput.placeholder = hostedAuthMode ? 'Enter your account password' : 'Enter the deployment password';
-  passwordHelp.textContent = hostedAuthMode
-    ? 'Use the password for your Markdown Mash Hosted account.'
-    : 'Use the password configured for this Markdown Mash deployment.';
   signupEntry?.classList.toggle('hidden', !publicSignupEnabled);
 }
 
