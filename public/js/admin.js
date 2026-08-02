@@ -431,6 +431,7 @@ createAccountBtn?.addEventListener('click', () => {
 
 document.getElementById('signup-form')?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  const form = event.currentTarget;
   const displayName = document.getElementById('signup-name').value.trim();
   const email = document.getElementById('signup-email').value.trim();
   const button = document.getElementById('signup-submit-btn');
@@ -446,7 +447,7 @@ document.getElementById('signup-form')?.addEventListener('submit', async (event)
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.error || 'Unable to register right now');
     showStatus('signup-status', data.message, true);
-    event.currentTarget.reset();
+    form.reset();
   } catch (error) {
     showStatus('signup-status', error.message, false);
   } finally {
