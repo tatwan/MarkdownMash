@@ -2989,6 +2989,8 @@ label {
 
 .instructor-account-row {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 16px;
   padding: 14px;
@@ -2997,24 +2999,43 @@ label {
   background: var(--bg-input);
 }
 
+.instructor-account-identity {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.instructor-account-identity span {
+  overflow-wrap: anywhere;
+}
+
 .instructor-account-row strong,
 .instructor-account-row span {
   display: block;
 }
 
 .instructor-account-meta {
-  flex: 0 0 auto;
-  text-align: right;
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  text-align: left;
   color: var(--text-muted);
   font-size: 0.8rem;
-  text-transform: capitalize;
+}
+
+.instructor-account-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .instructor-access-controls {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
+  flex: 1 1 380px;
   justify-content: flex-end;
 }
 
@@ -3171,6 +3192,7 @@ select option {
   }
 
   .instructor-account-meta {
+    width: 100%;
     text-align: left;
   }
 
@@ -4424,6 +4446,113 @@ select:focus-visible {
 
 .trial-entry {
   margin-top: 1.35rem;
+}
+
+.hosted-plan-sticker {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  margin: 0.8rem 0 1.1rem;
+  padding: 12px 10px 12px 14px;
+  border: 1px solid rgba(97, 218, 251, 0.38);
+  border-radius: 16px 12px 16px 12px;
+  background:
+    radial-gradient(circle at 92% 14%, rgba(255, 215, 64, 0.22), transparent 34%),
+    linear-gradient(135deg, rgba(104, 67, 255, 0.22), rgba(27, 200, 228, 0.1));
+  box-shadow: 0 12px 28px rgba(6, 12, 35, 0.22);
+  transform: rotate(-0.35deg);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.hosted-plan-sticker:hover {
+  border-color: rgba(97, 218, 251, 0.62);
+  transform: rotate(0deg) translateY(-1px);
+}
+
+.hosted-plan-sticker::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 34%, rgba(255, 255, 255, 0.06) 50%, transparent 66%);
+  pointer-events: none;
+}
+
+.hosted-plan-price {
+  padding-right: 12px;
+  border-right: 1px solid rgba(150, 161, 197, 0.22);
+}
+
+.hosted-plan-price > span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--cyan);
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hosted-plan-price strong {
+  color: var(--yellow);
+  font-size: 1.55rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hosted-plan-price small {
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.hosted-plan-perks {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hosted-plan-perks span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.hosted-plan-perks svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--cyan);
+}
+
+.hosted-plan-sticker > img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 10px rgba(5, 10, 29, 0.3));
+  transform: rotate(7deg) scale(1.08);
+}
+
+@media (max-width: 420px) {
+  .hosted-plan-sticker {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding-right: 12px;
+  }
+
+  .hosted-plan-sticker > img {
+    position: absolute;
+    z-index: -1;
+    right: -8px;
+    opacity: 0.18;
+  }
 }
 
 .login-divider {

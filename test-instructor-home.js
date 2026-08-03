@@ -5,6 +5,7 @@ const path = require('path');
 const adminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
 const adminJs = fs.readFileSync(path.join(__dirname, 'public', 'js', 'admin.js'), 'utf8');
+const styleCss = fs.readFileSync(path.join(__dirname, 'public', 'css', 'style.css'), 'utf8');
 
 for (const id of [
   'instructor-home-section',
@@ -26,9 +27,11 @@ for (const sidekick of ['zap', 'booky', 'chestie', 'byte', 'rocketo', 'popstar',
   );
 }
 
-assert.match(adminHtml, /Create host account · \$15\/year/);
-assert.match(adminHtml, /\$15\/year · Unlimited Mashes and saved analytics/);
-assert.match(adminHtml, /Up to 50 participants per Mash · one live room at a time/);
+assert.match(adminHtml, />Create host account<\/button>/);
+assert.match(adminHtml, /class="hosted-plan-sticker"/);
+assert.match(adminHtml, /Unlimited Mashes \+ saved analytics/);
+assert.match(adminHtml, /Up to 50 per Mash · 1 live room/);
+assert.match(styleCss, /\.hosted-plan-sticker\s*\{/);
 assert.match(adminHtml, /Email verification required · 7-day money-back guarantee/);
 assert.match(adminHtml, />Open studio</);
 assert.match(adminHtml, /placeholder="Mash group \(optional\)"/);
@@ -41,6 +44,9 @@ assert.match(adminJs, /analyticsEmptyState\.classList\.toggle\('hidden', hasSess
 assert.match(adminJs, /Cancellation scheduled/);
 assert.match(adminJs, /Cancels on/);
 assert.match(adminJs, /Billing: cancellation scheduled/);
+assert.match(adminJs, /identity\.className = 'instructor-account-identity'/);
+assert.match(styleCss, /\.instructor-account-row\s*\{[^}]*flex-wrap: wrap/s);
+assert.match(styleCss, /\.instructor-account-meta\s*\{[^}]*flex: 1 0 100%/s);
 for (const template of ['math', 'python', 'data-science', 'marvel', 'music', 'history']) {
   assert.match(adminHtml, new RegExp(`data-template=["']${template}["']`));
 }

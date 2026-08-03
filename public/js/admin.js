@@ -2525,6 +2525,7 @@ function createInstructorAccountRow(instructor) {
   row.className = 'instructor-account-row';
 
   const identity = document.createElement('div');
+  identity.className = 'instructor-account-identity';
   const name = document.createElement('strong');
   name.textContent = instructor.displayName || 'Hosted account';
   const email = document.createElement('span');
@@ -2538,10 +2539,10 @@ function createInstructorAccountRow(instructor) {
   const invitationExpired = instructor.invitationExpiresAt
     && new Date(instructor.invitationExpiresAt).getTime() <= Date.now();
   accountStatus.textContent = instructor.emailVerified
-    ? instructor.accountStatus.replaceAll('_', ' ')
+    ? `Account: ${instructor.accountStatus.replaceAll('_', ' ')}`
     : invitationExpired
-      ? 'Invitation expired'
-      : 'Invitation pending';
+      ? 'Account: invitation expired'
+      : 'Account: invitation pending';
   const billingStatus = document.createElement('span');
   billingStatus.textContent = instructor.cancelAtPeriodEnd
     ? `Billing: cancellation scheduled · access through ${billingDate(instructor.currentPeriodEnd)}`
