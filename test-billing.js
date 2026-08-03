@@ -107,6 +107,12 @@ assert.equal(
   'scheduled cancellation must be preserved from Stripe'
 );
 assert.equal(
+  normalizeStripeSubscription(stripeSubscription({ cancel_at: 1810000000 }), priceId)
+    .cancelAtPeriodEnd,
+  true,
+  'a concrete Stripe cancel_at date must also count as a scheduled cancellation'
+);
+assert.equal(
   normalizeStripeSubscription(
     stripeSubscription({ metadata: { app: 'atollo_scout', account_id: '42' } }),
     priceId
@@ -231,7 +237,7 @@ async function run() {
     provider_subscription_id: 'sub_markdown_mash',
     status: 'active'
   };
-  retrievedSubscription = stripeSubscription({ cancel_at_period_end: true });
+  retrievedSubscription = stripeSubscription({ cancel_at: 1810000000 });
   const refreshed = await service.refreshSubscription(account);
   assert.equal(refreshed.cancel_at_period_end, true);
   assert.equal(calls.at(-1).subscription.cancelAtPeriodEnd, true);

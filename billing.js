@@ -58,6 +58,7 @@ function normalizeStripeSubscription(subscription, expectedPriceId) {
   const app = subscription?.metadata?.app;
   const priceId = stripeObjectId(item?.price);
   const customerId = stripeObjectId(subscription?.customer);
+  const cancelAt = stripeTimestamp(subscription?.cancel_at);
 
   if (app !== BILLING_APP
     || !Number.isInteger(accountId)
@@ -73,7 +74,9 @@ function normalizeStripeSubscription(subscription, expectedPriceId) {
   return {
     accountId,
     accountStatus: subscriptionAccountStatus(subscription.status),
-    cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+    // Stripe may represent a future cancellation either with the legacy
+    // period-end flag or with a concrete cancel_at timestamp.
+    cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end || cancelAt),
     currentPeriodEnd: stripeTimestamp(
       subscription.current_period_end || item.current_period_end
     ),

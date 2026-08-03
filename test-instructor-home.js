@@ -27,6 +27,8 @@ for (const sidekick of ['zap', 'booky', 'chestie', 'byte', 'rocketo', 'popstar',
 }
 
 assert.match(adminHtml, /Create host account · \$15\/year/);
+assert.match(adminHtml, /\$15\/year · Unlimited Mashes and saved analytics/);
+assert.match(adminHtml, /Up to 50 participants per Mash · one live room at a time/);
 assert.match(adminHtml, /Email verification required · 7-day money-back guarantee/);
 assert.match(adminHtml, />Open studio</);
 assert.match(adminHtml, /placeholder="Mash group \(optional\)"/);
