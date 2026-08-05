@@ -39,3 +39,9 @@ DEPLOYMENT-CHECKLIST.md
 MIGRATION.md
 SAFE-PUSH-GUIDE.md
 MULTI_ADMIN_PLAN.md
+idea.md
+
+# Business and strategy documents (not for public repo).
+# docs/ is ignored by default so working notes never leak; public docs are
+# added back explicitly with `git add -f`.
+docs/
