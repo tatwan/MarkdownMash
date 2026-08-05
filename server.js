@@ -18,6 +18,7 @@ const {
   rankParticipants
 } = require('./presentation');
 const { canReuseParticipant } = require('./participant-identity');
+const { createPageMiddleware } = require('./page-metadata');
 const {
   createPersistentSessionRepository,
   createTransientSessionRepository
@@ -121,6 +122,9 @@ for (const [route, file] of vendorFiles) {
   app.get(route, (req, res) => res.sendFile(file));
 }
 app.use('/assets/sidekicks', express.static(path.join(__dirname, 'assets', 'sidekicks')));
+// Must precede express.static so the HTML pages are served with per-request
+// metadata instead of straight off disk. Anything unregistered falls through.
+app.use(createPageMiddleware());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================

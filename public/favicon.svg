@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Markdown Mash">
+  <rect width="32" height="32" rx="7" fill="#0d1433"/>
+  <g transform="translate(4 4) scale(1)">
+    <path d="M13.8 1.8 4.7 13h6.1l-.7 9.2L19.3 11h-6.1l.6-9.2Z"
+          fill="#ffd84d" stroke="#ffd84d" stroke-width="1.2" stroke-linejoin="round"/>
+  </g>
+</svg>
