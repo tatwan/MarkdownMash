@@ -215,4 +215,49 @@ assert.equal(stored.questions[0].index, 0, 'stored questions get dense indices')
 assert.equal(stored.questions[1].gradedNumber, 2, 'stored questions get graded numbers');
 assert.equal(gradedCount(stored), 2, 'a legacy stored quiz counts every question as graded');
 
+// --- code blocks keep their internal indentation ---
+//
+// text is trimmed at the outer edges only. The parse loop appends the original
+// `line`, never the trimmed one, so indentation inside a fenced block survives.
+// If this ever breaks, every Python question renders wrong.
+
+const codeQuiz = parseQuizMarkdown([
+  '# Intro to Python',
+  '# Score 100',
+  '',
+  '## Q1: What does this print?',
+  '```python',
+  'def greet(name):',
+  '    print(f"Hello, {name}!")',
+  '',
+  'greet("Alice")',
+  '```',
+  '- [ ] Hello, name!',
+  '- [x] Hello, Alice!',
+  '::time=30',
+  '',
+  '## Q2: Next one?',
+  '- [x] yes'
+].join('\n'));
+
+const codeText = codeQuiz.questions[0].text;
+
+assert.ok(
+  codeText.split('\n').some(l => l === '    print(f"Hello, {name}!")'),
+  'four-space indentation inside a fenced code block is preserved exactly'
+);
+assert.ok(codeText.includes('```python'), 'the opening fence is preserved');
+assert.ok(codeText.endsWith('```'), 'text is trimmed to end at the closing fence');
+assert.ok(!codeText.startsWith('\n'), 'no leading newline survives the trim');
+assert.equal(
+  codeQuiz.questions[0].options.length, 2,
+  'options after a code block are still parsed'
+);
+assert.deepEqual(
+  codeQuiz.questions[0].correctIndices, [1],
+  'the correct answer after a code block is still parsed'
+);
+assert.equal(codeQuiz.questions[0].timeLimit, 30, '::time after a code block still applies');
+assert.equal(codeQuiz.questions[1].text, 'Next one?', 'the following question is unaffected');
+
 console.log('All quiz structure tests passed.');
