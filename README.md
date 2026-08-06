@@ -50,6 +50,7 @@ Existing classroom sessions remain compatible. Hosted billing and public signup 
 - **PostgreSQL Persistence** - Session histories, answers, and analytics survive server restarts. 
 - **Frictionless Onboarding** - Zero setup for participants; students just enter their name and jump right in.
 - **Self-hosted & Free-Tier Friendly** - Easily deployable to services like Render and Supabase for free.
+- **Autopilot** - Hand off the flow entirely. Questions close as soon as everyone has answered, results hold for a pause you choose, and the next question appears on its own. Toggle it on or off at any point; the manual controls keep working and simply pre-empt the timer.
 
 
 
@@ -250,6 +251,7 @@ greet("Alice")
    - Click "Start Quiz"
    - Click "Next Question" to advance
    - Use "End Question Early" if everyone answered
+   - Or switch on **Autopilot** to run the whole quiz hands-free
    - Participants and presenter view show results after each question
 
 5. **Final results**

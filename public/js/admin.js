@@ -272,11 +272,15 @@ const presenterUrl = document.getElementById('presenter-url');
 
 const controlsSection = document.getElementById('controls-section');
 const sidekicksToggle = document.getElementById('sidekicks-toggle');
+const autopilotToggle = document.getElementById('autopilot-toggle');
+const autopilotPause = document.getElementById('autopilot-pause');
 const startBtn = document.getElementById('start-btn');
 const nextBtn = document.getElementById('next-btn');
+const nextBtnLabel = document.getElementById('next-btn-label');
 const endQuestionBtn = document.getElementById('end-question-btn');
 const showResultsBtn = document.getElementById('show-results-btn');
 const endSessionBtn = document.getElementById('end-session-btn');
+autopilotPause.disabled = true;
 
 const questionSection = document.getElementById('question-section');
 const currentQNum = document.getElementById('current-q-num');
@@ -344,6 +348,7 @@ let viewingSessionCode = null; // For analytics detail view
 let currentSessionsFilter = 'all'; // For sessions list filtering ('all', 'ended', 'incomplete')
 let trialExpiresAt = null;
 let trialCountdownInterval = null;
+let autopilotCountdownInterval = null;
 
 // Chart instances (for cleanup on re-render)
 let scoreDistributionChart = null;
@@ -364,6 +369,38 @@ function updateResponseProgress(answered = Number(answersReceived?.textContent |
   if (participantEmptyState) {
     participantEmptyState.classList.toggle('hidden', safeTotal > 0);
   }
+}
+
+function stopAutopilotCountdown() {
+  clearInterval(autopilotCountdownInterval);
+  autopilotCountdownInterval = null;
+  if (nextBtnLabel) nextBtnLabel.textContent = 'Next question';
+}
+
+function startAutopilotCountdown(nextInMs) {
+  stopAutopilotCountdown();
+  if (!nextInMs || nextInMs <= 0) return;
+
+  let remaining = Math.ceil(nextInMs / 1000);
+  nextBtnLabel.textContent = `Next question (${remaining})`;
+
+  autopilotCountdownInterval = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      stopAutopilotCountdown();
+      return;
+    }
+    nextBtnLabel.textContent = `Next question (${remaining})`;
+  }, 1000);
+}
+
+function sendAutopilotSetting() {
+  if (!socket || !sessionCode) return;
+  socket.emit('set_autopilot', {
+    sessionCode,
+    enabled: autopilotToggle.checked,
+    pauseSeconds: Number(autopilotPause.value)
+  });
 }
 
 function setLobbyPanel(mode = 'ready') {
@@ -1070,6 +1107,7 @@ function initSocket(code) {
   });
 
   socket.on('question_started', (data) => {
+    stopAutopilotCountdown();
     currentQuestion = data.question;
     showQuestion(data);
     startTimer(data.timeRemaining);
@@ -1099,9 +1137,23 @@ function initSocket(code) {
         btn.classList.add('correct');
       }
     });
+
+    startAutopilotCountdown(data.autopilotNextInMs);
+  });
+
+  socket.on('autopilot_changed', (data) => {
+    autopilotToggle.checked = data.enabled === true;
+    autopilotPause.value = String(data.pauseSeconds);
+    autopilotPause.disabled = !autopilotToggle.checked;
+    if (!data.enabled) stopAutopilotCountdown();
+  });
+
+  socket.on('all_answered', () => {
+    clearInterval(timerInterval);
   });
 
   socket.on('quiz_ended', () => {
+    stopAutopilotCountdown();
     quizStatus.textContent = 'Ended';
     quizStatus.className = 'badge badge-warning';
     questionSection.classList.add('hidden');
@@ -1445,6 +1497,11 @@ function resetToUploadState() {
   sidekicksToggle.checked = true;
   document.body.classList.remove('sidekicks-disabled');
 
+  stopAutopilotCountdown();
+  autopilotToggle.checked = false;
+  autopilotPause.value = '8';
+  autopilotPause.disabled = true;
+
   stopKeepAlive(); // Stop pinging — session is over
 
   sessionInfoSection.classList.add('hidden');
@@ -1487,11 +1544,23 @@ sidekicksToggle.addEventListener('change', () => {
   }
 });
 
+autopilotToggle.addEventListener('change', () => {
+  autopilotPause.disabled = !autopilotToggle.checked;
+  sendAutopilotSetting();
+});
+
+autopilotPause.addEventListener('change', () => {
+  const clamped = Math.min(30, Math.max(3, Math.round(Number(autopilotPause.value) || 8)));
+  autopilotPause.value = String(clamped);
+  sendAutopilotSetting();
+});
+
 // Next question
 nextBtn.addEventListener('click', () => {
   if (socket && sessionCode) {
     socket.emit('next_question', sessionCode);
   }
+  stopAutopilotCountdown();
 });
 
 // End question early

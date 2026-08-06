@@ -1997,6 +1997,39 @@ label {
   outline-offset: 3px;
 }
 
+.autopilot-pause {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted, #64748b);
+}
+
+.autopilot-pause input {
+  width: 3.5rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 6px;
+  font: inherit;
+  text-align: center;
+}
+
+.autopilot-pause input:disabled {
+  opacity: 0.5;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .sidekicks-disabled #waiting-sidekick-card,
 .sidekicks-disabled .personal-sidekick,
 .sidekicks-disabled .participant-sidekick,
@@ -7008,4 +7041,37 @@ select:focus-visible {
     flex-direction: column;
     text-align: center;
   }
+}
+
+.all-answered-banner {
+  margin: 0 auto 1rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  animation: all-answered-pop 0.35s ease-out;
+}
+
+@keyframes all-answered-pop {
+  from { transform: scale(0.85); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .all-answered-banner { animation: none; }
+}
+
+.presenter-all-answered {
+  font-size: 1.6rem;
+  padding: 0.9rem 2rem;
+}
+
+.presenter-next-countdown {
+  margin-top: 1.25rem;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
 }

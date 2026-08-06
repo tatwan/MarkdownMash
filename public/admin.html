@@ -321,9 +321,20 @@
                 <span class="sidekick-toggle-track" aria-hidden="true"></span>
                 <span>Sidekicks</span>
               </label>
+              <label class="sidekick-toggle" for="autopilot-toggle">
+                <input id="autopilot-toggle" type="checkbox">
+                <span class="sidekick-toggle-track" aria-hidden="true"></span>
+                <span>Autopilot</span>
+              </label>
+              <label class="autopilot-pause" for="autopilot-pause">
+                <span>Pause</span>
+                <input id="autopilot-pause" type="number" min="3" max="30" step="1" value="8" inputmode="numeric">
+                <span aria-hidden="true">s</span>
+                <span class="visually-hidden">seconds between questions</span>
+              </label>
               <div class="quiz-controls">
                 <button id="start-btn" class="btn btn-success">Start quiz <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg></button>
-                <button id="next-btn" class="btn btn-primary hidden">Next question <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
+                <button id="next-btn" class="btn btn-primary hidden"><span id="next-btn-label">Next question</span> <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
                 <button id="end-question-btn" class="btn btn-warning hidden">End question</button>
                 <button id="show-results-btn" class="btn btn-primary hidden">Show final results</button>
                 <button id="end-session-btn" class="btn btn-danger hidden">End session</button>

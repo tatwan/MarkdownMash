@@ -32,6 +32,8 @@ const timerProgress = document.getElementById('timer-progress');
 const questionText = document.getElementById('question-text');
 const optionsContainer = document.getElementById('options-container');
 const answerStatus = document.getElementById('answer-status');
+const allAnsweredBanner = document.getElementById('all-answered-banner');
+const timerRing = document.querySelector('.player-timer-ring');
 
 const resultsSection = document.getElementById('results-section');
 const resultIcon = document.getElementById('result-icon');
@@ -45,6 +47,7 @@ const resultMovement = document.getElementById('result-movement');
 const resultResponseTotal = document.getElementById('result-response-total');
 const resultsDistribution = document.getElementById('results-distribution');
 const resultSidekick = document.getElementById('result-sidekick');
+const resultWaiting = document.getElementById('result-waiting');
 
 const endedSection = document.getElementById('ended-section');
 const finalIcon = document.getElementById('final-icon');
@@ -71,6 +74,7 @@ let currentQuestion = null;
 let selectedAnswer = null;
 let timerInterval = null;
 let timerDuration = 20;
+let nextQuestionCountdown = null;
 let currentScore = 0;
 let avatarId = null;
 let canShuffleAvatar = false;
@@ -442,6 +446,9 @@ function initSocket() {
   });
 
   socket.on('question_started', (data) => {
+    hideAllAnsweredBanner();
+    stopNextQuestionCountdown();
+
     currentQuestion = data.question;
     selectedAnswer = null;
     timerDuration = data.timeRemaining;
@@ -462,8 +469,14 @@ function initSocket() {
     answerStatus.classList.remove('hidden');
   });
 
+  socket.on('all_answered', () => {
+    showAllAnsweredBanner();
+  });
+
   socket.on('question_ended', (data) => {
     clearInterval(timerInterval);
+    hideAllAnsweredBanner();
+    startNextQuestionCountdown(data.autopilotNextInMs);
     if (data.question) {
       currentQuestion = data.question;
     }
@@ -521,6 +534,7 @@ function initSocket() {
 
   socket.on('quiz_ended', (data) => {
     clearInterval(timerInterval);
+    stopNextQuestionCountdown();
 
     // Get my final results
     const myResults = data.participantResults ? data.participantResults[participantId] : null;
@@ -563,6 +577,42 @@ function initSocket() {
   socket.on('disconnect', () => {
     console.log('Disconnected');
   });
+}
+
+function hideAllAnsweredBanner() {
+  allAnsweredBanner.classList.add('hidden');
+  timerRing.classList.remove('hidden');
+}
+
+function showAllAnsweredBanner() {
+  clearInterval(timerInterval);
+  timerRing.classList.add('hidden');
+  allAnsweredBanner.classList.remove('hidden');
+}
+
+function stopNextQuestionCountdown() {
+  clearInterval(nextQuestionCountdown);
+  nextQuestionCountdown = null;
+  resultWaiting.lastChild.textContent = 'Next question coming up';
+}
+
+function startNextQuestionCountdown(nextInMs) {
+  stopNextQuestionCountdown();
+  if (!nextInMs || nextInMs <= 0) return;
+
+  let remaining = Math.ceil(nextInMs / 1000);
+  resultWaiting.lastChild.textContent = `Next question in ${remaining}…`;
+
+  nextQuestionCountdown = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(nextQuestionCountdown);
+      nextQuestionCountdown = null;
+      resultWaiting.lastChild.textContent = 'Next question coming up';
+      return;
+    }
+    resultWaiting.lastChild.textContent = `Next question in ${remaining}…`;
+  }, 1000);
 }
 
 // Show a non-destructive reconnection banner when connection drops mid-quiz.

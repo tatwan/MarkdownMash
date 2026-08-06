@@ -12,6 +12,7 @@ const jwt = require('jsonwebtoken');
 const Stripe = require('stripe');
 const { rateLimit } = require('express-rate-limit');
 const db = require('./db');
+const autopilot = require('./autopilot');
 const {
   buildFinaleSummary,
   buildQuestionPresentation,
@@ -407,8 +408,13 @@ function createSessionState({
       isRunning: false,
       currentQuestionIndex: -1,
       questionEndTime: null,
-      showingResults: false
+      showingResults: false,
+      autopilot: false,
+      autopilotPauseSeconds: autopilot.DEFAULT_PAUSE_SECONDS,
+      autopilotResumeAt: null,
+      allAnsweredEmittedFor: null
     },
+    autopilotTimer: null,
     questionStartTime: null,
     rankSnapshot: {},
     lastQuestionPresentation: null,
@@ -422,7 +428,7 @@ function createSessionState({
 //   code: string,
 //   quiz: object,
 //   participants: { participantId: { id, name, score, correctCount, answers: {}, responseTimes: {}, socketId } },
-//   quizState: { isRunning, currentQuestionIndex, questionEndTime, showingResults },
+//   quizState: { isRunning, currentQuestionIndex, questionEndTime, showingResults, autopilot, autopilotPauseSeconds, autopilotResumeAt, allAnsweredEmittedFor },
 //   questionStartTime: number (for response time tracking),
 //   rankSnapshot: { participantId: rank },
 //   lastQuestionPresentation: object,
@@ -736,6 +742,7 @@ function expireTrial(trial) {
     io.to(`presenter:${trial.sessionCode}`).emit('trial_expired', {
       message: 'This temporary practice room has expired.'
     });
+    clearAutopilotTimer(session);
     activeSessions.delete(trial.sessionCode);
   }
 }
@@ -1248,6 +1255,7 @@ app.post(
     io.to(`presenter:${session.code}`).emit('session_ended', {
       message: 'This practice session has ended.'
     });
+    clearAutopilotTimer(session);
     activeSessions.delete(session.code);
     res.json({ success: true, message: 'Practice session ended' });
   }
@@ -1541,6 +1549,7 @@ app.post('/api/admin/session/:code/end', authorizeAdminSession, async (req, res)
   });
 
   // Remove from active sessions
+  clearAutopilotTimer(session);
   activeSessions.delete(code);
 
   res.json({ success: true, message: 'Session ended' });
@@ -1605,7 +1614,9 @@ app.delete('/api/admin/session/:code', authorizeAdminSession, async (req, res) =
   const { code } = req.params;
   try {
     // If it's active, remove it from memory too
-    if (activeSessions.has(code)) {
+    const activeSession = activeSessions.get(code);
+    if (activeSession) {
+      clearAutopilotTimer(activeSession);
       activeSessions.delete(code);
     }
     if (req.activeSession) {
@@ -2547,6 +2558,11 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
     enabled: session.sidekicksEnabled !== false
   });
 
+  socket.emit('autopilot_changed', {
+    enabled: session.quizState.autopilot === true,
+    pauseSeconds: session.quizState.autopilotPauseSeconds
+  });
+
   socket.emit('participant_joined', {
     count: Object.keys(session.participants).length
   });
@@ -2580,7 +2596,8 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
       questionNumber: session.quizState.currentQuestionIndex + 1,
       correctIndices: question.correctIndices,
       stats: calculateStats(session, question.id),
-      presentation: session.lastQuestionPresentation
+      presentation: session.lastQuestionPresentation,
+      autopilotNextInMs: pendingAutopilotMs(session)
     });
   } else if (session.quizState.isRunning) {
     socket.emit('question_started', {
@@ -2630,6 +2647,39 @@ io.on('connection', (socket) => {
     io.to(`session:${sessionCode}`).emit('sidekicks_setting_changed', update);
     io.to(`admin:${sessionCode}`).emit('sidekicks_setting_changed', update);
     io.to(`presenter:${sessionCode}`).emit('sidekicks_setting_changed', update);
+  });
+
+  socket.on('set_autopilot', ({ sessionCode, enabled, pauseSeconds } = {}) => {
+    const session = activeSessions.get(sessionCode);
+    if (!session || !socketCanControl(socket, sessionCode)) {
+      return rejectSocketControl(socket);
+    }
+
+    session.quizState.autopilot = enabled === true;
+    session.quizState.autopilotPauseSeconds = autopilot.normalizePauseSeconds(pauseSeconds);
+
+    if (!session.quizState.autopilot) {
+      clearAutopilotTimer(session);
+    } else {
+      // Pass the live question's id (when one is in progress) so the close
+      // branch stays reachable — without it, re-scheduling here would drop a
+      // pending "everyone answered" close and stall the room until the
+      // question's full time limit expires. Guard for no quiz, a
+      // not-yet-started question (-1), or an out-of-range index.
+      const questions = session.quiz ? session.quiz.questions : null;
+      const currentIndex = session.quizState.currentQuestionIndex;
+      const liveQuestion = questions && currentIndex >= 0 && currentIndex < questions.length
+        ? questions[currentIndex]
+        : null;
+      scheduleAutopilot(sessionCode, liveQuestion ? liveQuestion.id : undefined);
+    }
+
+    const update = {
+      enabled: session.quizState.autopilot,
+      pauseSeconds: session.quizState.autopilotPauseSeconds
+    };
+    io.to(`admin:${sessionCode}`).emit('autopilot_changed', update);
+    io.to(`presenter:${sessionCode}`).emit('autopilot_changed', update);
   });
 
   // Presenter joins a read-only display room with a session-bound capability.
@@ -2771,7 +2821,8 @@ io.on('connection', (socket) => {
           },
           totalScore: session.quiz.totalScore,
           questionsAnswered: session.quizState.currentQuestionIndex + 1,
-          totalQuestions: session.quiz.questions.length
+          totalQuestions: session.quiz.questions.length,
+          autopilotNextInMs: pendingAutopilotMs(session)
         });
       } else if (timeRemaining > 0) {
         socket.emit('question_started', {
@@ -2791,6 +2842,8 @@ io.on('connection', (socket) => {
     if (!socketCanControl(socket, sessionCode)) {
       return rejectSocketControl(socket);
     }
+
+    clearAutopilotTimer(session);
 
     session.quizState.isRunning = true;
     session.quizState.currentQuestionIndex = -1;
@@ -2825,6 +2878,8 @@ io.on('connection', (socket) => {
       title: session.quiz.title,
       totalQuestions: session.quiz.questions.length
     });
+
+    scheduleAutopilot(sessionCode);
   });
 
   // Admin advances to next question
@@ -2835,87 +2890,8 @@ io.on('connection', (socket) => {
       return rejectSocketControl(socket);
     }
 
-    session.quizState.currentQuestionIndex++;
-    session.quizState.showingResults = false;
-
-    if (session.quizState.currentQuestionIndex >= session.quiz.questions.length) {
-      // Quiz ended
-      session.quizState.isRunning = false;
-      const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
-
-      // Update database status
-      await session.repository.updateStatus('ended');
-
-      // Save final scores to database and send results to each participant
-      console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
-      const finalLeaderboard = rankParticipants(session);
-      for (const participant of Object.values(session.participants)) {
-        const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
-        const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
-        const passed = percentage >= session.quiz.passingPercent;
-        const standing = finalLeaderboard.find(entry => entry.id === participant.id);
-        participant.score = finalScore;
-
-        // Update database
-        await session.repository.updateParticipantScore(
-          participant.id,
-          finalScore,
-          participant.correctCount || 0
-        );
-
-        if (participant.socketId) {
-          io.to(participant.socketId).emit('quiz_ended', {
-            finalScore,
-            totalScore: session.quiz.totalScore,
-            correctCount: participant.correctCount || 0,
-            totalQuestions: session.quiz.questions.length,
-            percentage,
-            passed,
-            passingPercent: session.quiz.passingPercent,
-            rank: standing?.rank || null,
-            participantCount: finalLeaderboard.length,
-            bestStreak: participant.bestStreak || 0
-          });
-        }
-      }
-
-      session.finale = buildFinaleSummary(session);
-      io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
-      io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
-      return;
-    }
-
-    const question = session.quiz.questions[session.quizState.currentQuestionIndex];
-    session.quizState.questionEndTime = Date.now() + (question.timeLimit * 1000);
-    session.questionStartTime = Date.now();
-
-    io.to(`session:${sessionCode}`).emit('question_started', {
-      question: getQuestionForParticipants(question),
-      timeRemaining: question.timeLimit,
-      questionNumber: session.quizState.currentQuestionIndex + 1,
-      totalQuestions: session.quiz.questions.length
-    });
-
-    io.to(`admin:${sessionCode}`).emit('question_started', {
-      question: question,
-      timeRemaining: question.timeLimit,
-      questionNumber: session.quizState.currentQuestionIndex + 1,
-      totalQuestions: session.quiz.questions.length
-    });
-    io.to(`presenter:${sessionCode}`).emit('question_started', {
-      question: getQuestionForParticipants(question),
-      timeRemaining: question.timeLimit,
-      questionNumber: session.quizState.currentQuestionIndex + 1,
-      totalQuestions: session.quiz.questions.length
-    });
-
-    // Auto-end question when time expires
-    const questionIndex = session.quizState.currentQuestionIndex;
-    setTimeout(() => {
-      if (session.quizState.currentQuestionIndex === questionIndex && !session.quizState.showingResults) {
-        endCurrentQuestion(sessionCode);
-      }
-    }, question.timeLimit * 1000);
+    clearAutopilotTimer(session);
+    await advanceToNextQuestion(sessionCode);
   });
 
   // Admin manually ends current question
@@ -2923,6 +2899,8 @@ io.on('connection', (socket) => {
     if (!socketCanControl(socket, sessionCode)) {
       return rejectSocketControl(socket);
     }
+    const session = activeSessions.get(sessionCode);
+    clearAutopilotTimer(session);
     endCurrentQuestion(sessionCode);
   });
 
@@ -3003,6 +2981,23 @@ io.on('connection', (socket) => {
 
     // Confirm to participant
     socket.emit('answer_confirmed', { questionId, answerIndex });
+
+    // Guarded per-question: two participants can both resolve their DB await
+    // after everyoneAnswered() has gone true (their in-memory answers land
+    // synchronously before either await), so without this guard both would
+    // emit 'all_answered' and both would call scheduleAutopilot — the second
+    // call would restart the 2s beat late by the inter-arrival gap between
+    // the two submissions. scheduleAutopilot stays inside the guard so only
+    // the call that "wins" the race schedules the close.
+    if (autopilot.shouldCloseEarly(session, questionId)
+      && session.quizState.allAnsweredEmittedFor !== questionId) {
+      session.quizState.allAnsweredEmittedFor = questionId;
+      const closingInMs = autopilot.ALL_ANSWERED_BEAT_MS;
+      io.to(`session:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
+      io.to(`admin:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
+      io.to(`presenter:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
+      scheduleAutopilot(sessionCode, questionId);
+    }
   });
 
   // Admin ends session
@@ -3039,6 +3034,7 @@ io.on('connection', (socket) => {
     });
 
     // Remove from active sessions
+    clearAutopilotTimer(session);
     activeSessions.delete(sessionCode);
   });
 
@@ -3047,12 +3043,163 @@ io.on('connection', (socket) => {
   });
 });
 
+function clearAutopilotTimer(session) {
+  if (!session) return;
+  if (session.autopilotTimer) {
+    clearTimeout(session.autopilotTimer);
+    session.autopilotTimer = null;
+  }
+  if (session.quizState) {
+    session.quizState.autopilotResumeAt = null;
+  }
+}
+
+// Remaining pause before the next auto-advance, or null when none is pending.
+function pendingAutopilotMs(session) {
+  const resumeAt = session?.quizState?.autopilotResumeAt;
+  if (!resumeAt) return null;
+  return Math.max(0, resumeAt - Date.now());
+}
+
+// Schedules at most one pending autopilot action per session.
+function scheduleAutopilot(sessionCode, questionId) {
+  const session = activeSessions.get(sessionCode);
+  if (!session) return;
+
+  clearAutopilotTimer(session);
+
+  const step = autopilot.nextAutopilotStep(session, questionId);
+  if (!step) return;
+
+  // Captured so a timer that survives a state change cannot fire into the
+  // wrong question — the same guard the time-expiry timer uses.
+  const expectedIndex = session.quizState.currentQuestionIndex;
+
+  session.quizState.autopilotResumeAt = Date.now() + step.delayMs;
+  session.autopilotTimer = setTimeout(() => {
+    const live = activeSessions.get(sessionCode);
+    if (!live) return;
+    if (live.quizState.currentQuestionIndex !== expectedIndex) return;
+
+    live.autopilotTimer = null;
+    live.quizState.autopilotResumeAt = null;
+
+    if (step.action === 'close') {
+      if (live.quizState.showingResults) return;
+      endCurrentQuestion(sessionCode);
+      return;
+    }
+
+    // Defensive, not incidental: don't rely on "every transition out of
+    // showingResults also mutates the index" holding forever — re-check
+    // the quiz is still running before advancing.
+    if (!live.quizState.isRunning) return;
+
+    advanceToNextQuestion(sessionCode).catch(err => {
+      console.error('[AUTOPILOT] advance failed:', err);
+    });
+  }, step.delayMs);
+}
+
+// Advances the room to the next question, or ends the quiz when the last one
+// is finished. No permission check: callers must authorize first.
+async function advanceToNextQuestion(sessionCode) {
+  const session = activeSessions.get(sessionCode);
+  if (!session || !session.quiz || !session.quizState.isRunning) return;
+
+  session.quizState.currentQuestionIndex++;
+  session.quizState.showingResults = false;
+  session.quizState.allAnsweredEmittedFor = null;
+
+  if (session.quizState.currentQuestionIndex >= session.quiz.questions.length) {
+    // Quiz ended
+    session.quizState.isRunning = false;
+    const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
+
+    // Update database status
+    await session.repository.updateStatus('ended');
+
+    // Save final scores to database and send results to each participant
+    console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
+    const finalLeaderboard = rankParticipants(session);
+    for (const participant of Object.values(session.participants)) {
+      const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
+      const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
+      const passed = percentage >= session.quiz.passingPercent;
+      const standing = finalLeaderboard.find(entry => entry.id === participant.id);
+      participant.score = finalScore;
+
+      // Update database
+      await session.repository.updateParticipantScore(
+        participant.id,
+        finalScore,
+        participant.correctCount || 0
+      );
+
+      if (participant.socketId) {
+        io.to(participant.socketId).emit('quiz_ended', {
+          finalScore,
+          totalScore: session.quiz.totalScore,
+          correctCount: participant.correctCount || 0,
+          totalQuestions: session.quiz.questions.length,
+          percentage,
+          passed,
+          passingPercent: session.quiz.passingPercent,
+          rank: standing?.rank || null,
+          participantCount: finalLeaderboard.length,
+          bestStreak: participant.bestStreak || 0
+        });
+      }
+    }
+
+    session.finale = buildFinaleSummary(session);
+    clearAutopilotTimer(session);
+    io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
+    io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
+    return;
+  }
+
+  const question = session.quiz.questions[session.quizState.currentQuestionIndex];
+  session.quizState.questionEndTime = Date.now() + (question.timeLimit * 1000);
+  session.questionStartTime = Date.now();
+
+  io.to(`session:${sessionCode}`).emit('question_started', {
+    question: getQuestionForParticipants(question),
+    timeRemaining: question.timeLimit,
+    questionNumber: session.quizState.currentQuestionIndex + 1,
+    totalQuestions: session.quiz.questions.length
+  });
+
+  io.to(`admin:${sessionCode}`).emit('question_started', {
+    question: question,
+    timeRemaining: question.timeLimit,
+    questionNumber: session.quizState.currentQuestionIndex + 1,
+    totalQuestions: session.quiz.questions.length
+  });
+  io.to(`presenter:${sessionCode}`).emit('question_started', {
+    question: getQuestionForParticipants(question),
+    timeRemaining: question.timeLimit,
+    questionNumber: session.quizState.currentQuestionIndex + 1,
+    totalQuestions: session.quiz.questions.length
+  });
+
+  // Auto-end question when time expires
+  const questionIndex = session.quizState.currentQuestionIndex;
+  setTimeout(() => {
+    if (session.quizState.currentQuestionIndex === questionIndex && !session.quizState.showingResults) {
+      endCurrentQuestion(sessionCode);
+    }
+  }, question.timeLimit * 1000);
+}
+
 function endCurrentQuestion(sessionCode) {
   const session = activeSessions.get(sessionCode);
   if (!session || !session.quiz || session.quizState.currentQuestionIndex < 0) return;
   if (session.quizState.showingResults) return;
 
   session.quizState.showingResults = true;
+  scheduleAutopilot(sessionCode);
+  const nextInMs = pendingAutopilotMs(session);
   const question = session.quiz.questions[session.quizState.currentQuestionIndex];
   const stats = calculateStats(session, question.id);
   const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
@@ -3107,7 +3254,8 @@ function endCurrentQuestion(sessionCode) {
         },
         totalScore: session.quiz.totalScore,
         questionsAnswered: session.quizState.currentQuestionIndex + 1,
-        totalQuestions: session.quiz.questions.length
+        totalQuestions: session.quiz.questions.length,
+        autopilotNextInMs: nextInMs
       });
     }
   }
@@ -3119,7 +3267,8 @@ function endCurrentQuestion(sessionCode) {
     questionNumber: session.quizState.currentQuestionIndex + 1,
     correctIndices: question.correctIndices,
     stats,
-    presentation: session.lastQuestionPresentation
+    presentation: session.lastQuestionPresentation,
+    autopilotNextInMs: nextInMs
   });
   io.to(`presenter:${sessionCode}`).emit('question_ended', {
     questionId: question.id,
@@ -3127,7 +3276,8 @@ function endCurrentQuestion(sessionCode) {
     questionNumber: session.quizState.currentQuestionIndex + 1,
     correctIndices: question.correctIndices,
     stats,
-    presentation: session.lastQuestionPresentation
+    presentation: session.lastQuestionPresentation,
+    autopilotNextInMs: nextInMs
   });
 }
 

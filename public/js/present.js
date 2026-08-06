@@ -46,6 +46,9 @@ const finaleSubtitle = document.getElementById('finale-subtitle');
 const finaleReplayBtn = document.getElementById('finale-replay-btn');
 const finaleNextBtn = document.getElementById('finale-next-btn');
 const finaleProgress = document.getElementById('finale-progress');
+const allAnsweredBanner = document.getElementById('all-answered-banner');
+const presenterTimerRing = document.querySelector('.presenter-timer-ring');
+const presenterNextCountdown = document.getElementById('presenter-next-countdown');
 
 let socket = null;
 let sessionCode = null;
@@ -56,6 +59,7 @@ let highlightInterval = null;
 let timerDuration = 20;
 let finaleData = null;
 let finaleTimeouts = [];
+let presenterNextInterval = null;
 
 function iconHref(icon) {
   return `/assets/icons.svg#${icon}`;
@@ -181,6 +185,8 @@ function initSocket() {
 
   socket.on('question_started', data => {
     clearPresenterTimers();
+    hideAllAnsweredBanner();
+    stopPresenterNextCountdown();
     currentQuestion = data.question;
     timerDuration = Math.max(1, data.timeRemaining);
     currentQNum.textContent = data.questionNumber;
@@ -198,8 +204,14 @@ function initSocket() {
     totalParticipants.textContent = data.totalParticipants;
   });
 
+  socket.on('all_answered', () => {
+    showAllAnsweredBanner();
+  });
+
   socket.on('question_ended', data => {
     clearPresenterTimers();
+    hideAllAnsweredBanner();
+    startPresenterNextCountdown(data.autopilotNextInMs);
     if (data.question) currentQuestion = data.question;
     if (!currentQuestion) return;
 
@@ -546,6 +558,44 @@ function clearPresenterTimers() {
   clearInterval(timerInterval);
   clearInterval(highlightInterval);
   clearFinaleTimeouts();
+  clearInterval(presenterNextInterval);
+  presenterNextInterval = null;
+}
+
+function hideAllAnsweredBanner() {
+  allAnsweredBanner.classList.add('hidden');
+  presenterTimerRing.classList.remove('hidden');
+}
+
+function showAllAnsweredBanner() {
+  clearInterval(timerInterval);
+  presenterTimerRing.classList.add('hidden');
+  allAnsweredBanner.classList.remove('hidden');
+}
+
+function stopPresenterNextCountdown() {
+  clearInterval(presenterNextInterval);
+  presenterNextInterval = null;
+  presenterNextCountdown.classList.add('hidden');
+  presenterNextCountdown.textContent = '';
+}
+
+function startPresenterNextCountdown(nextInMs) {
+  stopPresenterNextCountdown();
+  if (!nextInMs || nextInMs <= 0) return;
+
+  let remaining = Math.ceil(nextInMs / 1000);
+  presenterNextCountdown.textContent = `Next question in ${remaining}…`;
+  presenterNextCountdown.classList.remove('hidden');
+
+  presenterNextInterval = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      stopPresenterNextCountdown();
+      return;
+    }
+    presenterNextCountdown.textContent = `Next question in ${remaining}…`;
+  }, 1000);
 }
 
 function hideAllSections() {
