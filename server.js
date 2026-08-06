@@ -25,6 +25,7 @@ const {
   createTransientSessionRepository
 } = require('./session-repository');
 const {
+  ownerFilterFor,
   canAdminAccessStoredSession,
   canControlSession
 } = require('./controller-authorization');
@@ -650,10 +651,6 @@ async function hostedBillingFailureForAdmin(admin) {
     admin,
     subscription
   });
-}
-
-function ownerFilterFor(admin) {
-  return admin.role === 'master' ? null : admin.id;
 }
 
 async function authorizeAdminSession(req, res, next) {
