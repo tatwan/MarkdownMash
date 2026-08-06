@@ -10,6 +10,16 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
+## What's New in v1.3.1
+
+### Autopilot
+
+Turn on **Autopilot** and the quiz runs itself. Start it once and the first question appears on its own; each question closes as soon as everyone has answered, and the next one follows after a pause you choose. Both the participant screen and the presenter view explain what is happening, so an early close reads as intentional rather than as a glitch.
+
+It is built for the moments a host cannot stay at the dashboard — stepping out, or joining their own room as a player. Manual control never goes away: End question and Next question still work and simply pre-empt the timer, and switching Autopilot off hands the room straight back. Because the flow is driven from the server, a host can close their laptop entirely and the quiz still reaches the finale.
+
+Autopilot is off by default. Quizzes run exactly as before when it is never enabled.
+
 ## What's New in v1.3.0
 
 ### Hosted Accounts, Sidekicks, and a Friendlier Host Studio

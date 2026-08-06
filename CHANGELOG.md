@@ -2,6 +2,26 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [1.3.1] - 2026-08-06
+
+### Added
+
+- **Autopilot**, an optional hands-free flow for the whole quiz. Once the host starts the quiz, the first question appears on its own, each question closes two seconds after the last participant answers, and the next question follows after a pause the host chooses (3-30 seconds, default 8).
+- "Everyone's in!" and "Next question in 5…" cues on both the participant device and the presenter screen, so a question ending before its timer reads as intentional rather than as a glitch.
+- An Autopilot toggle and pause control in the host studio, with a live countdown on the Next question button.
+- Autopilot state and the true remaining countdown are restored when a host reloads or reconnects mid-pause.
+- `autopilot.js`, a dependency-free decision module, with a dedicated regression suite.
+
+### Changed
+
+- Manual control stays available at all times while Autopilot is engaged; End question and Next question pre-empt any pending timer, and switching Autopilot off cancels it.
+- Advancing to the next question is now handled by a shared routine used by both the host action and the Autopilot timer.
+
+### Notes
+
+- Autopilot is off by default, and quizzes run exactly as before when it is never enabled.
+- If a participant leaves without answering, questions run their full clock instead of closing early. Automatic advancing continues, so the quiz still completes unattended.
+
 ## [1.3.0] - 2026-08-03
 
 ### Added
