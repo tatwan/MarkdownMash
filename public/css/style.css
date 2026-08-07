@@ -4819,6 +4819,14 @@ select:focus-visible {
     var(--bg-card);
 }
 
+.instructor-launch-card-survey {
+  min-height: 220px;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(52, 211, 153, 0.18), transparent 12rem),
+    linear-gradient(145deg, rgba(16, 185, 129, 0.12), rgba(20, 28, 65, 0.98));
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
 .instructor-launch-card-account {
   background:
     radial-gradient(circle at 100% 100%, rgba(255, 216, 77, 0.12), transparent 10rem),

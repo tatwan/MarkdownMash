@@ -14,6 +14,7 @@
   <script defer src="/socket.io/socket.io.js"></script>
   <script defer src="/js/settings-state.js"></script>
   <script defer src="/js/quiz-preview-parser.js"></script>
+  <script defer src="/js/survey-preview-parser.js"></script>
   <script defer src="/js/admin.js"></script>
 </head>
 <body class="admin-body">
@@ -196,6 +197,15 @@
                 <span id="home-host-action" class="instructor-launch-action">Build your Mash <svg aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></span>
               </span>
               <img src="/assets/sidekicks/webp/256/zap.webp" alt="" width="190" height="190">
+            </button>
+            <button id="home-survey-btn" type="button" class="instructor-launch-card instructor-launch-card-survey">
+              <span class="instructor-launch-copy">
+                <span class="section-eyebrow">Anonymous pulse</span>
+                <strong id="home-survey-title">Host a survey</strong>
+                <span id="home-survey-copy">Collect opinions with no scores and no named answer rows.</span>
+                <span id="home-survey-action" class="instructor-launch-action">Build your survey <svg aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></span>
+              </span>
+              <img src="/assets/sidekicks/webp/256/nimbus.webp" alt="" width="160" height="160" onerror="this.src='/assets/sidekicks/webp/256/boo.webp'">
             </button>
             <button id="home-analytics-btn" type="button" class="instructor-launch-card instructor-launch-card-analytics">
               <span class="instructor-launch-copy">
@@ -719,29 +729,41 @@
       <div class="modal-body">
         <p class="template-modal-intro">Each card loads a ready-to-edit Mash from the project’s <code>templates/</code> folder (the same files on GitHub). Change anything you like before previewing or opening the room.</p>
         <div class="template-card-grid">
-          <button type="button" class="template-card" data-template="math">
+          <button type="button" class="template-card" data-template="math" data-template-kind="quiz">
             <img src="/assets/sidekicks/webp/128/zap.webp" alt="" width="88" height="88">
             <span><strong>Quick Math</strong><small>Patterns, arithmetic, and fractions · 3 questions</small></span>
           </button>
-          <button type="button" class="template-card" data-template="python">
+          <button type="button" class="template-card" data-template="python" data-template-kind="quiz">
             <img src="/assets/sidekicks/webp/128/byte.webp" alt="" width="88" height="88">
             <span><strong>Python Basics</strong><small>Functions, lists, and output · 3 questions</small></span>
           </button>
-          <button type="button" class="template-card" data-template="data-science">
+          <button type="button" class="template-card" data-template="data-science" data-template-kind="quiz">
             <img src="/assets/sidekicks/webp/128/booky.webp" alt="" width="88" height="88">
             <span><strong>Data Science Foundations</strong><small>Statistics, labels, and overfitting · 3 questions</small></span>
           </button>
-          <button type="button" class="template-card" data-template="marvel">
+          <button type="button" class="template-card" data-template="marvel" data-template-kind="quiz">
             <img src="/assets/sidekicks/webp/128/rocketo.webp" alt="" width="88" height="88">
             <span><strong>Marvel Movies &amp; TV</strong><small>Heroes, worlds, and memorable characters · 3 questions</small></span>
           </button>
-          <button type="button" class="template-card" data-template="music">
+          <button type="button" class="template-card" data-template="music" data-template-kind="quiz">
             <img src="/assets/sidekicks/webp/128/popstar.webp" alt="" width="88" height="88">
             <span><strong>Music &amp; Lyrics</strong><small>Song structure, rhythm, and an original rhyme · 3 questions</small></span>
           </button>
-          <button type="button" class="template-card" data-template="history">
+          <button type="button" class="template-card" data-template="history" data-template-kind="quiz">
             <img src="/assets/sidekicks/webp/128/luna.webp" alt="" width="88" height="88">
             <span><strong>History Highlights</strong><small>Ancient worlds and turning points · 3 questions</small></span>
+          </button>
+          <button type="button" class="template-card hidden" data-template="survey-food" data-template-kind="survey">
+            <img src="/assets/sidekicks/webp/128/boo.webp" alt="" width="88" height="88">
+            <span><strong>Food pulse</strong><small>Snacks and café vibes · anonymous</small></span>
+          </button>
+          <button type="button" class="template-card hidden" data-template="survey-movies" data-template-kind="survey">
+            <img src="/assets/sidekicks/webp/128/popstar.webp" alt="" width="88" height="88">
+            <span><strong>Movies &amp; watching</strong><small>How and what you watch · anonymous</small></span>
+          </button>
+          <button type="button" class="template-card hidden" data-template="survey-sports" data-template-kind="survey">
+            <img src="/assets/sidekicks/webp/128/rocketo.webp" alt="" width="88" height="88">
+            <span><strong>Sports pulse</strong><small>Play vs watch · anonymous</small></span>
           </button>
         </div>
         <p class="template-replace-note"><svg aria-hidden="true"><use href="/assets/icons.svg#spark"></use></svg>Choosing a template replaces the current editor only after you confirm.</p>

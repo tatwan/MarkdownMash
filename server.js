@@ -38,6 +38,12 @@ const {
   stepAt,
   questionForStep
 } = require('./quiz-structure');
+const {
+  parseSurveyMarkdown,
+  normalizeStoredSurvey,
+  questionCount: surveyQuestionCount,
+  isSurveyPayload
+} = require('./survey-structure');
 const { createTrialManager } = require('./trial-manager');
 const {
   createOpaqueToken,
@@ -408,13 +414,15 @@ function createSessionState({
   controller,
   repository,
   expiresAt = null,
-  participantLimit = null
+  participantLimit = null,
+  sessionType = 'quiz'
 }) {
   return {
     id,
     code,
     quiz,
     kind,
+    sessionType: sessionType === 'survey' ? 'survey' : 'quiz',
     controller,
     repository,
     expiresAt,
@@ -465,7 +473,48 @@ function getQuestionForParticipants(question) {
     options: question.options,
     timeLimit: question.timeLimit,
     type: question.type,
-    gradedNumber: question.gradedNumber
+    gradedNumber: question.gradedNumber,
+    displayNumber: question.displayNumber ?? null
+  };
+}
+
+function isSurveySession(session) {
+  return session?.sessionType === 'survey'
+    || session?.quiz?.sessionKind === 'survey'
+    || isSurveyPayload(session?.quiz);
+}
+
+function visibleQuestionTotal(session) {
+  if (isSurveySession(session)) return surveyQuestionCount(session.quiz);
+  return gradedCount(session.quiz);
+}
+
+function shuffleCopy(items) {
+  const arr = items.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+function buildSurveyDistribution(session, question) {
+  const counts = new Array((question.options || []).length).fill(0);
+  let answered = 0;
+  for (const participant of Object.values(session.participants || {})) {
+    const answer = participant.answers?.[question.id];
+    if (answer === undefined || answer === null) continue;
+    if (answer >= 0 && answer < counts.length) {
+      counts[answer] += 1;
+      answered += 1;
+    }
+  }
+  return {
+    counts,
+    answered,
+    totalParticipants: Object.keys(session.participants || {}).length
   };
 }
 
@@ -674,6 +723,7 @@ function sessionResponse(req, session, qrCode) {
     joinUrl: `${req.protocol}://${req.get('host')}/play.html?session=${session.code}`,
     presenterUrl: `${req.protocol}://${req.get('host')}/present.html#session=${session.code}&token=${encodeURIComponent(presenterToken)}`,
     kind: session.kind,
+    sessionType: isSurveySession(session) ? 'survey' : 'quiz',
     participantLimit: session.participantLimit,
     expiresAt: session.expiresAt
   };
@@ -1380,11 +1430,23 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
   }
 });
 
-// Create a new session (upload quiz, get session code + QR)
+// Create a new session (upload quiz or survey, get session code + QR)
 app.post('/api/admin/session', async (req, res) => {
-  const { markdown, courseName } = req.body;
+  const { markdown, courseName, sessionType: rawSessionType } = req.body;
+  const sessionType = rawSessionType === 'survey' ? 'survey' : 'quiz';
   try {
-    const quiz = parseQuizMarkdown(markdown);
+    const quiz = sessionType === 'survey'
+      ? parseSurveyMarkdown(markdown)
+      : parseQuizMarkdown(markdown);
+
+    if (!quiz.questions || quiz.questions.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: sessionType === 'survey'
+          ? 'Survey needs at least one question with options'
+          : 'Quiz needs at least one question'
+      });
+    }
 
     const billingFailure = await hostedBillingFailureForAdmin(req.admin);
     if (billingFailure) {
@@ -1401,6 +1463,7 @@ app.post('/api/admin/session', async (req, res) => {
       courseName,
       req.admin.id,
       {
+        sessionType,
         enforceSingleOpenRoom: shouldEnforceSingleOpenRoom({
           hostedMode: HOSTED_MODE,
           admin: req.admin
@@ -1414,6 +1477,7 @@ app.post('/api/admin/session', async (req, res) => {
       code,
       quiz,
       kind: 'persistent',
+      sessionType,
       controller: { type: 'admin', id: req.admin.id },
       repository: createPersistentSessionRepository(db, id, code),
       participantLimit: resolveParticipantLimitForAdmin(req.admin, HOSTED_MAX_PARTICIPANTS)
@@ -2253,9 +2317,10 @@ app.get('/api/admin/analytics/sessions', async (req, res) => {
       endedAt: s.ended_at,
       totalQuestions: s.total_questions,
       participantCount: s.participant_count || 0,
-      avgScorePercent: s.avg_score_percent || 0,
+      avgScorePercent: s.avg_score_percent == null ? null : s.avg_score_percent,
       courseName: s.course_name,
-      isTest: s.is_test
+      isTest: s.is_test,
+      sessionType: s.session_type || 'quiz'
     }))
   });
 });
@@ -2269,10 +2334,65 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
     return res.status(404).json({ success: false, error: 'Session not found' });
   }
 
+  const sessionType = session.session_type === 'survey' || isSurveyPayload(session.quiz_data)
+    ? 'survey'
+    : 'quiz';
+
   const questionAnalytics = await db.getQuestionAnalytics(session.id);
   const participantPerformance = await db.getParticipantPerformance(session.id);
   const answerDistribution = await db.getAnswerDistribution(session.id);
   const participantAnswers = await db.getParticipantAnswers(session.id);
+
+  if (sessionType === 'survey') {
+    const survey = normalizeStoredSurvey(session.quiz_data || {});
+    const questions = survey.questions.map((quizQuestion, index) => {
+      const analytics = questionAnalytics.find(q => q.question_index === index) || {};
+      const distribution = answerDistribution.filter(a => a.question_index === index);
+      const counts = (quizQuestion.options || []).map((_, optIdx) => {
+        const hit = distribution.find(d => d.answer_index === optIdx);
+        return hit ? Number(hit.count) : 0;
+      });
+      const totalAnswers = counts.reduce((sum, n) => sum + n, 0);
+      return {
+        index,
+        displayNumber: quizQuestion.displayNumber,
+        type: 'survey',
+        text: quizQuestion.text,
+        options: quizQuestion.options,
+        counts,
+        totalAnswers,
+        optionDistribution: counts.map((count, optionIndex) => ({
+          optionIndex,
+          count,
+          percent: totalAnswers > 0 ? Math.round((count * 100) / totalAnswers) : 0
+        }))
+      };
+    });
+
+    return res.json({
+      success: true,
+      session: {
+        code: session.code,
+        quizTitle: session.quiz_title,
+        status: session.status,
+        sessionType: 'survey',
+        totalQuestions: survey.questions.length,
+        totalScore: 0,
+        createdAt: session.created_at,
+        startedAt: session.started_at,
+        endedAt: session.ended_at
+      },
+      questions,
+      questionsByDifficulty: [],
+      participants: participantPerformance.map(p => ({
+        id: p.id,
+        name: p.name,
+        // Attendance only — answers are anonymous and not linked.
+        joinedOnly: true
+      })),
+      mode: 'survey'
+    });
+  }
 
   const normalized = normalizeStoredQuiz(session.quiz_data || {});
   const totalGraded = gradedCount(normalized);
@@ -2432,53 +2552,79 @@ app.get(
     return res.status(404).json({ success: false, error: 'Session not found' });
   }
 
-  const answers = await db.getAnswersForExport(session.id);
-  const quizData = normalizeStoredQuiz(session.quiz_data || {});
-
-  // Build CSV content
+  const isSurvey = session.session_type === 'survey' || isSurveyPayload(session.quiz_data);
   const csvRows = [];
 
-  // Header row
-  csvRows.push([
-    'Participant Name',
-    'Question Number',
-    'Question Type',
-    'Question Text',
-    'Selected Answer',
-    'Correct Answer(s)',
-    'Is Correct',
-    'Response Time (ms)',
-    'Answered At'
-  ].join(','));
-
-  // Data rows
-  for (const answer of answers) {
-    const question = quizData.questions[answer.question_index];
-    if (!question) continue;
-
-    const selectedOption = answer.answer_index !== null && question.options[answer.answer_index]
-      ? question.options[answer.answer_index]
-      : 'No answer';
-    const correctOptions = question.correctIndices
-      .map(i => question.options[i])
-      .filter(Boolean)
-      .join('; ');
-    // Graded questions use the room's "Question N" number; ungraded leave it blank.
-    const questionNumber = isScored(question) && question.gradedNumber != null
-      ? question.gradedNumber
-      : '';
-
+  if (isSurvey) {
+    // Aggregated only — never emit participant names for survey sessions.
+    const quizData = normalizeStoredSurvey(session.quiz_data || {});
+    const answerDistribution = await db.getAnswerDistribution(session.id);
     csvRows.push([
-      escapeCSV(answer.participant_name),
-      questionNumber,
-      escapeCSV(question.type || 'graded'),
-      escapeCSV(question.text),
-      escapeCSV(selectedOption),
-      escapeCSV(correctOptions),
-      answer.is_correct ? 'Yes' : 'No',
-      answer.response_time_ms || '',
-      answer.answered_at || ''
+      'Question Number',
+      'Question Text',
+      'Option',
+      'Count',
+      'Percent'
     ].join(','));
+
+    for (const question of quizData.questions) {
+      const distribution = answerDistribution.filter(a => a.question_index === question.index);
+      const total = distribution.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      (question.options || []).forEach((option, optIdx) => {
+        const hit = distribution.find(d => d.answer_index === optIdx);
+        const count = hit ? Number(hit.count) : 0;
+        const percent = total > 0 ? Math.round((count * 100) / total) : 0;
+        csvRows.push([
+          question.displayNumber || question.index + 1,
+          escapeCSV(question.text),
+          escapeCSV(option),
+          count,
+          percent
+        ].join(','));
+      });
+    }
+  } else {
+    const answers = await db.getAnswersForExport(session.id);
+    const quizData = normalizeStoredQuiz(session.quiz_data || {});
+    csvRows.push([
+      'Participant Name',
+      'Question Number',
+      'Question Type',
+      'Question Text',
+      'Selected Answer',
+      'Correct Answer(s)',
+      'Is Correct',
+      'Response Time (ms)',
+      'Answered At'
+    ].join(','));
+
+    for (const answer of answers) {
+      const question = quizData.questions[answer.question_index];
+      if (!question) continue;
+
+      const selectedOption = answer.answer_index !== null && question.options[answer.answer_index]
+        ? question.options[answer.answer_index]
+        : 'No answer';
+      const correctOptions = question.correctIndices
+        .map(i => question.options[i])
+        .filter(Boolean)
+        .join('; ');
+      const questionNumber = isScored(question) && question.gradedNumber != null
+        ? question.gradedNumber
+        : '';
+
+      csvRows.push([
+        escapeCSV(answer.participant_name),
+        questionNumber,
+        escapeCSV(question.type || 'graded'),
+        escapeCSV(question.text),
+        escapeCSV(selectedOption),
+        escapeCSV(correctOptions),
+        answer.is_correct ? 'Yes' : 'No',
+        answer.response_time_ms || '',
+        answer.answered_at || ''
+      ].join(','));
+    }
   }
 
   const csvContent = csvRows.join('\n');
@@ -2886,18 +3032,23 @@ io.on('connection', (socket) => {
       p.funTotal = 0;
     }
 
+    const startedTotal = visibleQuestionTotal(session);
+    const startedMode = isSurveySession(session) ? 'survey' : 'quiz';
     io.to(`session:${sessionCode}`).emit('quiz_started', {
       title: session.quiz.title,
-      totalQuestions: gradedCount(session.quiz)
+      totalQuestions: startedTotal,
+      mode: startedMode
     });
 
     io.to(`admin:${sessionCode}`).emit('quiz_started', {
       title: session.quiz.title,
-      totalQuestions: gradedCount(session.quiz)
+      totalQuestions: startedTotal,
+      mode: startedMode
     });
     io.to(`presenter:${sessionCode}`).emit('quiz_started', {
       title: session.quiz.title,
-      totalQuestions: gradedCount(session.quiz)
+      totalQuestions: startedTotal,
+      mode: startedMode
     });
 
     scheduleAutopilot(sessionCode);
@@ -2975,33 +3126,50 @@ io.on('connection', (socket) => {
     participant.responseTimes = participant.responseTimes || {};
     participant.responseTimes[questionId] = responseTimeMs;
 
-    // Record answer in database
-    const isCorrect = question.correctIndices.includes(answerIndex);
-    await session.repository.recordAnswer(
-      participantId,
-      question.index,
-      answerIndex,
-      isCorrect,
-      responseTimeMs
-    );
+    const answeredCount = Object.values(session.participants)
+      .filter(p => p.answers[questionId] !== undefined).length;
+    const totalParticipants = Object.keys(session.participants).length;
 
-    // Notify admin of answer received
-    io.to(`admin:${sessionCode}`).emit('answer_received', {
-      participantId,
-      participantName: participant.name,
-      questionId,
-      answeredCount: Object.values(session.participants).filter(p => p.answers[questionId] !== undefined).length,
-      totalParticipants: Object.keys(session.participants).length
-    });
-    io.to(`presenter:${sessionCode}`).emit('answer_received', {
-      questionId,
-      answeredCount: Object.values(session.participants)
-        .filter(p => p.answers[questionId] !== undefined).length,
-      totalParticipants: Object.keys(session.participants).length
-    });
+    if (isSurveySession(session)) {
+      // Anonymity: keep the choice in memory only until question close.
+      // Never write participant_id; never name anyone on the wire.
+      io.to(`admin:${sessionCode}`).emit('answer_received', {
+        questionId,
+        answeredCount,
+        totalParticipants,
+        mode: 'survey'
+      });
+      io.to(`presenter:${sessionCode}`).emit('answer_received', {
+        questionId,
+        answeredCount,
+        totalParticipants,
+        mode: 'survey'
+      });
+      socket.emit('answer_confirmed', { questionId, answerIndex, mode: 'survey' });
+    } else {
+      const isCorrect = question.correctIndices.includes(answerIndex);
+      await session.repository.recordAnswer(
+        participantId,
+        question.index,
+        answerIndex,
+        isCorrect,
+        responseTimeMs
+      );
 
-    // Confirm to participant
-    socket.emit('answer_confirmed', { questionId, answerIndex });
+      io.to(`admin:${sessionCode}`).emit('answer_received', {
+        participantId,
+        participantName: participant.name,
+        questionId,
+        answeredCount,
+        totalParticipants
+      });
+      io.to(`presenter:${sessionCode}`).emit('answer_received', {
+        questionId,
+        answeredCount,
+        totalParticipants
+      });
+      socket.emit('answer_confirmed', { questionId, answerIndex });
+    }
 
     // Guarded per-question: two participants can both resolve their DB await
     // after everyoneAnswered() has gone true (their in-memory answers land
@@ -3151,13 +3319,49 @@ async function advanceToNextStep(sessionCode) {
 }
 
 async function finishQuiz(sessionCode, session) {
-  // Quiz ended
   session.quizState.isRunning = false;
+  await session.repository.updateStatus('ended');
+
+  if (isSurveySession(session)) {
+    const questions = session.quiz.questions.map(question => {
+      const distribution = buildSurveyDistribution(session, question);
+      return {
+        text: question.text,
+        options: question.options,
+        counts: distribution.counts,
+        answered: distribution.answered,
+        displayNumber: question.displayNumber
+      };
+    });
+    session.finale = {
+      mode: 'survey',
+      quizTitle: session.quiz.title,
+      participantCount: Object.keys(session.participants).length,
+      questions
+    };
+    for (const participant of Object.values(session.participants)) {
+      if (!participant.socketId) continue;
+      io.to(participant.socketId).emit('quiz_ended', {
+        mode: 'survey',
+        quizTitle: session.quiz.title,
+        hasScore: false,
+        finalScore: 0,
+        totalScore: 0,
+        correctCount: 0,
+        totalQuestions: surveyQuestionCount(session.quiz),
+        percentage: 0,
+        passed: false,
+        participantCount: session.finale.participantCount
+      });
+    }
+    clearAutopilotTimer(session);
+    io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
+    io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
+    return;
+  }
+
   const pointsPer = pointsPerQuestion(session.quiz);
   const totalGraded = gradedCount(session.quiz);
-
-  // Update database status
-  await session.repository.updateStatus('ended');
 
   // Save final scores to database and send results to each participant
   console.log(`[FINAL SCORES] Points per question: ${pointsPer}`);
@@ -3171,7 +3375,6 @@ async function finishQuiz(sessionCode, session) {
     const standing = finalLeaderboard.find(entry => entry.id === participant.id);
     participant.score = finalScore;
 
-    // Update database
     await session.repository.updateParticipantScore(
       participant.id,
       finalScore,
@@ -3233,29 +3436,38 @@ function startQuestionStep(sessionCode, session) {
   session.quizState.questionEndTime = Date.now() + (question.timeLimit * 1000);
   session.questionStartTime = Date.now();
 
-  const totalGraded = gradedCount(session.quiz);
+  const survey = isSurveySession(session);
+  const totalQuestions = survey
+    ? surveyQuestionCount(session.quiz)
+    : gradedCount(session.quiz);
+  const questionNumber = survey
+    ? (question.displayNumber ?? question.index + 1)
+    : question.gradedNumber;
 
   io.to(`session:${sessionCode}`).emit('question_started', {
     question: getQuestionForParticipants(question),
     timeRemaining: question.timeLimit,
-    questionNumber: question.gradedNumber,
-    totalQuestions: totalGraded
+    questionNumber,
+    totalQuestions,
+    mode: survey ? 'survey' : 'quiz'
   });
 
   io.to(`admin:${sessionCode}`).emit('question_started', {
     question,
     timeRemaining: question.timeLimit,
-    questionNumber: question.gradedNumber,
-    totalQuestions: totalGraded,
+    questionNumber,
+    totalQuestions,
     stepNumber: session.quizState.currentStepIndex + 1,
-    totalSteps: session.quiz.steps.length
+    totalSteps: session.quiz.steps.length,
+    mode: survey ? 'survey' : 'quiz'
   });
 
   io.to(`presenter:${sessionCode}`).emit('question_started', {
     question: getQuestionForParticipants(question),
     timeRemaining: question.timeLimit,
-    questionNumber: question.gradedNumber,
-    totalQuestions: totalGraded
+    questionNumber,
+    totalQuestions,
+    mode: survey ? 'survey' : 'quiz'
   });
 
   // Auto-end question when time expires
@@ -3267,7 +3479,7 @@ function startQuestionStep(sessionCode, session) {
   }, question.timeLimit * 1000);
 }
 
-function endCurrentQuestion(sessionCode) {
+async function endCurrentQuestion(sessionCode) {
   const session = activeSessions.get(sessionCode);
   if (!session || !session.quiz || session.quizState.currentStepIndex < 0) return;
   if (session.quizState.showingResults) return;
@@ -3277,6 +3489,63 @@ function endCurrentQuestion(sessionCode) {
   session.quizState.showingResults = true;
   scheduleAutopilot(sessionCode);
   const nextInMs = pendingAutopilotMs(session);
+
+  if (isSurveySession(session)) {
+    const distribution = buildSurveyDistribution(session, question);
+    // Persist anonymous rows only at close — shuffled so insert order is noise.
+    const rows = shuffleCopy(
+      Object.values(session.participants)
+        .filter(p => p.answers[question.id] !== undefined)
+        .map(p => ({
+          questionIndex: question.index,
+          answerIndex: p.answers[question.id],
+          responseTimeMs: p.responseTimes?.[question.id] ?? null
+        }))
+    );
+    try {
+      await session.repository.recordAnonymousAnswers(rows);
+    } catch (err) {
+      console.error('[SURVEY] anonymous batch write failed:', err.message);
+    }
+
+    const questionNumber = question.displayNumber ?? question.index + 1;
+    const totalQuestions = surveyQuestionCount(session.quiz);
+    const surveyPayload = {
+      mode: 'survey',
+      questionId: question.id,
+      question,
+      questionNumber,
+      totalQuestions,
+      distribution: {
+        options: question.options,
+        counts: distribution.counts,
+        answered: distribution.answered,
+        totalParticipants: distribution.totalParticipants
+      },
+      autopilotNextInMs: nextInMs
+    };
+    session.lastQuestionPresentation = {
+      mode: 'survey',
+      distribution: surveyPayload.distribution
+    };
+
+    for (const participant of Object.values(session.participants)) {
+      if (!participant.socketId) continue;
+      io.to(participant.socketId).emit('question_ended', {
+        mode: 'survey',
+        questionId: question.id,
+        yourAnswer: participant.answers[question.id],
+        distribution: surveyPayload.distribution,
+        questionsAnswered: questionNumber,
+        totalQuestions,
+        autopilotNextInMs: nextInMs
+      });
+    }
+    io.to(`admin:${sessionCode}`).emit('question_ended', surveyPayload);
+    io.to(`presenter:${sessionCode}`).emit('question_ended', surveyPayload);
+    return;
+  }
+
   const stats = calculateStats(session, question.id);
   const pointsPer = pointsPerQuestion(session.quiz);
 

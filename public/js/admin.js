@@ -13,6 +13,7 @@ const homeHostBtn = document.getElementById('home-host-btn');
 const homeHostTitle = document.getElementById('home-host-title');
 const homeHostCopy = document.getElementById('home-host-copy');
 const homeHostAction = document.getElementById('home-host-action');
+const homeSurveyBtn = document.getElementById('home-survey-btn');
 const homeAnalyticsBtn = document.getElementById('home-analytics-btn');
 const homeAccountBtn = document.getElementById('home-account-btn');
 const loginForm = document.getElementById('login-form');
@@ -124,8 +125,14 @@ const STARTER_TEMPLATE_FILES = Object.freeze({
   'data-science': '/templates/data-science.md',
   marvel: '/templates/marvel.md',
   music: '/templates/music.md',
-  history: '/templates/history.md'
+  history: '/templates/history.md',
+  'survey-food': '/templates/survey-food.md',
+  'survey-movies': '/templates/survey-movies.md',
+  'survey-sports': '/templates/survey-sports.md'
 });
+
+// 'quiz' | 'survey' — set from Host Home; default quiz for trial.
+let studioMode = 'quiz';
 
 let previewQuizData = null;
 let previewCurrentQuestionIndex = 0;
@@ -370,7 +377,53 @@ function showInstructorHome() {
   updateInstructorHome();
 }
 
-function showInstructorStudio() {
+function applyStudioModeCopy() {
+  const survey = studioMode === 'survey';
+  if (builderEyebrow) builderEyebrow.textContent = survey ? 'New survey session' : 'New live session';
+  if (builderHeading) builderHeading.textContent = survey ? 'Build your next survey' : 'Build your next Mash';
+  if (builderDescription) {
+    builderDescription.textContent = survey
+      ? 'Paste Markdown options (no scores). Answers stay anonymous.'
+      : 'Paste a Markdown quiz, preview it, then open the room.';
+  }
+  if (builderCardHeading) builderCardHeading.textContent = survey ? 'Survey Markdown' : 'Quiz Markdown';
+  if (builderCardDescription) {
+    builderCardDescription.textContent = survey
+      ? 'Questions and options only — no correctness marks needed.'
+      : 'Questions, options, timers and scoring stay in one readable file.';
+  }
+  if (uploadBtnLabel) {
+    uploadBtnLabel.textContent = survey ? 'Open survey room' : 'Open room';
+  }
+  if (quizMarkdown && !quizMarkdown.value.trim()) {
+    quizMarkdown.placeholder = survey
+      ? `# Pulse check
+
+# Section: Warm-up
+> Optional subtitle
+
+## How was the pace today?
+- Just right
+- A bit fast
+- A bit slow
+::time=20
+
+## What should we revisit?
+- Recursion
+- Debugging
+- Testing
+::time=25`
+      : quizMarkdown.getAttribute('placeholder') || quizMarkdown.placeholder;
+  }
+}
+
+function showInstructorStudio(mode) {
+  if (mode === 'survey' || mode === 'quiz') {
+    studioMode = mode;
+  }
+  if (isTrialMode()) studioMode = 'quiz';
+  applyStudioModeCopy();
+
   instructorHomeSection.classList.add('hidden');
   analyticsSection.classList.add('hidden');
   sessionDetailSection.classList.add('hidden');
@@ -381,7 +434,9 @@ function showInstructorStudio() {
     liveWorkspace.classList.add('hidden');
     uploadSection.classList.remove('hidden');
   }
-  studioTitleLabel.textContent = isTrialMode() ? 'Guest studio' : 'Host studio';
+  studioTitleLabel.textContent = isTrialMode()
+    ? 'Guest studio'
+    : (studioMode === 'survey' ? 'Survey studio' : 'Host studio');
 }
 
 function sessionApiPath(suffix = '') {
@@ -522,6 +577,15 @@ function closeTemplateModal() {
 }
 
 openTemplateBtn?.addEventListener('click', () => {
+  const kind = studioMode === 'survey' ? 'survey' : 'quiz';
+  templateCards.forEach(card => {
+    const cardKind = card.dataset.templateKind || 'quiz';
+    card.classList.toggle('hidden', cardKind !== kind);
+  });
+  const title = document.getElementById('template-modal-title');
+  if (title) {
+    title.textContent = kind === 'survey' ? 'Choose a starter survey' : 'Choose a starter Mash';
+  }
   templateModal.classList.remove('hidden');
   const firstTemplate = templateCards[0];
   firstTemplate?.focus({ preventScroll: true });
@@ -1179,7 +1243,11 @@ uploadBtn.addEventListener('click', async () => {
       {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown, courseName })
+      body: JSON.stringify({
+        markdown,
+        courseName,
+        sessionType: isTrialMode() ? 'quiz' : studioMode
+      })
       }
     );
 
@@ -1231,7 +1299,9 @@ previewBtn.addEventListener('click', () => {
   // Reuse the parseQuizMarkdown logic if possible, or just parse locally
   // Since we want to preview it, we should use the same logic
   // Let's implement a lightweight local parser
-  previewQuizData = parseQuizMarkdownLocal(markdown);
+  previewQuizData = studioMode === 'survey' && typeof parseSurveyMarkdownLocal === 'function'
+    ? parseSurveyMarkdownLocal(markdown)
+    : parseQuizMarkdownLocal(markdown);
 
   if (previewQuizData.steps.length === 0) {
     alert('No valid questions found in markdown.');
@@ -1316,7 +1386,12 @@ function renderPreviewQuestionCard(q) {
   previewOptionsContainer.classList.remove('hidden');
 
   const qnumLabel = document.getElementById('preview-qnum-label');
-  if (q.type === 'ungraded') {
+  const isSurveyPreview = previewQuizData.sessionKind === 'survey' || q.type === 'survey';
+  if (isSurveyPreview) {
+    qnumLabel.innerHTML = 'Q<span id="preview-q-num"></span>/<span id="preview-total-q-num"></span>';
+    document.getElementById('preview-q-num').textContent = q.displayNumber || (previewQuizData.questions.indexOf(q) + 1);
+    document.getElementById('preview-total-q-num').textContent = previewQuizData.questions.length;
+  } else if (q.type === 'ungraded') {
     qnumLabel.textContent = '⭐ Just for fun · no points';
   } else {
     qnumLabel.innerHTML = 'Q<span id="preview-q-num"></span>/<span id="preview-total-q-num"></span>';
@@ -1331,7 +1406,7 @@ function renderPreviewQuestionCard(q) {
   previewOptionsContainer.innerHTML = '';
   q.options.forEach((opt, idx) => {
     const div = document.createElement('div');
-    const isCorrect = q.correctIndices.includes(idx);
+    const isCorrect = !isSurveyPreview && q.correctIndices.includes(idx);
     div.className = `preview-option${isCorrect ? ' preview-option-correct' : ''}`;
     div.innerHTML = `
       <span class="preview-option-letter">${String.fromCharCode(65 + idx)}</span>
@@ -1616,7 +1691,17 @@ instructorHomeLink?.addEventListener('click', event => {
 });
 
 homeHostBtn?.addEventListener('click', () => {
-  showInstructorStudio();
+  showInstructorStudio(sessionCode ? studioMode : 'quiz');
+  if (!sessionCode) builderHeading.focus({ preventScroll: true });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+homeSurveyBtn?.addEventListener('click', () => {
+  if (sessionCode) {
+    showInstructorStudio(studioMode);
+  } else {
+    showInstructorStudio('survey');
+  }
   if (!sessionCode) builderHeading.focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
@@ -1624,7 +1709,7 @@ homeHostBtn?.addEventListener('click', () => {
 homeAnalyticsBtn?.addEventListener('click', showAnalytics);
 homeAccountBtn?.addEventListener('click', openSettings);
 analyticsEmptyHostBtn?.addEventListener('click', () => {
-  showInstructorStudio();
+  showInstructorStudio('quiz');
   builderHeading.focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });

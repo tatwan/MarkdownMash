@@ -267,6 +267,11 @@ async function runMigrations(client) {
     {
       check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'account_invitations' AND column_name = 'purpose'",
       migrate: "ALTER TABLE account_invitations ADD COLUMN purpose TEXT NOT NULL DEFAULT 'master_invite' CHECK (purpose IN ('master_invite', 'self_signup'))"
+    },
+    // Survey sessions (v1.5.0)
+    {
+      check: "SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions' AND column_name = 'session_type'",
+      migrate: "ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'quiz'"
     }
   ];
 
@@ -337,6 +342,7 @@ const dbApi = {
   // Session operations
   async createSession(quizData, courseName = null, ownerId = null, options = {}) {
     const enforceSingleOpenRoom = options.enforceSingleOpenRoom === true;
+    const sessionType = options.sessionType === 'survey' ? 'survey' : 'quiz';
     const client = enforceSingleOpenRoom ? await pool.connect() : null;
     const database = client || pool;
     let code;
@@ -359,20 +365,26 @@ const dbApi = {
         throw new Error('Failed to generate unique session code');
       }
 
+      const totalQuestions = sessionType === 'survey'
+        ? (quizData.questions || []).length
+        : gradedCount(quizData);
+      const totalScore = sessionType === 'survey' ? 0 : (quizData.totalScore || 100);
+      const passingPercent = sessionType === 'survey' ? 0 : (quizData.passingPercent || 70);
+
       const result = await database.query(
-        `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score, course_name, is_test, owner_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)
+        `INSERT INTO sessions (code, quiz_title, quiz_data, total_questions, passing_percent, total_score, course_name, is_test, owner_id, session_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9)
          RETURNING id`,
         [
           code,
-          quizData.title || 'Untitled Quiz',
+          quizData.title || (sessionType === 'survey' ? 'Untitled Survey' : 'Untitled Quiz'),
           JSON.stringify(quizData),
-          // Denominator for avg score % and "of N" analytics — graded only.
-          gradedCount(quizData),
-          quizData.passingPercent || 70,
-          quizData.totalScore || 100,
+          totalQuestions,
+          passingPercent,
+          totalScore,
           courseName,
-          ownerId
+          ownerId,
+          sessionType
         ]
       );
 
@@ -497,6 +509,34 @@ const dbApi = {
     );
   },
 
+  // Survey anonymity: no participant_id, no is_correct. Rows should be shuffled
+  // by the caller before insert so insertion order carries no identity signal.
+  async recordAnonymousAnswers(sessionId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return { rowCount: 0 };
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const row of rows) {
+        await client.query(
+          `INSERT INTO answers (session_id, participant_id, question_index, answer_index, is_correct, response_time_ms)
+           VALUES ($1, NULL, $2, $3, NULL, $4)`,
+          [sessionId, row.questionIndex, row.answerIndex, row.responseTimeMs ?? null]
+        );
+      }
+      await client.query('COMMIT');
+      return { rowCount: rows.length };
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {
+        /* ignore */
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async getAnswersBySession(sessionId) {
     const result = await pool.query('SELECT * FROM answers WHERE session_id = $1', [sessionId]);
     return result.rows;
@@ -523,8 +563,12 @@ const dbApi = {
       `SELECT
         s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at,
         s.total_questions, s.total_score, s.course_name, s.is_test,
+        COALESCE(s.session_type, 'quiz') as session_type,
         COUNT(DISTINCT p.id) as participant_count,
-        ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1) as avg_score_percent
+        CASE
+          WHEN COALESCE(s.session_type, 'quiz') = 'survey' THEN NULL
+          ELSE ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1)
+        END as avg_score_percent
       FROM sessions s
       LEFT JOIN participants p ON p.session_id = s.id
       WHERE ${conditions.join(' AND ')}

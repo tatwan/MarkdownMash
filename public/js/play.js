@@ -513,6 +513,31 @@ function initSocket() {
       currentQuestion = data.question;
     }
 
+    if (data.mode === 'survey') {
+      const yourAnswerIdx = data.yourAnswer;
+      resultIcon.className = 'result-icon correct';
+      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
+      if (yourAnswerIdx === undefined) {
+        resultText.textContent = "Time's up!";
+        yourAnswer.textContent = 'No answer';
+      } else {
+        resultText.textContent = 'Got it — thanks!';
+        const opt = currentQuestion?.options?.[yourAnswerIdx];
+        yourAnswer.innerHTML = opt
+          ? `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(opt)}`
+          : 'Recorded';
+      }
+      resultRank.textContent = '—';
+      resultStreak.textContent = '—';
+      resultMovement.textContent = '—';
+      const correctRow = document.querySelector('.result-detail-row.correct');
+      if (correctRow) correctRow.style.display = 'none';
+      showSurveyResultsChart(data);
+      hideAllSections();
+      resultsSection.classList.remove('hidden');
+      return;
+    }
+
     // Get my results from participantResults
     const myResults = data.participantResults?.[participantId] || {
       yourAnswer: data.yourAnswer
@@ -568,6 +593,23 @@ function initSocket() {
     clearInterval(timerInterval);
     stopNextQuestionCountdown();
     stopSectionCountdown();
+
+    if (data.mode === 'survey') {
+      finalIcon.className = 'final-icon passed';
+      finalIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
+      finalStatus.textContent = 'Thanks for sharing!';
+      finalScoreValue.textContent = '—';
+      finalScoreMax.textContent = '—';
+      finalPercentage.textContent = '';
+      finalPercentage.className = 'final-pct';
+      finalRank.textContent = data.participantCount ? `${data.participantCount} in the room` : '—';
+      finalCorrect.textContent = '—';
+      finalStreak.textContent = '—';
+      finalMessage.textContent = 'Your answers were recorded anonymously.';
+      hideAllSections();
+      finalSection.classList.remove('hidden');
+      return;
+    }
 
     // Get my final results
     const myResults = data.participantResults ? data.participantResults[participantId] : null;
@@ -761,6 +803,29 @@ function showResultsChart(data) {
     const width = Math.round((count / largestCount) * 100);
     const row = document.createElement('div');
     row.className = `distribution-row ${data.correctIndices.includes(index) ? 'correct' : ''}`;
+    row.innerHTML = `
+      <div class="distribution-answer"><strong>${String.fromCharCode(65 + index)}.</strong> ${markdown.inline(option)}</div>
+      <div class="distribution-track" aria-hidden="true"><span style="width: ${width}%"></span></div>
+      <div class="distribution-count">${count}</div>
+    `;
+    resultsDistribution.appendChild(row);
+  });
+}
+
+function showSurveyResultsChart(data) {
+  const counts = data.distribution?.counts || [];
+  const options = data.distribution?.options || currentQuestion?.options || [];
+  const totalResponses = counts.reduce((sum, count) => sum + Number(count || 0), 0);
+  const largestCount = Math.max(1, ...counts, 1);
+
+  resultResponseTotal.textContent = `${totalResponses} ${totalResponses === 1 ? 'response' : 'responses'}`;
+  resultsDistribution.innerHTML = '';
+
+  options.forEach((option, index) => {
+    const count = Number(counts[index] || 0);
+    const width = Math.round((count / largestCount) * 100);
+    const row = document.createElement('div');
+    row.className = 'distribution-row';
     row.innerHTML = `
       <div class="distribution-answer"><strong>${String.fromCharCode(65 + index)}.</strong> ${markdown.inline(option)}</div>
       <div class="distribution-track" aria-hidden="true"><span style="width: ${width}%"></span></div>

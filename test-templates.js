@@ -5,6 +5,7 @@ const { parseQuizMarkdown, gradedCount } = require('./quiz-structure');
 
 const templatesDir = path.join(__dirname, 'templates');
 const studioKeys = ['math', 'python', 'data-science', 'marvel', 'music', 'history'];
+const surveyKeys = ['survey-food', 'survey-movies', 'survey-sports'];
 const showcase = 'classroom-modules';
 
 assert.ok(fs.existsSync(templatesDir), 'templates/ directory must exist');
@@ -53,5 +54,18 @@ assert.ok(
   python.questions.some(q => q.type === 'ungraded'),
   'python starter includes an ungraded question'
 );
+
+const { parseSurveyMarkdown } = require('./survey-structure');
+for (const key of surveyKeys) {
+  const filePath = path.join(templatesDir, `${key}.md`);
+  assert.ok(fs.existsSync(filePath), `templates/${key}.md must exist`);
+  const survey = parseSurveyMarkdown(fs.readFileSync(filePath, 'utf8'));
+  assert.equal(survey.sessionKind, 'survey');
+  assert.ok(survey.questions.length >= 2, `${key} needs at least two questions`);
+  assert.ok(
+    survey.questions.every(q => q.correctIndices.length === 0),
+    `${key} must not mark correct answers`
+  );
+}
 
 console.log('Template gallery contract passed');

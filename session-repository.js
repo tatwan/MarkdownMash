@@ -31,6 +31,9 @@ function createPersistentSessionRepository(db, sessionId, sessionCode) {
         responseTimeMs
       );
     },
+    recordAnonymousAnswers(rows) {
+      return db.recordAnonymousAnswers(sessionId, rows);
+    },
     updateParticipantScore(participantId, score, correctCount) {
       return db.updateParticipantScore(participantId, score, correctCount);
     },
@@ -64,6 +67,7 @@ function createTransientSessionRepository(options = {}) {
       kickedParticipants.add(participantId);
     },
     async recordAnswer() {},
+    async recordAnonymousAnswers() {},
     async updateParticipantScore() {},
     async deleteSession() {}
   };

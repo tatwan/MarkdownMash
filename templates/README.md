@@ -28,6 +28,9 @@ when writing your own Mashes.
 | [`music.md`](music.md) | Music & lyrics | Classic three-question graded Mash |
 | [`history.md`](history.md) | History highlights | Bonus section with an ungraded question |
 | [`classroom-modules.md`](classroom-modules.md) | Classroom showcase | Full v1.4 demo: two sections, mixed graded/ungraded |
+| [`survey-food.md`](survey-food.md) | Survey · food | Anonymous pulse (v1.5) |
+| [`survey-movies.md`](survey-movies.md) | Survey · movies | Anonymous pulse (v1.5) |
+| [`survey-sports.md`](survey-sports.md) | Survey · sports | Anonymous pulse (v1.5) |
 
 ## Syntax quick reference
 

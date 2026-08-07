@@ -215,7 +215,7 @@ function initSocket() {
     stopPresenterSectionCountdown();
     currentQuestion = data.question;
     timerDuration = Math.max(1, data.timeRemaining);
-    const isUngraded = data.question.type === 'ungraded';
+    const isUngraded = data.question.type === 'ungraded' && data.mode !== 'survey';
     presenterQnum.classList.toggle('hidden', isUngraded);
     presenterQbadge.classList.toggle('hidden', !isUngraded);
     if (!isUngraded) {
@@ -244,7 +244,26 @@ function initSocket() {
     hideAllAnsweredBanner();
     startPresenterNextCountdown(data.autopilotNextInMs);
     if (data.question) currentQuestion = data.question;
-    if (!currentQuestion) return;
+    if (!currentQuestion && data.mode !== 'survey') return;
+
+    if (data.mode === 'survey') {
+      const q = data.question || currentQuestion;
+      resultQNum.textContent = data.questionNumber || currentQNum.textContent;
+      resultQuestionText.innerHTML = markdown.block(q.text);
+      correctCount.textContent = '—';
+      totalAnswered.textContent = data.distribution?.answered ?? 0;
+      renderSurveyDistribution(data);
+      renderCorrectResponders([]);
+      startHighlightRotation([{
+        type: 'steady',
+        icon: 'check-circle',
+        eyebrow: 'Survey',
+        message: 'Responses are anonymous — showing the room totals only'
+      }]);
+      hideAllSections();
+      resultsSection.classList.remove('hidden');
+      return;
+    }
 
     resultQNum.textContent = data.questionNumber || currentQNum.textContent;
     resultQuestionText.innerHTML = markdown.block(currentQuestion.text);
@@ -266,6 +285,10 @@ function initSocket() {
 
   socket.on('quiz_ended', data => {
     clearPresenterTimers();
+    if (data.mode === 'survey') {
+      showSurveyFinale(data);
+      return;
+    }
     showFinale(data);
   });
 }
@@ -361,6 +384,72 @@ function renderAnswerDistribution(data) {
       </div>
     `;
     answerDistribution.appendChild(row);
+  });
+}
+
+function renderSurveyDistribution(data) {
+  answerDistribution.innerHTML = '';
+  const counts = data.distribution?.counts || [];
+  const options = data.distribution?.options || data.question?.options || [];
+  const total = Math.max(1, data.distribution?.totalParticipants || data.distribution?.answered || 1);
+  const maxCount = Math.max(1, ...counts, 1);
+
+  options.forEach((option, index) => {
+    const count = counts[index] || 0;
+    const percent = Math.round((count / total) * 100);
+    const row = document.createElement('div');
+    row.className = 'answer-bar-row';
+    row.innerHTML = `
+      <div class="answer-bar-label">
+        <span class="answer-letter">${String.fromCharCode(65 + index)}</span>
+        <span class="answer-copy">${markdown.inline(option)}</span>
+      </div>
+      <div class="answer-bar-track">
+        <div class="answer-bar-fill" style="--bar-width: ${(count / maxCount) * 100}%"></div>
+        <span class="answer-bar-value">${count} · ${percent}%</span>
+      </div>
+    `;
+    answerDistribution.appendChild(row);
+  });
+}
+
+function showSurveyFinale(data) {
+  finaleData = {
+    mode: 'survey',
+    leaderboard: [],
+    hardestQuestions: [],
+    questions: data.questions || [],
+    participantCount: data.participantCount || 0,
+    quizTitle: data.quizTitle
+  };
+  hideAllSections();
+  endedSection.classList.remove('hidden');
+  finaleSubtitle.textContent = data.participantCount
+    ? `${data.participantCount} ${data.participantCount === 1 ? 'participant' : 'participants'} — answers stay anonymous`
+    : 'Survey complete — answers stay anonymous';
+  podiumStage.querySelectorAll('.podium-place').forEach(place => {
+    place.classList.add('absent');
+    place.querySelector('[data-podium-name]').textContent = '';
+    place.querySelector('[data-podium-score]').textContent = '';
+    const avatar = place.querySelector('[data-podium-avatar]');
+    if (avatar) avatar.classList.add('hidden');
+  });
+  runnersUp.innerHTML = '';
+  hardestQuestions.innerHTML = '';
+  (data.questions || []).slice(0, 3).forEach((q, i) => {
+    const total = (q.counts || []).reduce((s, n) => s + n, 0);
+    const topIdx = (q.counts || []).reduce((best, n, idx, arr) => (n > arr[best] ? idx : best), 0);
+    const card = document.createElement('article');
+    card.className = 'hardest-card';
+    card.innerHTML = `
+      <span class="hardest-rank">${i + 1}</span>
+      <div>
+        <strong></strong>
+        <span>${total} responses${q.options?.[topIdx] ? ` · top: ${q.options[topIdx]}` : ''}</span>
+      </div>
+    `;
+    card.querySelector('strong').textContent = q.text || `Question ${i + 1}`;
+    hardestQuestions.appendChild(card);
   });
 }
 

@@ -10,6 +10,7 @@ const styleCss = fs.readFileSync(path.join(__dirname, 'public', 'css', 'style.cs
 for (const id of [
   'instructor-home-section',
   'home-host-btn',
+  'home-survey-btn',
   'home-analytics-btn',
   'home-account-btn',
   'open-template-btn',
@@ -68,7 +69,15 @@ assert.match(adminHtml, /Music &amp; Lyrics/);
 assert.match(adminHtml, /History Highlights/);
 assert.match(adminJs, /const STARTER_TEMPLATE_FILES = Object\.freeze/);
 assert.match(adminJs, /fetch\(templateUrl/);
+assert.match(adminJs, /sessionType/);
+assert.match(adminJs, /studioMode/);
 assert.match(adminJs, /Replace the Markdown currently in the editor/);
+for (const survey of ['survey-food', 'survey-movies', 'survey-sports']) {
+  assert.ok(
+    fs.existsSync(path.join(__dirname, 'templates', `${survey}.md`)),
+    `templates/${survey}.md must exist`
+  );
+}
 assert.match(adminHtml, /\/js\/settings-state\.js/);
 assert.doesNotMatch(adminJs, /event\.currentTarget\.reset\(\)/);
 assert.doesNotMatch(adminJs, /const STARTER_TEMPLATES = Object\.freeze/);
