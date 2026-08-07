@@ -102,12 +102,15 @@ const editIsTest = document.getElementById('edit-is-test');
 // Preview Modal Elements
 const previewModal = document.getElementById('preview-modal');
 const closePreviewBtn = document.getElementById('close-preview-btn');
-const previewQNum = document.getElementById('preview-q-num');
-const previewTotalQNum = document.getElementById('preview-total-q-num');
 const previewQuestionText = document.getElementById('preview-question-text');
 const previewOptionsContainer = document.getElementById('preview-options-container');
 const previewPrevBtn = document.getElementById('preview-prev-btn');
 const previewNextBtn = document.getElementById('preview-next-btn');
+const previewPlayerHeader = document.getElementById('preview-player-header');
+const previewSectionCard = document.getElementById('preview-section-card');
+const previewSectionEyebrow = document.getElementById('preview-section-eyebrow');
+const previewSectionTitle = document.getElementById('preview-section-title');
+const previewSectionSubtitle = document.getElementById('preview-section-subtitle');
 const openTemplateBtn = document.getElementById('open-template-btn');
 const templateModal = document.getElementById('template-modal');
 const closeTemplateBtn = document.getElementById('close-template-btn');
@@ -246,12 +249,16 @@ const STARTER_TEMPLATES = Object.freeze({
 - [ ] 1776
 ::time=25
 
+# Section: Bonus Round
+> Just for fun — no points on the line.
+
 ## Q3: Where did the Industrial Revolution begin?
 - [ ] Brazil
 - [ ] Japan
 - [x] Great Britain
 - [ ] Canada
-::time=20`
+::time=20
+::type=ungraded`
 });
 
 let previewQuizData = null;
@@ -298,6 +305,10 @@ const liveLobbyPanel = document.getElementById('live-lobby-panel');
 const liveLobbyEyebrow = document.getElementById('live-lobby-eyebrow');
 const liveLobbyTitle = document.getElementById('live-lobby-title');
 const liveLobbyCopy = document.getElementById('live-lobby-copy');
+const liveSectionPanel = document.getElementById('live-section-panel');
+const liveSectionEyebrow = document.getElementById('live-section-eyebrow');
+const liveSectionTitle = document.getElementById('live-section-title');
+const liveSectionSubtitle = document.getElementById('live-section-subtitle');
 const answerProgressBar = document.getElementById('answer-progress-bar');
 const participantEmptyState = document.getElementById('participant-empty-state');
 const copySessionCodeBtn = document.getElementById('copy-session-code-btn');
@@ -1106,6 +1117,24 @@ function initSocket(code) {
     liveLobbyPanel.classList.remove('hidden');
   });
 
+  socket.on('section_started', (data) => {
+    stopAutopilotCountdown();
+
+    liveSectionEyebrow.textContent = `Section ${data.stepNumber} of ${data.totalSections}`;
+    liveSectionTitle.textContent = data.title;
+    liveSectionSubtitle.textContent = data.subtitle || '';
+    liveSectionSubtitle.classList.toggle('hidden', !data.subtitle);
+
+    liveLobbyPanel.classList.add('hidden');
+    questionSection.classList.add('hidden');
+    liveSectionPanel.classList.remove('hidden');
+
+    nextBtn.classList.remove('hidden');
+    endQuestionBtn.classList.add('hidden');
+
+    if (data.autopilotNextInMs) startAutopilotCountdown(data.autopilotNextInMs);
+  });
+
   socket.on('question_started', (data) => {
     stopAutopilotCountdown();
     currentQuestion = data.question;
@@ -1118,6 +1147,7 @@ function initSocket(code) {
     endQuestionBtn.classList.remove('hidden');
     questionSection.classList.remove('hidden');
     liveLobbyPanel.classList.add('hidden');
+    liveSectionPanel.classList.add('hidden');
   });
 
   socket.on('answer_received', (data) => {
@@ -1314,12 +1344,12 @@ previewBtn.addEventListener('click', () => {
   // Since we want to preview it, we should use the same logic
   // Let's implement a lightweight local parser
   previewQuizData = parseQuizMarkdownLocal(markdown);
-  
-  if (previewQuizData.questions.length === 0) {
+
+  if (previewQuizData.steps.length === 0) {
     alert('No valid questions found in markdown.');
     return;
   }
-  
+
   previewCurrentQuestionIndex = 0;
   previewModal.classList.remove('hidden');
   renderPreviewQuestion();
@@ -1347,7 +1377,7 @@ function closePreview() {
 }
 
 previewNextBtn.addEventListener('click', () => {
-  if (previewCurrentQuestionIndex < previewQuizData.questions.length - 1) {
+  if (previewCurrentQuestionIndex < previewQuizData.steps.length - 1) {
     previewCurrentQuestionIndex++;
     renderPreviewQuestion();
   }
@@ -1360,13 +1390,54 @@ previewPrevBtn.addEventListener('click', () => {
   }
 });
 
+// Renders the current preview step: a section card for kind === 'section',
+// or the question card (with the ungraded badge) for kind === 'question'.
 function renderPreviewQuestion() {
-  const q = previewQuizData.questions[previewCurrentQuestionIndex];
-  previewQNum.textContent = previewCurrentQuestionIndex + 1;
-  previewTotalQNum.textContent = previewQuizData.questions.length;
-  
+  const step = previewQuizData.steps[previewCurrentQuestionIndex];
+
+  if (step.kind === 'section') {
+    renderPreviewSectionCard(step);
+  } else {
+    renderPreviewQuestionCard(previewQuizData.questions[step.questionIndex]);
+  }
+
+  previewPrevBtn.disabled = previewCurrentQuestionIndex === 0;
+  previewNextBtn.disabled = previewCurrentQuestionIndex === previewQuizData.steps.length - 1;
+}
+
+function renderPreviewSectionCard(step) {
+  previewPlayerHeader.classList.add('hidden');
+  previewQuestionText.classList.add('hidden');
+  previewOptionsContainer.classList.add('hidden');
+  previewSectionCard.classList.remove('hidden');
+
+  const sections = previewQuizData.steps.filter(s => s.kind === 'section');
+  const ordinal = sections.indexOf(step) + 1;
+
+  // Section titles/subtitles are host-authored text — textContent only.
+  previewSectionEyebrow.textContent = `Section ${ordinal} of ${sections.length}`;
+  previewSectionTitle.textContent = step.title;
+  previewSectionSubtitle.textContent = step.subtitle || '';
+  previewSectionSubtitle.classList.toggle('hidden', !step.subtitle);
+}
+
+function renderPreviewQuestionCard(q) {
+  previewSectionCard.classList.add('hidden');
+  previewPlayerHeader.classList.remove('hidden');
+  previewQuestionText.classList.remove('hidden');
+  previewOptionsContainer.classList.remove('hidden');
+
+  const qnumLabel = document.getElementById('preview-qnum-label');
+  if (q.type === 'ungraded') {
+    qnumLabel.textContent = '⭐ Just for fun · no points';
+  } else {
+    qnumLabel.innerHTML = 'Q<span id="preview-q-num"></span>/<span id="preview-total-q-num"></span>';
+    document.getElementById('preview-q-num').textContent = previewQuizData.questions.indexOf(q) + 1;
+    document.getElementById('preview-total-q-num').textContent = previewQuizData.questions.length;
+  }
+
   previewQuestionText.innerHTML = markdown.block(q.text);
-  
+
   previewOptionsContainer.innerHTML = '';
   q.options.forEach((opt, idx) => {
     const div = document.createElement('div');
@@ -1379,19 +1450,37 @@ function renderPreviewQuestion() {
     `;
     previewOptionsContainer.appendChild(div);
   });
-  
-  previewPrevBtn.disabled = previewCurrentQuestionIndex === 0;
-  previewNextBtn.disabled = previewCurrentQuestionIndex === previewQuizData.questions.length - 1;
 }
 
-// Local markdown parser for preview
+// Local markdown parser for preview. Mirrors quiz-structure.js's
+// parseQuizMarkdown closely enough to preview sections and ungraded
+// questions client-side, without a server round trip.
 function parseQuizMarkdownLocal(markdown) {
   const lines = markdown.split('\n');
-  const quiz = { title: '', questions: [] };
+  const quiz = { title: '', questions: [], steps: [] };
   let currentQuestion = null;
+  let pendingSection = null;
+  let sectionDefaultType = null;
+
+  function flushQuestion() {
+    if (!currentQuestion) return;
+    quiz.questions.push(currentQuestion);
+    quiz.steps.push({ kind: 'question', questionIndex: quiz.questions.length - 1 });
+    currentQuestion = null;
+  }
 
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // Section (# Section: Name). Checked before the title rule below, or a
+    // section would silently overwrite quiz.title.
+    const sectionMatch = trimmed.match(/^#\s*Section:\s*(.+)$/i);
+    if (sectionMatch) {
+      flushQuestion();
+      pendingSection = { kind: 'section', title: sectionMatch[1].trim(), subtitle: null };
+      sectionDefaultType = null;
+      continue;
+    }
 
     if (trimmed.startsWith('# ') && !trimmed.startsWith('## ') && !trimmed.toLowerCase().startsWith('# score')) {
       quiz.title = trimmed.slice(2).trim();
@@ -1399,15 +1488,19 @@ function parseQuizMarkdownLocal(markdown) {
     }
 
     if (trimmed.startsWith('## ')) {
-      if (currentQuestion) {
-        quiz.questions.push(currentQuestion);
+      flushQuestion();
+      // A section only enters the flow once a question follows it.
+      if (pendingSection) {
+        quiz.steps.push(pendingSection);
+        pendingSection = null;
       }
       const questionText = trimmed.slice(3).replace(/^Q\d+:\s*/, '').trim();
       currentQuestion = {
         id: quiz.questions.length + 1,
         text: questionText,
         options: [],
-        correctIndices: []
+        correctIndices: [],
+        type: sectionDefaultType === 'ungraded' ? 'ungraded' : 'graded'
       };
       continue;
     }
@@ -1430,6 +1523,26 @@ function parseQuizMarkdownLocal(markdown) {
       continue;
     }
 
+    // Type metadata (::type=graded|ungraded). Binds to the open question
+    // when there is one, otherwise becomes the pending section's default.
+    const typeMatch = trimmed.match(/^::type=([A-Za-z]+)$/);
+    if (typeMatch) {
+      const normalized = typeMatch[1].trim().toLowerCase() === 'ungraded' ? 'ungraded' : 'graded';
+      if (currentQuestion) {
+        currentQuestion.type = normalized;
+      } else if (pendingSection) {
+        sectionDefaultType = normalized;
+      }
+      continue;
+    }
+
+    // Section subtitle (> line beneath a # Section: heading, before the
+    // first question).
+    if (pendingSection && !currentQuestion && trimmed.startsWith('> ')) {
+      pendingSection.subtitle = trimmed.slice(2).trim();
+      continue;
+    }
+
     // If it doesn't match any directive, append it to the current question's text
     // We use the original 'line' to preserve indentation
     if (currentQuestion) {
@@ -1437,9 +1550,7 @@ function parseQuizMarkdownLocal(markdown) {
     }
   }
 
-  if (currentQuestion) {
-    quiz.questions.push(currentQuestion);
-  }
+  flushQuestion();
 
   return quiz;
 }
@@ -1622,7 +1733,14 @@ showResultsBtn.addEventListener('click', async () => {
 
 // Show current question
 function showQuestion(data) {
-  currentQNum.textContent = data.questionNumber;
+  const meta = document.querySelector('.question-meta');
+  if (data.question && data.question.type === 'ungraded') {
+    meta.textContent = '⭐ Just for fun · no points';
+  } else {
+    meta.innerHTML = 'Question <span id="current-q-num"></span> of <span id="total-q-num"></span>';
+    document.getElementById('current-q-num').textContent = data.questionNumber;
+    document.getElementById('total-q-num').textContent = data.totalQuestions;
+  }
   currentQuestionText.innerHTML = markdown.block(data.question.text);
   answersReceived.textContent = '0';
   optionsDisplay.innerHTML = ''; // Clear previous options

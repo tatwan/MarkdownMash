@@ -273,6 +273,13 @@
               <p id="live-lobby-copy">The participant list updates live. Open the presenter on the screen your class can see.</p>
             </div>
 
+            <section id="live-section-panel" class="card live-section-panel hidden" aria-live="polite">
+              <p id="live-section-eyebrow" class="section-eyebrow">Section</p>
+              <h2 id="live-section-title">Section title</h2>
+              <p id="live-section-subtitle" class="live-section-subtitle hidden"></p>
+              <p class="live-section-hint">Click <strong>Next question</strong> to begin this section.</p>
+            </section>
+
             <section id="question-section" class="card live-question-card hidden">
               <div class="question-topline">
                 <p class="question-meta">Question <span id="current-q-num">1</span> of <span id="total-q-num">10</span></p>
@@ -753,12 +760,17 @@
           </button>
         </div>
         <div class="preview-device-screen">
-          <div class="player-header preview-player-header">
-            <span class="player-qnum">Q<span id="preview-q-num">1</span>/<span id="preview-total-q-num">10</span></span>
+          <div id="preview-player-header" class="player-header preview-player-header">
+            <span id="preview-qnum-label" class="player-qnum">Q<span id="preview-q-num">1</span>/<span id="preview-total-q-num">10</span></span>
             <span class="player-score">0 pts</span>
           </div>
           <h1 class="player-question preview-question" id="preview-question-text">Question?</h1>
           <div class="player-options preview-options" id="preview-options-container"></div>
+          <div id="preview-section-card" class="preview-section-card hidden">
+            <p id="preview-section-eyebrow" class="section-eyebrow">Section</p>
+            <h1 id="preview-section-title" class="preview-question"></h1>
+            <p id="preview-section-subtitle" class="live-section-subtitle hidden"></p>
+          </div>
           <div class="preview-footer">
             <button id="preview-prev-btn" class="btn btn-secondary" type="button">
               <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>
