@@ -2521,6 +2521,17 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
   }
 
   const question = questionForStep(session.quiz, session.quizState.currentStepIndex);
+  const resumeStep = stepAt(session.quiz, session.quizState.currentStepIndex);
+  if (resumeStep && resumeStep.kind === 'section') {
+    socket.emit('section_started', {
+      title: resumeStep.title,
+      subtitle: resumeStep.subtitle,
+      stepNumber: sectionOrdinal(session.quiz, session.quizState.currentStepIndex),
+      totalSections: session.quiz.steps.filter(s => s.kind === 'section').length,
+      autopilotNextInMs: pendingAutopilotMs(session)
+    });
+    return;
+  }
   if (!question) return;
   const timeRemaining = Math.max(
     0,
@@ -2736,6 +2747,17 @@ io.on('connection', (socket) => {
     // If quiz is in progress, send current state
     if (session.quizState.isRunning && session.quizState.currentStepIndex >= 0) {
       const question = questionForStep(session.quiz, session.quizState.currentStepIndex);
+      const resumeStep = stepAt(session.quiz, session.quizState.currentStepIndex);
+      if (resumeStep && resumeStep.kind === 'section') {
+        socket.emit('section_started', {
+          title: resumeStep.title,
+          subtitle: resumeStep.subtitle,
+          stepNumber: sectionOrdinal(session.quiz, session.quizState.currentStepIndex),
+          totalSections: session.quiz.steps.filter(s => s.kind === 'section').length,
+          autopilotNextInMs: pendingAutopilotMs(session)
+        });
+        return;
+      }
       if (!question) return;
       const timeRemaining = Math.max(0, Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000));
 
