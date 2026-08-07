@@ -416,7 +416,7 @@ function createSessionState({
     participants: Object.create(null),
     quizState: {
       isRunning: false,
-      currentQuestionIndex: -1,
+      currentStepIndex: -1,
       questionEndTime: null,
       showingResults: false,
       autopilot: false,
@@ -438,7 +438,7 @@ function createSessionState({
 //   code: string,
 //   quiz: object,
 //   participants: { participantId: { id, name, score, correctCount, answers: {}, responseTimes: {}, socketId } },
-//   quizState: { isRunning, currentQuestionIndex, questionEndTime, showingResults, autopilot, autopilotPauseSeconds, autopilotResumeAt, allAnsweredEmittedFor },
+//   quizState: { isRunning, currentStepIndex, questionEndTime, showingResults, autopilot, autopilotPauseSeconds, autopilotResumeAt, allAnsweredEmittedFor },
 //   questionStartTime: number (for response time tracking),
 //   rankSnapshot: { participantId: rank },
 //   lastQuestionPresentation: object,
@@ -454,8 +454,17 @@ function getQuestionForParticipants(question) {
     id: question.id,
     text: question.text,
     options: question.options,
-    timeLimit: question.timeLimit
+    timeLimit: question.timeLimit,
+    type: question.type,
+    gradedNumber: question.gradedNumber
   };
+}
+
+// The flow index walks steps[], which mixes sections and questions, so the
+// current question is a lookup rather than an array index.
+function currentQuestionOf(session) {
+  if (!session || !session.quiz) return null;
+  return questionForStep(session.quiz, session.quizState.currentStepIndex);
 }
 
 function calculateStats(session, questionId) {
@@ -1631,7 +1640,7 @@ app.post('/api/session/:code/join', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Session not found or has ended' });
   }
 
-  if (session.quizState.isRunning && session.quizState.currentQuestionIndex >= session.quiz.questions.length - 1) {
+  if (session.quizState.isRunning && session.quizState.currentStepIndex >= session.quiz.questions.length - 1) {
     return res.status(400).json({ success: false, error: 'Cannot join - quiz is ending' });
   }
 
@@ -2509,12 +2518,12 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
     return;
   }
 
-  if (session.quizState.currentQuestionIndex < 0
-    || session.quizState.currentQuestionIndex >= session.quiz.questions.length) {
+  if (session.quizState.currentStepIndex < 0
+    || session.quizState.currentStepIndex >= session.quiz.questions.length) {
     return;
   }
 
-  const question = session.quiz.questions[session.quizState.currentQuestionIndex];
+  const question = session.quiz.questions[session.quizState.currentStepIndex];
   const timeRemaining = Math.max(
     0,
     Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000)
@@ -2524,7 +2533,7 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
     socket.emit('question_ended', {
       questionId: question.id,
       question,
-      questionNumber: session.quizState.currentQuestionIndex + 1,
+      questionNumber: session.quizState.currentStepIndex + 1,
       correctIndices: question.correctIndices,
       stats: calculateStats(session, question.id),
       presentation: session.lastQuestionPresentation,
@@ -2536,7 +2545,7 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
         ? getQuestionForParticipants(question)
         : question,
       timeRemaining,
-      questionNumber: session.quizState.currentQuestionIndex + 1,
+      questionNumber: session.quizState.currentStepIndex + 1,
       totalQuestions: session.quiz.questions.length
     });
   }
@@ -2598,7 +2607,7 @@ io.on('connection', (socket) => {
       // question's full time limit expires. Guard for no quiz, a
       // not-yet-started question (-1), or an out-of-range index.
       const questions = session.quiz ? session.quiz.questions : null;
-      const currentIndex = session.quizState.currentQuestionIndex;
+      const currentIndex = session.quizState.currentStepIndex;
       const liveQuestion = questions && currentIndex >= 0 && currentIndex < questions.length
         ? questions[currentIndex]
         : null;
@@ -2725,8 +2734,8 @@ io.on('connection', (socket) => {
     }
 
     // If quiz is in progress, send current state
-    if (session.quizState.isRunning && session.quizState.currentQuestionIndex >= 0) {
-      const question = session.quiz.questions[session.quizState.currentQuestionIndex];
+    if (session.quizState.isRunning && session.quizState.currentStepIndex >= 0) {
+      const question = session.quiz.questions[session.quizState.currentStepIndex];
       const timeRemaining = Math.max(0, Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000));
 
       if (session.quizState.showingResults) {
@@ -2751,7 +2760,7 @@ io.on('connection', (socket) => {
             }
           },
           totalScore: session.quiz.totalScore,
-          questionsAnswered: session.quizState.currentQuestionIndex + 1,
+          questionsAnswered: session.quizState.currentStepIndex + 1,
           totalQuestions: session.quiz.questions.length,
           autopilotNextInMs: pendingAutopilotMs(session)
         });
@@ -2759,7 +2768,7 @@ io.on('connection', (socket) => {
         socket.emit('question_started', {
           question: getQuestionForParticipants(question),
           timeRemaining,
-          questionNumber: session.quizState.currentQuestionIndex + 1,
+          questionNumber: session.quizState.currentStepIndex + 1,
           totalQuestions: session.quiz.questions.length
         });
       }
@@ -2777,7 +2786,7 @@ io.on('connection', (socket) => {
     clearAutopilotTimer(session);
 
     session.quizState.isRunning = true;
-    session.quizState.currentQuestionIndex = -1;
+    session.quizState.currentStepIndex = -1;
     session.quizState.showingResults = false;
     session.rankSnapshot = {};
     session.lastQuestionPresentation = null;
@@ -2822,7 +2831,7 @@ io.on('connection', (socket) => {
     }
 
     clearAutopilotTimer(session);
-    await advanceToNextQuestion(sessionCode);
+    await advanceToNextStep(sessionCode);
   });
 
   // Admin manually ends current question
@@ -2889,7 +2898,7 @@ io.on('connection', (socket) => {
     const isCorrect = question.correctIndices.includes(answerIndex);
     await session.repository.recordAnswer(
       participantId,
-      session.quizState.currentQuestionIndex,
+      question.index,
       answerIndex,
       isCorrect,
       responseTimeMs
@@ -3004,13 +3013,13 @@ function scheduleAutopilot(sessionCode, questionId) {
 
   // Captured so a timer that survives a state change cannot fire into the
   // wrong question — the same guard the time-expiry timer uses.
-  const expectedIndex = session.quizState.currentQuestionIndex;
+  const expectedIndex = session.quizState.currentStepIndex;
 
   session.quizState.autopilotResumeAt = Date.now() + step.delayMs;
   session.autopilotTimer = setTimeout(() => {
     const live = activeSessions.get(sessionCode);
     if (!live) return;
-    if (live.quizState.currentQuestionIndex !== expectedIndex) return;
+    if (live.quizState.currentStepIndex !== expectedIndex) return;
 
     live.autopilotTimer = null;
     live.quizState.autopilotResumeAt = null;
@@ -3026,98 +3035,144 @@ function scheduleAutopilot(sessionCode, questionId) {
     // the quiz is still running before advancing.
     if (!live.quizState.isRunning) return;
 
-    advanceToNextQuestion(sessionCode).catch(err => {
+    advanceToNextStep(sessionCode).catch(err => {
       console.error('[AUTOPILOT] advance failed:', err);
     });
   }, step.delayMs);
 }
 
-// Advances the room to the next question, or ends the quiz when the last one
-// is finished. No permission check: callers must authorize first.
-async function advanceToNextQuestion(sessionCode) {
+// Advances the room to the next step — question or section — or ends the
+// quiz when the last step is finished. No permission check: callers must
+// authorize first.
+async function advanceToNextStep(sessionCode) {
   const session = activeSessions.get(sessionCode);
   if (!session || !session.quiz || !session.quizState.isRunning) return;
 
-  session.quizState.currentQuestionIndex++;
+  session.quizState.currentStepIndex++;
   session.quizState.showingResults = false;
   session.quizState.allAnsweredEmittedFor = null;
 
-  if (session.quizState.currentQuestionIndex >= session.quiz.questions.length) {
-    // Quiz ended
-    session.quizState.isRunning = false;
-    const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
-
-    // Update database status
-    await session.repository.updateStatus('ended');
-
-    // Save final scores to database and send results to each participant
-    console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
-    const finalLeaderboard = rankParticipants(session);
-    for (const participant of Object.values(session.participants)) {
-      const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
-      const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
-      const passed = percentage >= session.quiz.passingPercent;
-      const standing = finalLeaderboard.find(entry => entry.id === participant.id);
-      participant.score = finalScore;
-
-      // Update database
-      await session.repository.updateParticipantScore(
-        participant.id,
-        finalScore,
-        participant.correctCount || 0
-      );
-
-      if (participant.socketId) {
-        io.to(participant.socketId).emit('quiz_ended', {
-          finalScore,
-          totalScore: session.quiz.totalScore,
-          correctCount: participant.correctCount || 0,
-          totalQuestions: session.quiz.questions.length,
-          percentage,
-          passed,
-          passingPercent: session.quiz.passingPercent,
-          rank: standing?.rank || null,
-          participantCount: finalLeaderboard.length,
-          bestStreak: participant.bestStreak || 0
-        });
-      }
-    }
-
-    session.finale = buildFinaleSummary(session);
-    clearAutopilotTimer(session);
-    io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
-    io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
+  if (session.quizState.currentStepIndex >= session.quiz.steps.length) {
+    await finishQuiz(sessionCode, session);
     return;
   }
 
-  const question = session.quiz.questions[session.quizState.currentQuestionIndex];
+  const step = stepAt(session.quiz, session.quizState.currentStepIndex);
+
+  if (step.kind === 'section') {
+    startSectionStep(sessionCode, session, step);
+    return;
+  }
+
+  startQuestionStep(sessionCode, session);
+}
+
+async function finishQuiz(sessionCode, session) {
+  // Quiz ended
+  session.quizState.isRunning = false;
+  const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
+
+  // Update database status
+  await session.repository.updateStatus('ended');
+
+  // Save final scores to database and send results to each participant
+  console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
+  const finalLeaderboard = rankParticipants(session);
+  for (const participant of Object.values(session.participants)) {
+    const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
+    const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
+    const passed = percentage >= session.quiz.passingPercent;
+    const standing = finalLeaderboard.find(entry => entry.id === participant.id);
+    participant.score = finalScore;
+
+    // Update database
+    await session.repository.updateParticipantScore(
+      participant.id,
+      finalScore,
+      participant.correctCount || 0
+    );
+
+    if (participant.socketId) {
+      io.to(participant.socketId).emit('quiz_ended', {
+        finalScore,
+        totalScore: session.quiz.totalScore,
+        correctCount: participant.correctCount || 0,
+        totalQuestions: session.quiz.questions.length,
+        percentage,
+        passed,
+        passingPercent: session.quiz.passingPercent,
+        rank: standing?.rank || null,
+        participantCount: finalLeaderboard.length,
+        bestStreak: participant.bestStreak || 0
+      });
+    }
+  }
+
+  session.finale = buildFinaleSummary(session);
+  clearAutopilotTimer(session);
+  io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
+  io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
+}
+
+function startSectionStep(sessionCode, session, step) {
+  session.quizState.questionEndTime = null;
+  scheduleAutopilot(sessionCode);
+  const payload = {
+    title: step.title,
+    subtitle: step.subtitle,
+    stepNumber: sectionOrdinal(session.quiz, session.quizState.currentStepIndex),
+    totalSections: session.quiz.steps.filter(s => s.kind === 'section').length,
+    autopilotNextInMs: pendingAutopilotMs(session)
+  };
+
+  io.to(`session:${sessionCode}`).emit('section_started', payload);
+  io.to(`admin:${sessionCode}`).emit('section_started', payload);
+  io.to(`presenter:${sessionCode}`).emit('section_started', payload);
+}
+
+// "Section 2 of 4" — counts section steps up to and including this one.
+function sectionOrdinal(quiz, stepIndex) {
+  let ordinal = 0;
+  for (let i = 0; i <= stepIndex; i++) {
+    if (quiz.steps[i].kind === 'section') ordinal++;
+  }
+  return ordinal;
+}
+
+function startQuestionStep(sessionCode, session) {
+  const question = currentQuestionOf(session);
   session.quizState.questionEndTime = Date.now() + (question.timeLimit * 1000);
   session.questionStartTime = Date.now();
+
+  const totalGraded = gradedCount(session.quiz);
 
   io.to(`session:${sessionCode}`).emit('question_started', {
     question: getQuestionForParticipants(question),
     timeRemaining: question.timeLimit,
-    questionNumber: session.quizState.currentQuestionIndex + 1,
-    totalQuestions: session.quiz.questions.length
+    questionNumber: question.gradedNumber,
+    totalQuestions: totalGraded
   });
 
   io.to(`admin:${sessionCode}`).emit('question_started', {
-    question: question,
+    question,
     timeRemaining: question.timeLimit,
-    questionNumber: session.quizState.currentQuestionIndex + 1,
-    totalQuestions: session.quiz.questions.length
+    questionNumber: question.gradedNumber,
+    totalQuestions: totalGraded,
+    stepNumber: session.quizState.currentStepIndex + 1,
+    totalSteps: session.quiz.steps.length
   });
+
   io.to(`presenter:${sessionCode}`).emit('question_started', {
     question: getQuestionForParticipants(question),
     timeRemaining: question.timeLimit,
-    questionNumber: session.quizState.currentQuestionIndex + 1,
-    totalQuestions: session.quiz.questions.length
+    questionNumber: question.gradedNumber,
+    totalQuestions: totalGraded
   });
 
   // Auto-end question when time expires
-  const questionIndex = session.quizState.currentQuestionIndex;
+  const stepIndex = session.quizState.currentStepIndex;
   setTimeout(() => {
-    if (session.quizState.currentQuestionIndex === questionIndex && !session.quizState.showingResults) {
+    if (session.quizState.currentStepIndex === stepIndex && !session.quizState.showingResults) {
       endCurrentQuestion(sessionCode);
     }
   }, question.timeLimit * 1000);
@@ -3125,13 +3180,14 @@ async function advanceToNextQuestion(sessionCode) {
 
 function endCurrentQuestion(sessionCode) {
   const session = activeSessions.get(sessionCode);
-  if (!session || !session.quiz || session.quizState.currentQuestionIndex < 0) return;
+  if (!session || !session.quiz || session.quizState.currentStepIndex < 0) return;
   if (session.quizState.showingResults) return;
+  const question = currentQuestionOf(session);
+  if (!question) return; // a section step has no results to end
 
   session.quizState.showingResults = true;
   scheduleAutopilot(sessionCode);
   const nextInMs = pendingAutopilotMs(session);
-  const question = session.quiz.questions[session.quizState.currentQuestionIndex];
   const stats = calculateStats(session, question.id);
   const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
 
@@ -3184,7 +3240,7 @@ function endCurrentQuestion(sessionCode) {
           [participant.id]: participantResult
         },
         totalScore: session.quiz.totalScore,
-        questionsAnswered: session.quizState.currentQuestionIndex + 1,
+        questionsAnswered: session.quizState.currentStepIndex + 1,
         totalQuestions: session.quiz.questions.length,
         autopilotNextInMs: nextInMs
       });
@@ -3195,7 +3251,7 @@ function endCurrentQuestion(sessionCode) {
   io.to(`admin:${sessionCode}`).emit('question_ended', {
     questionId: question.id,
     question,
-    questionNumber: session.quizState.currentQuestionIndex + 1,
+    questionNumber: session.quizState.currentStepIndex + 1,
     correctIndices: question.correctIndices,
     stats,
     presentation: session.lastQuestionPresentation,
@@ -3204,7 +3260,7 @@ function endCurrentQuestion(sessionCode) {
   io.to(`presenter:${sessionCode}`).emit('question_ended', {
     questionId: question.id,
     question,
-    questionNumber: session.quizState.currentQuestionIndex + 1,
+    questionNumber: session.quizState.currentStepIndex + 1,
     correctIndices: question.correctIndices,
     stats,
     presentation: session.lastQuestionPresentation,

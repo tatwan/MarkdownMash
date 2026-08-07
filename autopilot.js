@@ -46,7 +46,7 @@ function nextAutopilotStep(session, questionId) {
   if (!isEngaged(session)) return null;
 
   // Sitting on results, or freshly started before the first question: advance.
-  if (session.quizState.showingResults || session.quizState.currentQuestionIndex < 0) {
+  if (session.quizState.showingResults || session.quizState.currentStepIndex < 0) {
     return { action: 'advance', delayMs: pauseMs(session) };
   }
 

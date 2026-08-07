@@ -18,7 +18,7 @@ function makeSession(overrides = {}) {
     },
     quizState: {
       isRunning: true,
-      currentQuestionIndex: 0,
+      currentStepIndex: 0,
       showingResults: false,
       autopilot: true,
       autopilotPauseSeconds: DEFAULT_PAUSE_SECONDS,
@@ -95,7 +95,7 @@ notRunning.quizState.isRunning = false;
 assert.equal(nextAutopilotStep(notRunning), null, 'no step when the quiz is not running');
 
 const justStarted = makeSession();
-justStarted.quizState.currentQuestionIndex = -1;
+justStarted.quizState.currentStepIndex = -1;
 assert.deepEqual(
   nextAutopilotStep(justStarted),
   { action: 'advance', delayMs: DEFAULT_PAUSE_SECONDS * 1000 },
