@@ -116,149 +116,15 @@ const templateModal = document.getElementById('template-modal');
 const closeTemplateBtn = document.getElementById('close-template-btn');
 const templateCards = document.querySelectorAll('.template-card[data-template]');
 
-const STARTER_TEMPLATES = Object.freeze({
-  math: `# Quick Math Mash
-# Score 100
-
-## Q1: What is 8 × 7?
-- [ ] 48
-- [x] 56
-- [ ] 64
-- [ ] 72
-::time=20
-
-## Q2: Which fraction is equivalent to one half?
-- [ ] 1/3
-- [x] 2/4
-- [ ] 3/8
-- [ ] 4/10
-::time=20
-
-## Q3: What number comes next: 2, 4, 8, 16, ...?
-- [ ] 18
-- [ ] 24
-- [x] 32
-- [ ] 64
-::time=20`,
-  python: `# Python Basics Mash
-# Score 100
-
-## Q1: What does len([4, 7, 9]) return?
-- [ ] 2
-- [x] 3
-- [ ] 4
-- [ ] 20
-::time=20
-
-## Q2: Which keyword starts a function definition in Python?
-- [ ] function
-- [x] def
-- [ ] func
-- [ ] define
-::time=20
-
-## Q3: Which Python value is mutable?
-- [ ] A string
-- [ ] A tuple
-- [x] A list
-- [ ] An integer
-::time=20`,
-  'data-science': `# Data Science Foundations Mash
-# Score 100
-
-## Q1: What is the median of 2, 4, and 9?
-- [ ] 2
-- [x] 4
-- [ ] 5
-- [ ] 9
-::time=20
-
-## Q2: In supervised learning, what does the model learn from?
-- [ ] Unlabeled examples only
-- [x] Examples paired with target labels
-- [ ] Random guesses
-- [ ] Database passwords
-::time=25
-
-## Q3: What is overfitting?
-- [ ] A model is too small to run
-- [ ] A dataset has no columns
-- [x] A model memorizes training patterns and generalizes poorly
-- [ ] A chart contains too many colors
-::time=25`,
-  marvel: `# Marvel Movies & TV Mash
-# Score 100
-
-## Q1: What is the name of Black Panther's home nation?
-- [ ] Sokovia
-- [x] Wakanda
-- [ ] Asgard
-- [ ] Latveria
-::time=20
-
-## Q2: In the Loki series, Loki is best known as the god of what?
-- [ ] Thunder
-- [ ] Wisdom
-- [x] Mischief
-- [ ] Speed
-::time=20
-
-## Q3: Which Guardians of the Galaxy character says “I am Groot”?
-- [ ] Rocket
-- [ ] Drax
-- [x] Groot
-- [ ] Star-Lord
-::time=20`,
-  music: `# Music & Lyrics Mash
-# Score 100
-
-## Q1: Which song section usually repeats the main musical and lyrical idea?
-- [ ] Verse
-- [x] Chorus
-- [ ] Bridge
-- [ ] Intro
-::time=20
-
-## Q2: How many beats are in one bar of common 4/4 time?
-- [ ] 2
-- [ ] 3
-- [x] 4
-- [ ] 8
-::time=20
-
-## Q3: Complete this original rhyme: “Stars light the night; dreams take their ___.”
-- [x] flight
-- [ ] road
-- [ ] song
-- [ ] time
-::time=25`,
-  history: `# History Highlights Mash
-# Score 100
-
-## Q1: Which ancient civilization built the pyramids at Giza?
-- [x] Ancient Egyptians
-- [ ] Ancient Romans
-- [ ] Vikings
-- [ ] Maya
-::time=20
-
-## Q2: In which year was Magna Carta sealed?
-- [ ] 1066
-- [x] 1215
-- [ ] 1492
-- [ ] 1776
-::time=25
-
-# Section: Bonus Round
-> Just for fun — no points on the line.
-
-## Q3: Where did the Industrial Revolution begin?
-- [ ] Brazil
-- [ ] Japan
-- [x] Great Britain
-- [ ] Canada
-::time=20
-::type=ungraded`
+// Starter cards load Markdown from /templates/*.md — the same files that live
+// in the public GitHub repo — so the studio and the repository never drift.
+const STARTER_TEMPLATE_FILES = Object.freeze({
+  math: '/templates/math.md',
+  python: '/templates/python.md',
+  'data-science': '/templates/data-science.md',
+  marvel: '/templates/marvel.md',
+  music: '/templates/music.md',
+  history: '/templates/history.md'
 });
 
 let previewQuizData = null;
@@ -668,17 +534,39 @@ templateModal?.addEventListener('click', event => {
 });
 
 templateCards.forEach(card => {
-  card.addEventListener('click', () => {
-    const markdown = STARTER_TEMPLATES[card.dataset.template];
-    if (!markdown) return;
+  card.addEventListener('click', async () => {
+    const templateKey = card.dataset.template;
+    const templateUrl = STARTER_TEMPLATE_FILES[templateKey];
+    if (!templateUrl) return;
     if (quizMarkdown.value.trim()
       && !confirm('Replace the Markdown currently in the editor with this starter template?')) {
       return;
     }
-    quizMarkdown.value = markdown;
-    closeTemplateModal();
-    showStatus('upload-status', 'Starter template loaded. Edit anything you like, then preview your questions.', true);
-    quizMarkdown.focus({ preventScroll: true });
+
+    card.disabled = true;
+    try {
+      const response = await fetch(templateUrl, { cache: 'no-cache' });
+      if (!response.ok) {
+        throw new Error(`Could not load template (${response.status})`);
+      }
+      const markdown = await response.text();
+      if (!markdown.trim()) {
+        throw new Error('Template file was empty');
+      }
+      quizMarkdown.value = markdown;
+      closeTemplateModal();
+      showStatus('upload-status', 'Starter template loaded. Edit anything you like, then preview your questions.', true);
+      quizMarkdown.focus({ preventScroll: true });
+    } catch (error) {
+      console.error('Starter template load failed:', error);
+      showStatus(
+        'upload-status',
+        'Could not load that starter template. Check your connection and try again.',
+        false
+      );
+    } finally {
+      card.disabled = false;
+    }
   });
 });
 

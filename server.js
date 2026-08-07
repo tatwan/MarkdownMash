@@ -133,6 +133,15 @@ for (const [route, file] of vendorFiles) {
   app.get(route, (req, res) => res.sendFile(file));
 }
 app.use('/assets/sidekicks', express.static(path.join(__dirname, 'assets', 'sidekicks')));
+// Example Mashes — same files as the public GitHub templates/ folder, loaded by
+// the host studio starter gallery so the product and the repo stay in sync.
+app.use('/templates', express.static(path.join(__dirname, 'templates'), {
+  index: false,
+  setHeaders(res) {
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+  }
+}));
 // Must precede express.static so the HTML pages are served with per-request
 // metadata instead of straight off disk. Anything unregistered falls through.
 app.use(createPageMiddleware());

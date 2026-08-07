@@ -49,13 +49,32 @@ assert.match(styleCss, /\.instructor-account-row\s*\{[^}]*flex-wrap: wrap/s);
 assert.match(styleCss, /\.instructor-account-meta\s*\{[^}]*flex: 1 0 100%/s);
 for (const template of ['math', 'python', 'data-science', 'marvel', 'music', 'history']) {
   assert.match(adminHtml, new RegExp(`data-template=["']${template}["']`));
+  // Keys may be bare (math:) or quoted ('data-science':).
+  const keyPattern = template.includes('-')
+    ? `['"]${template.replace(/-/g, '\\-')}['"]`
+    : template;
+  assert.match(
+    adminJs,
+    new RegExp(`${keyPattern}\\s*:\\s*['"]/templates/${template.replace(/-/g, '\\-')}\\.md['"]`),
+    `studio must map ${template} to /templates/${template}.md`
+  );
+  assert.ok(
+    fs.existsSync(path.join(__dirname, 'templates', `${template}.md`)),
+    `templates/${template}.md must exist for the starter gallery`
+  );
 }
 assert.match(adminHtml, /Marvel Movies &amp; TV/);
 assert.match(adminHtml, /Music &amp; Lyrics/);
 assert.match(adminHtml, /History Highlights/);
-assert.match(adminJs, /const STARTER_TEMPLATES = Object\.freeze/);
+assert.match(adminJs, /const STARTER_TEMPLATE_FILES = Object\.freeze/);
+assert.match(adminJs, /fetch\(templateUrl/);
 assert.match(adminJs, /Replace the Markdown currently in the editor/);
 assert.match(adminHtml, /\/js\/settings-state\.js/);
 assert.doesNotMatch(adminJs, /event\.currentTarget\.reset\(\)/);
+assert.doesNotMatch(adminJs, /const STARTER_TEMPLATES = Object\.freeze/);
+assert.ok(
+  !fs.existsSync(path.join(__dirname, 'sample-quiz.md')),
+  'sample-quiz.md was replaced by the templates/ folder'
+);
 
 console.log('Host home, starter templates, and empty analytics contract passed');

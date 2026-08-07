@@ -21,9 +21,24 @@ Group a quiz into named modules and mark questions that should feel real without
 - **Graded-only scoring** — `# Score N` divides among graded questions only, and every "Question X of N" counter matches what the room sees.
 - **Autopilot-aware** — section curtains hold for five seconds under Autopilot, then advance on their own.
 - **Studio preview** — the host preview walks sections and badges ungraded questions before you run the room.
+- **Example Mashes in [`templates/`](templates/)** — ready-to-run Markdown files that replace the old `sample-quiz.md`. The host studio **Starter templates** gallery loads these same files, so the product and the GitHub repo stay in sync.
 - **Analytics stay honest** — ungraded answers remain in raw data and CSV (with a Question Type column) without distorting scored averages or the hardest-questions recap.
 
 Legacy quizzes without sections or `::type=` run exactly as before. This release also hardens hosted account scoping so each host, including the deployment master, only sees their own session history and analytics.
+
+### Example templates
+
+| Template | Path | What it shows |
+|---|---|---|
+| Quick Math | [`templates/math.md`](templates/math.md) | Classic graded Mash |
+| Python Basics | [`templates/python.md`](templates/python.md) | Sections + ungraded opinion question |
+| Data Science | [`templates/data-science.md`](templates/data-science.md) | Classic graded Mash |
+| Marvel | [`templates/marvel.md`](templates/marvel.md) | Classic graded Mash |
+| Music & Lyrics | [`templates/music.md`](templates/music.md) | Classic graded Mash |
+| History Highlights | [`templates/history.md`](templates/history.md) | Bonus section with ungraded question |
+| Classroom Modules | [`templates/classroom-modules.md`](templates/classroom-modules.md) | Full showcase: two sections, mixed graded/ungraded |
+
+Open any file in the host studio, or choose **Starter templates** after **Host a Mash** — the cards fetch from `/templates/…` on your deployment.
 
 ## What's New in v1.3.1
 
@@ -48,7 +63,7 @@ Version 1.3.0 adds an optional managed-hosting foundation while keeping normal s
 - **20 Sticker Sidekicks** - Participants receive friendly avatars that appear across the waiting room, response highlights, rankings, and finale.
 - **Animated Lead Changes** - Swoop, high-five, spring-swap, and rocket-pass animations celebrate a new leader between questions.
 - **Host Home** - A focused signed-in launcher for hosting, analytics, account settings, and billing.
-- **Editable Starter Mashes** - Six three-question templates for math, Python, data science, Marvel, music, and history.
+- **Editable Starter Mashes** - Six starter templates (math, Python, data science, Marvel, music, history) plus a classroom showcase in [`templates/`](templates/), loaded by the host studio from the same files.
 - **Public Policies and Support** - Terms, privacy, refunds, and `info@markdownmash.com` are linked throughout the hosted experience.
 - **Shared-Browser Privacy Hardening** - Switching from the master account to a hosted account clears master-only Settings data and recalculates tab access.
 
@@ -207,7 +222,7 @@ For local development only, the application falls back to `admin123` if `ADMIN_P
 
 ## Quiz Format
 
-Create quizzes in Markdown format:
+Create quizzes in Markdown format. Ready-made examples live in [`templates/`](templates/) — including a full sections + ungraded showcase in [`templates/classroom-modules.md`](templates/classroom-modules.md).
 
 ````markdown
 # Intro to Python
@@ -583,11 +598,18 @@ Access via Admin Dashboard → Session History → View Analytics
 markdown-mash/
 ├── server.js              # Express + Socket.IO server
 ├── db.js                  # PostgreSQL database module
+├── quiz-structure.js      # Markdown quiz parser (sections, ungraded)
 ├── security-utils.js      # Opaque tokens and safe CSV helpers
 ├── package.json           # Dependencies and scripts
 ├── .env.example           # Environment variables template
 ├── render.yaml            # Render.com deployment config
-├── sample-quiz.md         # Example quiz
+├── templates/             # Example Mashes (also served to the host studio)
+│   ├── README.md
+│   ├── math.md
+│   ├── python.md
+│   ├── classroom-modules.md
+│   └── …
+├── demo-quizzes/          # Guest trial template (server-owned)
 ├── test-simulation.js     # Participant simulator for testing
 └── public/
     ├── index.html         # Landing page
