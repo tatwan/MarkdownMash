@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 const dns = require('dns');
 const { assertHostedRoomAvailable } = require('./hosted-room-guard');
 const { normalizeEmail } = require('./account-identity');
+const { gradedCount } = require('./quiz-structure');
 
 // Force IPv4 to avoid IPv6 connection issues
 dns.setDefaultResultOrder('ipv4first');
@@ -366,7 +367,8 @@ const dbApi = {
           code,
           quizData.title || 'Untitled Quiz',
           JSON.stringify(quizData),
-          quizData.questions.length,
+          // Denominator for avg score % and "of N" analytics — graded only.
+          gradedCount(quizData),
           quizData.passingPercent || 70,
           quizData.totalScore || 100,
           courseName,

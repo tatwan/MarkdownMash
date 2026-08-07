@@ -1146,7 +1146,14 @@ app.post('/api/trial/session', authenticateTrial, async (req, res) => {
   try {
     let session = activeSessions.get(trial.sessionCode);
     if (!session) {
-      const quiz = parseQuizMarkdown(guestQuizMarkdown);
+      // Custom markdown is only for local/runtime verification drivers.
+      // Hosted production keeps the fixed guest template.
+      const customMarkdown = process.env.GUEST_TRIAL_CUSTOM_MARKDOWN === 'true'
+        && typeof req.body?.markdown === 'string'
+        && req.body.markdown.trim()
+        ? req.body.markdown
+        : null;
+      const quiz = parseQuizMarkdown(customMarkdown || guestQuizMarkdown);
       session = createSessionState({
         id: `trial:${trial.id}`,
         code: trial.sessionCode,
@@ -2258,12 +2265,19 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
   const answerDistribution = await db.getAnswerDistribution(session.id);
   const participantAnswers = await db.getParticipantAnswers(session.id);
 
-  // Compute streaks per participant
+  const normalized = normalizeStoredQuiz(session.quiz_data || {});
+  const totalGraded = gradedCount(normalized);
+
+  // Compute streaks per participant from graded answers only — ungraded
+  // never touch streaks in the live room, so analytics must match.
   const streakMap = {};
   let currentPid = null;
   let currentStreak = 0;
   let bestStreak = 0;
   for (const row of participantAnswers) {
+    const quizQuestion = normalized.questions[row.question_index];
+    if (!isScored(quizQuestion)) continue;
+
     if (row.participant_id !== currentPid) {
       if (currentPid) streakMap[currentPid] = bestStreak;
       currentPid = row.participant_id;
@@ -2279,13 +2293,25 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
   }
   if (currentPid) streakMap[currentPid] = bestStreak;
 
-  // Build question details with quiz data
+  // Graded answers answered per participant (for scored "X of N" totals).
+  const gradedAnsweredByParticipant = {};
+  for (const row of participantAnswers) {
+    const quizQuestion = normalized.questions[row.question_index];
+    if (!isScored(quizQuestion)) continue;
+    gradedAnsweredByParticipant[row.participant_id] =
+      (gradedAnsweredByParticipant[row.participant_id] || 0) + 1;
+  }
+
+  // Build question details with quiz data — every question stays in the raw list.
   const questions = questionAnalytics.map(q => {
-    const quizQuestion = session.quiz_data.questions[q.question_index];
+    const quizQuestion = normalized.questions[q.question_index];
     const distribution = answerDistribution.filter(a => a.question_index === q.question_index);
+    const type = quizQuestion ? quizQuestion.type : 'graded';
 
     return {
       index: q.question_index,
+      gradedNumber: quizQuestion ? quizQuestion.gradedNumber : null,
+      type,
       text: quizQuestion ? quizQuestion.text : `Question ${q.question_index + 1}`,
       options: quizQuestion ? quizQuestion.options : [],
       correctIndices: quizQuestion ? quizQuestion.correctIndices : [],
@@ -2295,7 +2321,7 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
       avgResponseTimeMs: q.avg_response_time_ms,
       minResponseTimeMs: q.min_response_time_ms,
       maxResponseTimeMs: q.max_response_time_ms,
-      difficulty: getDifficultyRating(q.correct_percent || 0),
+      difficulty: type === 'ungraded' ? null : getDifficultyRating(q.correct_percent || 0),
       optionDistribution: distribution.map(d => ({
         optionIndex: d.answer_index,
         count: d.count
@@ -2303,8 +2329,10 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
     };
   });
 
-  // Sort questions by difficulty (hardest first)
-  const questionsByDifficulty = [...questions].sort((a, b) => a.correctPercent - b.correctPercent);
+  // Hardest/easiest ranking is graded-only; ungraded stay in `questions`.
+  const questionsByDifficulty = questions
+    .filter(q => q.type === 'graded')
+    .sort((a, b) => a.correctPercent - b.correctPercent);
 
   res.json({
     success: true,
@@ -2312,9 +2340,9 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
       code: session.code,
       quizTitle: session.quiz_title,
       status: session.status,
-      totalQuestions: session.total_questions,
+      totalQuestions: totalGraded,
       totalScore: session.total_score,
-      passingPercent: session.passing_percent ?? session.quiz_data?.passingPercent ?? 70,
+      passingPercent: session.passing_percent ?? normalized.passingPercent ?? 70,
       createdAt: session.created_at,
       startedAt: session.started_at,
       endedAt: session.ended_at
@@ -2327,8 +2355,8 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
       score: p.score,
       correctCount: p.correct_count,
       avgResponseTimeMs: p.avg_response_time_ms,
-      questionsAnswered: p.questions_answered,
-      totalQuestions: session.total_questions,
+      questionsAnswered: gradedAnsweredByParticipant[p.id] || 0,
+      totalQuestions: totalGraded,
       bestStreak: streakMap[p.id] || 0
     }))
   });
@@ -2348,13 +2376,17 @@ app.get(
 
   const questionAnalytics = await db.getQuestionAnalytics(session.id);
   const answerDistribution = await db.getAnswerDistribution(session.id);
+  const normalized = normalizeStoredQuiz(session.quiz_data || {});
 
   const questions = questionAnalytics.map(q => {
-    const quizQuestion = session.quiz_data.questions[q.question_index];
+    const quizQuestion = normalized.questions[q.question_index];
     const distribution = answerDistribution.filter(a => a.question_index === q.question_index);
+    const type = quizQuestion ? quizQuestion.type : 'graded';
 
     return {
       index: q.question_index,
+      gradedNumber: quizQuestion ? quizQuestion.gradedNumber : null,
+      type,
       text: quizQuestion ? quizQuestion.text : `Question ${q.question_index + 1}`,
       options: quizQuestion ? quizQuestion.options : [],
       correctIndices: quizQuestion ? quizQuestion.correctIndices : [],
@@ -2362,7 +2394,7 @@ app.get(
       correctCount: q.correct_count,
       correctPercent: q.correct_percent || 0,
       avgResponseTimeMs: q.avg_response_time_ms,
-      difficulty: getDifficultyRating(q.correct_percent || 0),
+      difficulty: type === 'ungraded' ? null : getDifficultyRating(q.correct_percent || 0),
       optionBreakdown: (quizQuestion ? quizQuestion.options : []).map((opt, idx) => {
         const dist = distribution.find(d => d.answer_index === idx);
         const count = dist ? dist.count : 0;
@@ -2392,7 +2424,7 @@ app.get(
   }
 
   const answers = await db.getAnswersForExport(session.id);
-  const quizData = session.quiz_data;
+  const quizData = normalizeStoredQuiz(session.quiz_data || {});
 
   // Build CSV content
   const csvRows = [];
@@ -2401,6 +2433,7 @@ app.get(
   csvRows.push([
     'Participant Name',
     'Question Number',
+    'Question Type',
     'Question Text',
     'Selected Answer',
     'Correct Answer(s)',
@@ -2421,10 +2454,15 @@ app.get(
       .map(i => question.options[i])
       .filter(Boolean)
       .join('; ');
+    // Graded questions use the room's "Question N" number; ungraded leave it blank.
+    const questionNumber = isScored(question) && question.gradedNumber != null
+      ? question.gradedNumber
+      : '';
 
     csvRows.push([
       escapeCSV(answer.participant_name),
-      answer.question_index + 1,
+      questionNumber,
+      escapeCSV(question.type || 'graded'),
       escapeCSV(question.text),
       escapeCSV(selectedOption),
       escapeCSV(correctOptions),

@@ -1,3 +1,5 @@
+const { isScored, pointsPerQuestion } = require('./quiz-structure');
+
 function getAverageResponseTime(participant) {
   const times = Object.values(participant.responseTimes || {})
     .filter(time => Number.isFinite(time) && time >= 0);
@@ -7,10 +9,7 @@ function getAverageResponseTime(participant) {
 }
 
 function rankParticipants(session) {
-  const totalQuestions = session.quiz.questions.length;
-  const pointsPerQuestion = totalQuestions > 0
-    ? session.quiz.totalScore / totalQuestions
-    : 0;
+  const pointsPer = pointsPerQuestion(session.quiz);
 
   const ranked = Object.values(session.participants)
     .map(participant => ({
@@ -41,7 +40,7 @@ function rankParticipants(session) {
       rank,
       previousRank,
       movement: previousRank ? previousRank - rank : 0,
-      score: Math.round(participant.correctCount * pointsPerQuestion),
+      score: Math.round(participant.correctCount * pointsPer),
       avgResponseTimeMs: Number.isFinite(participant.avgResponseTimeMs)
         ? Math.round(participant.avgResponseTimeMs)
         : null
@@ -182,8 +181,11 @@ function buildHardestQuestions(session) {
   const participants = Object.values(session.participants);
   const participantCount = participants.length;
 
+  // Hardest-question recap is about what the graded quiz revealed.
   return session.quiz.questions
-    .map((question, index) => {
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => isScored(question))
+    .map(({ question, index }) => {
       let correctCount = 0;
       let answeredCount = 0;
       const wrongOptionCounts = new Map();

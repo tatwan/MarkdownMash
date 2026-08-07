@@ -1432,8 +1432,10 @@ function renderPreviewQuestionCard(q) {
     qnumLabel.textContent = '⭐ Just for fun · no points';
   } else {
     qnumLabel.innerHTML = 'Q<span id="preview-q-num"></span>/<span id="preview-total-q-num"></span>';
-    document.getElementById('preview-q-num').textContent = previewQuizData.questions.indexOf(q) + 1;
-    document.getElementById('preview-total-q-num').textContent = previewQuizData.questions.length;
+    // Match the live room: gradedNumber and graded-only denominator, never raw position.
+    document.getElementById('preview-q-num').textContent = q.gradedNumber;
+    document.getElementById('preview-total-q-num').textContent =
+      previewQuizData.questions.filter(qq => qq.type === 'graded').length;
   }
 
   previewQuestionText.innerHTML = markdown.block(q.text);

@@ -126,6 +126,51 @@ function run() {
   assert.equal(finale.leaderboard[0].name, 'Amina');
   assert.equal(finale.hardestQuestions.length, 3);
 
+  // Mixed graded + ungraded: scores use graded denominator; hardest excludes ungraded.
+  const mixed = {
+    quiz: {
+      title: 'Mixed',
+      totalScore: 100,
+      questions: [
+        { id: 1, text: 'G1', options: ['A', 'B'], correctIndices: [0], type: 'graded' },
+        { id: 2, text: 'Fun', options: ['A', 'B'], correctIndices: [0], type: 'ungraded' },
+        { id: 3, text: 'G2', options: ['A', 'B'], correctIndices: [1], type: 'graded' }
+      ]
+    },
+    rankSnapshot: {},
+    participants: {
+      p1: {
+        id: 'p1',
+        name: 'Pat',
+        correctCount: 2,
+        currentStreak: 1,
+        bestStreak: 1,
+        answers: { 1: 0, 2: 1, 3: 1 },
+        responseTimes: { 1: 1000, 2: 1000, 3: 1000 }
+      },
+      p2: {
+        id: 'p2',
+        name: 'Quinn',
+        correctCount: 0,
+        currentStreak: 0,
+        bestStreak: 0,
+        answers: { 1: 1, 2: 0, 3: 0 },
+        responseTimes: { 1: 900, 2: 900, 3: 900 }
+      }
+    }
+  };
+
+  const mixedRanked = rankParticipants(mixed);
+  assert.equal(mixedRanked[0].score, 100, 'two correct graded of two is full score (50 pts each)');
+  assert.equal(mixedRanked[1].score, 0, 'zero graded correct is zero points');
+
+  const mixedHardest = buildHardestQuestions(mixed);
+  assert.equal(mixedHardest.length, 2, 'hardest recap excludes ungraded questions');
+  assert.ok(
+    mixedHardest.every(q => q.index !== 1),
+    'the ungraded question must not appear in the hardest recap'
+  );
+
   console.log('Presentation calculations passed');
 }
 
