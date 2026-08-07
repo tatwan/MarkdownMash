@@ -23,9 +23,16 @@ const waitingSidekickName = document.getElementById('waiting-sidekick-name');
 const sidekickShuffleBtn = document.getElementById('sidekick-shuffle-btn');
 const sidekickShuffleStatus = document.getElementById('sidekick-shuffle-status');
 
+const sectionIntroSection = document.getElementById('section-intro-section');
+const sectionIntroTitle = document.getElementById('section-intro-title');
+const sectionIntroSubtitle = document.getElementById('section-intro-subtitle');
+const sectionIntroCountdown = document.getElementById('section-intro-countdown');
+
 const questionSection = document.getElementById('question-section');
 const currentQNum = document.getElementById('current-q-num');
 const totalQNum = document.getElementById('total-q-num');
+const playerQnum = document.querySelector('.player-qnum');
+const playerQbadge = document.getElementById('player-qbadge');
 const scoreDisplay = document.getElementById('score-display');
 const timer = document.getElementById('timer');
 const timerProgress = document.getElementById('timer-progress');
@@ -445,16 +452,37 @@ function initSocket() {
     renderPersonalSidekick();
   });
 
+  socket.on('section_started', (data) => {
+    hideAllAnsweredBanner();
+    stopNextQuestionCountdown();
+    stopSectionCountdown();
+
+    sectionIntroTitle.textContent = data.title;
+    sectionIntroSubtitle.textContent = data.subtitle || '';
+    sectionIntroSubtitle.classList.toggle('hidden', !data.subtitle);
+
+    startSectionCountdown(data.autopilotNextInMs);
+
+    hideAllSections();
+    sectionIntroSection.classList.remove('hidden');
+  });
+
   socket.on('question_started', (data) => {
     hideAllAnsweredBanner();
     stopNextQuestionCountdown();
+    stopSectionCountdown();
 
     currentQuestion = data.question;
     selectedAnswer = null;
     timerDuration = data.timeRemaining;
 
-    currentQNum.textContent = data.questionNumber;
-    totalQNum.textContent = data.totalQuestions;
+    const isUngraded = data.question.type === 'ungraded';
+    playerQnum.classList.toggle('hidden', isUngraded);
+    playerQbadge.classList.toggle('hidden', !isUngraded);
+    if (!isUngraded) {
+      currentQNum.textContent = data.questionNumber;
+      totalQNum.textContent = data.totalQuestions;
+    }
     questionText.innerHTML = markdown.block(data.question.text);
     answerStatus.classList.add('hidden');
 
@@ -615,6 +643,39 @@ function startNextQuestionCountdown(nextInMs) {
   }, 1000);
 }
 
+let sectionCountdownTimer = null;
+
+function stopSectionCountdown() {
+  if (sectionCountdownTimer) {
+    clearInterval(sectionCountdownTimer);
+    sectionCountdownTimer = null;
+  }
+  sectionIntroCountdown.classList.add('hidden');
+}
+
+// Autopilot holds a section for a fixed beat. A reconnecting client is sent the
+// TRUE remaining milliseconds, so this counts down from whatever it receives
+// rather than restarting a full hold.
+function startSectionCountdown(nextInMs) {
+  stopSectionCountdown();
+  if (!nextInMs || nextInMs <= 0) return;
+
+  let remaining = Math.ceil(nextInMs / 1000);
+  sectionIntroCountdown.textContent = `Next up in ${remaining}…`;
+  sectionIntroCountdown.classList.remove('hidden');
+
+  sectionCountdownTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(sectionCountdownTimer);
+      sectionCountdownTimer = null;
+      sectionIntroCountdown.textContent = 'Here we go…';
+      return;
+    }
+    sectionIntroCountdown.textContent = `Next up in ${remaining}…`;
+  }, 1000);
+}
+
 // Show a non-destructive reconnection banner when connection drops mid-quiz.
 // Preserves stored credentials so the student can try again when the server is back.
 function showReconnectBanner(reason) {
@@ -744,6 +805,7 @@ function hideAllSections() {
   joinSection.classList.add('hidden');
   sessionEndedSection.classList.add('hidden');
   waitingSection.classList.add('hidden');
+  sectionIntroSection.classList.add('hidden');
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
   endedSection.classList.add('hidden');

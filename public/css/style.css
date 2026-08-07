@@ -7075,3 +7075,41 @@ select:focus-visible {
   font-weight: 600;
   color: var(--text-muted, #94a3b8);
 }
+
+.section-intro-card {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(160deg, #0d1433 0%, #1b2560 100%);
+  color: #fff;
+  text-align: center;
+  animation: sectionIntroIn 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.section-intro-eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffd84d;
+}
+
+.section-intro-title { margin: 0; font-size: 1.75rem; line-height: 1.2; }
+.section-intro-subtitle { margin: 0.75rem 0 0; opacity: 0.82; }
+.section-intro-countdown { margin: 1.5rem 0 0; font-weight: 600; color: #ffd84d; }
+
+.player-qbadge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ffd84d;
+}
+
+@keyframes sectionIntroIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-intro-card { animation: fadeIn 200ms ease both; }
+}
