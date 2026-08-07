@@ -260,4 +260,41 @@ assert.deepEqual(
 assert.equal(codeQuiz.questions[0].timeLimit, 30, '::time after a code block still applies');
 assert.equal(codeQuiz.questions[1].text, 'Next one?', 'the following question is unaffected');
 
+// --- step index is not a question index ---
+//
+// Guards the class of bug where a flow (step) index is used to index into
+// questions[]. With sections the two diverge, and the failure is silent.
+
+const divergent = parseQuizMarkdown([
+  '# Course',
+  '# Score 100',
+  '',
+  '# Section: One',
+  '## Q1: a?',
+  '- [x] yes',
+  '',
+  '# Section: Two',
+  '## Q2: b?',
+  '- [x] yes'
+].join('\n'));
+
+assert.equal(divergent.steps.length, 4, 'four steps: two sections, two questions');
+assert.equal(divergent.questions.length, 2, 'but only two questions');
+assert.notEqual(
+  divergent.steps.length,
+  divergent.questions.length,
+  'steps and questions diverge once sections exist — indexing one with the other is a bug'
+);
+assert.equal(questionForStep(divergent, 0), null, 'step 0 is a section, not a question');
+assert.equal(questionForStep(divergent, 1).text, 'a?', 'step 1 resolves to the first question');
+assert.equal(questionForStep(divergent, 2), null, 'step 2 is a section, not a question');
+assert.equal(questionForStep(divergent, 3).text, 'b?', 'step 3 resolves to the second question');
+assert.equal(questionForStep(divergent, 4), null, 'past the end returns null, not undefined');
+assert.equal(questionForStep(divergent, -1), null, 'a negative index returns null');
+assert.equal(
+  divergent.questions[divergent.steps.length - 1],
+  undefined,
+  'indexing questions[] with a step index runs off the end — the bug this guards'
+);
+
 console.log('All quiz structure tests passed.');

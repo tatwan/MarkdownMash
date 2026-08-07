@@ -1640,7 +1640,7 @@ app.post('/api/session/:code/join', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Session not found or has ended' });
   }
 
-  if (session.quizState.isRunning && session.quizState.currentStepIndex >= session.quiz.questions.length - 1) {
+  if (session.quizState.isRunning && session.quizState.currentStepIndex >= session.quiz.steps.length - 1) {
     return res.status(400).json({ success: false, error: 'Cannot join - quiz is ending' });
   }
 
@@ -2604,12 +2604,10 @@ io.on('connection', (socket) => {
       // Pass the live question's id (when one is in progress) so the close
       // branch stays reachable — without it, re-scheduling here would drop a
       // pending "everyone answered" close and stall the room until the
-      // question's full time limit expires. Guard for no quiz, a
-      // not-yet-started question (-1), or an out-of-range index.
-      const questions = session.quiz ? session.quiz.questions : null;
-      const currentIndex = session.quizState.currentStepIndex;
-      const liveQuestion = questions && currentIndex >= 0 && currentIndex < questions.length
-        ? questions[currentIndex]
+      // question's full time limit expires. questionForStep returns null for
+      // a section step, an out-of-range index, or a not-yet-started question.
+      const liveQuestion = session.quiz
+        ? questionForStep(session.quiz, session.quizState.currentStepIndex)
         : null;
       scheduleAutopilot(sessionCode, liveQuestion ? liveQuestion.id : undefined);
     }
