@@ -7113,3 +7113,53 @@ select:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .section-intro-card { animation: fadeIn 200ms ease both; }
 }
+
+#section-intro-section {
+  position: relative;
+  overflow: hidden;
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.presenter-curtain {
+  position: absolute;
+  top: 0;
+  width: 50.5%;
+  height: 100%;
+  background: linear-gradient(160deg, #0d1433 0%, #1b2560 100%);
+}
+
+.presenter-curtain-left  { left: 0;  animation: curtainInLeft 620ms cubic-bezier(0.65, 0, 0.35, 1) both; }
+.presenter-curtain-right { right: 0; animation: curtainInRight 620ms cubic-bezier(0.65, 0, 0.35, 1) both; }
+
+.presenter-section-intro {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  color: #fff;
+  padding: 2rem;
+  animation: finaleSceneIn 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.presenter-section-eyebrow {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ffd84d;
+}
+
+.presenter-section-title { margin: 0; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 1.05; }
+.presenter-section-subtitle { margin: 1.25rem 0 0; font-size: clamp(1rem, 2.2vw, 1.6rem); opacity: 0.85; }
+.presenter-section-countdown { margin: 2.5rem 0 0; font-size: 1.5rem; font-weight: 700; color: #ffd84d; }
+
+@keyframes curtainInLeft  { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes curtainInRight { from { transform: translateX(100%); }  to { transform: translateX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .presenter-curtain-left,
+  .presenter-curtain-right { animation: fadeIn 200ms ease both; }
+  .presenter-section-intro { animation: fadeIn 200ms ease both; }
+}

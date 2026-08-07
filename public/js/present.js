@@ -49,6 +49,11 @@ const finaleProgress = document.getElementById('finale-progress');
 const allAnsweredBanner = document.getElementById('all-answered-banner');
 const presenterTimerRing = document.querySelector('.presenter-timer-ring');
 const presenterNextCountdown = document.getElementById('presenter-next-countdown');
+const sectionIntroSection = document.getElementById('section-intro-section');
+const presenterSectionEyebrow = document.getElementById('presenter-section-eyebrow');
+const presenterSectionTitle = document.getElementById('presenter-section-title');
+const presenterSectionSubtitle = document.getElementById('presenter-section-subtitle');
+const presenterSectionCountdown = document.getElementById('presenter-section-countdown');
 
 let socket = null;
 let sessionCode = null;
@@ -60,6 +65,7 @@ let timerDuration = 20;
 let finaleData = null;
 let finaleTimeouts = [];
 let presenterNextInterval = null;
+let presenterSectionTimer = null;
 
 function iconHref(icon) {
   return `/assets/icons.svg#${icon}`;
@@ -183,10 +189,28 @@ function initSocket() {
     getreadySection.classList.remove('hidden');
   });
 
+  socket.on('section_started', data => {
+    clearPresenterTimers();
+    hideAllAnsweredBanner();
+    stopPresenterNextCountdown();
+    stopPresenterSectionCountdown();
+
+    presenterSectionEyebrow.textContent = `Section ${data.stepNumber} of ${data.totalSections}`;
+    presenterSectionTitle.textContent = data.title;
+    presenterSectionSubtitle.textContent = data.subtitle || '';
+    presenterSectionSubtitle.classList.toggle('hidden', !data.subtitle);
+
+    startPresenterSectionCountdown(data.autopilotNextInMs);
+
+    hideAllSections();
+    sectionIntroSection.classList.remove('hidden');
+  });
+
   socket.on('question_started', data => {
     clearPresenterTimers();
     hideAllAnsweredBanner();
     stopPresenterNextCountdown();
+    stopPresenterSectionCountdown();
     currentQuestion = data.question;
     timerDuration = Math.max(1, data.timeRemaining);
     currentQNum.textContent = data.questionNumber;
@@ -560,6 +584,8 @@ function clearPresenterTimers() {
   clearFinaleTimeouts();
   clearInterval(presenterNextInterval);
   presenterNextInterval = null;
+  clearInterval(presenterSectionTimer);
+  presenterSectionTimer = null;
 }
 
 function hideAllAnsweredBanner() {
@@ -598,11 +624,40 @@ function startPresenterNextCountdown(nextInMs) {
   }, 1000);
 }
 
+function stopPresenterSectionCountdown() {
+  if (presenterSectionTimer) {
+    clearInterval(presenterSectionTimer);
+    presenterSectionTimer = null;
+  }
+  presenterSectionCountdown.classList.add('hidden');
+}
+
+function startPresenterSectionCountdown(nextInMs) {
+  stopPresenterSectionCountdown();
+  if (!nextInMs || nextInMs <= 0) return;
+
+  let remaining = Math.ceil(nextInMs / 1000);
+  presenterSectionCountdown.textContent = `Starting in ${remaining}…`;
+  presenterSectionCountdown.classList.remove('hidden');
+
+  presenterSectionTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(presenterSectionTimer);
+      presenterSectionTimer = null;
+      presenterSectionCountdown.textContent = 'Here we go…';
+      return;
+    }
+    presenterSectionCountdown.textContent = `Starting in ${remaining}…`;
+  }, 1000);
+}
+
 function hideAllSections() {
   sessionInputSection.classList.add('hidden');
   waitingSection.classList.add('hidden');
   sessionEndedSection.classList.add('hidden');
   getreadySection.classList.add('hidden');
+  sectionIntroSection.classList.add('hidden');
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
   endedSection.classList.add('hidden');
