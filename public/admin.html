@@ -13,6 +13,7 @@
   <script defer src="/vendor/chart.js"></script>
   <script defer src="/socket.io/socket.io.js"></script>
   <script defer src="/js/settings-state.js"></script>
+  <script defer src="/js/quiz-preview-parser.js"></script>
   <script defer src="/js/admin.js"></script>
 </head>
 <body class="admin-body">
@@ -239,17 +240,19 @@
             </div>
             <textarea id="quiz-markdown" aria-label="Quiz Markdown" placeholder="# Quiz Title
 
+# Section: Module 1 — Basics
+> A quick warm-up.
+
 ## Q1: What is the capital of France?
 - [ ] London
 - [x] Paris
 - [ ] Berlin
-- [ ] Madrid
 ::time=20
 
-## Q2: True or False: The Earth is flat.
-- [ ] True
-- [x] False
-::time=10"></textarea>
+## Q2: Which came first?
+::type=ungraded
+- [x] Python
+- [ ] Java"></textarea>
             <div class="builder-actions">
               <button id="preview-btn" class="btn btn-preview">
                 <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#eye"></use></svg>
