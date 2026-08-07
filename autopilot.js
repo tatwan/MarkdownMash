@@ -5,6 +5,7 @@ const DEFAULT_PAUSE_SECONDS = 8;
 const MIN_PAUSE_SECONDS = 3;
 const MAX_PAUSE_SECONDS = 30;
 const ALL_ANSWERED_BEAT_MS = 2000;
+const SECTION_HOLD_MS = 5000;
 
 // Clamps host-supplied pause values and rejects anything non-numeric.
 function normalizePauseSeconds(value) {
@@ -42,8 +43,13 @@ function pauseMs(session) {
 
 // Returns the single action autopilot should schedule from the current state,
 // or null when it should stay out of the way.
-function nextAutopilotStep(session, questionId) {
+function nextAutopilotStep(session, questionId, options = {}) {
   if (!isEngaged(session)) return null;
+
+  // A section step has no answers and no results, so it only ever advances.
+  if (options.onSection) {
+    return { action: 'advance', delayMs: SECTION_HOLD_MS };
+  }
 
   // Sitting on results, or freshly started before the first question: advance.
   if (session.quizState.showingResults || session.quizState.currentStepIndex < 0) {
@@ -63,6 +69,7 @@ module.exports = {
   MIN_PAUSE_SECONDS,
   MAX_PAUSE_SECONDS,
   ALL_ANSWERED_BEAT_MS,
+  SECTION_HOLD_MS,
   normalizePauseSeconds,
   everyoneAnswered,
   shouldCloseEarly,

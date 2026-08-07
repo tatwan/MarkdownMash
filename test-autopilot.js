@@ -151,4 +151,35 @@ assert.equal(
   'no step mid-question when no questionId is supplied'
 );
 
+// --- section steps ---
+
+const { SECTION_HOLD_MS } = require('./autopilot');
+
+assert.equal(SECTION_HOLD_MS, 5000, 'section hold is a fixed five seconds');
+
+const onSection = makeSession();
+onSection.quizState.showingResults = false;
+assert.deepEqual(
+  nextAutopilotStep(onSection, undefined, { onSection: true }),
+  { action: 'advance', delayMs: SECTION_HOLD_MS },
+  'a section step advances after the fixed hold'
+);
+
+const sectionOff = makeSession();
+sectionOff.quizState.autopilot = false;
+assert.equal(
+  nextAutopilotStep(sectionOff, undefined, { onSection: true }),
+  null,
+  'a section step does not auto-advance when autopilot is off'
+);
+
+const sectionNoClose = makeSession();
+sectionNoClose.participants.a.answers[1] = 0;
+sectionNoClose.participants.b.answers[1] = 0;
+assert.deepEqual(
+  nextAutopilotStep(sectionNoClose, 1, { onSection: true }),
+  { action: 'advance', delayMs: SECTION_HOLD_MS },
+  'a section step never triggers an early close, even with a stale questionId'
+);
+
 console.log('All autopilot tests passed.');

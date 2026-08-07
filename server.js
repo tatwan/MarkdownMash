@@ -3006,14 +3006,16 @@ function scheduleAutopilot(sessionCode, questionId) {
 
   clearAutopilotTimer(session);
 
-  const step = autopilot.nextAutopilotStep(session, questionId);
-  if (!step) return;
+  const step = stepAt(session.quiz, session.quizState.currentStepIndex);
+  const onSection = Boolean(step && step.kind === 'section');
+  const next = autopilot.nextAutopilotStep(session, questionId, { onSection });
+  if (!next) return;
 
   // Captured so a timer that survives a state change cannot fire into the
   // wrong question — the same guard the time-expiry timer uses.
   const expectedIndex = session.quizState.currentStepIndex;
 
-  session.quizState.autopilotResumeAt = Date.now() + step.delayMs;
+  session.quizState.autopilotResumeAt = Date.now() + next.delayMs;
   session.autopilotTimer = setTimeout(() => {
     const live = activeSessions.get(sessionCode);
     if (!live) return;
@@ -3022,7 +3024,7 @@ function scheduleAutopilot(sessionCode, questionId) {
     live.autopilotTimer = null;
     live.quizState.autopilotResumeAt = null;
 
-    if (step.action === 'close') {
+    if (next.action === 'close') {
       if (live.quizState.showingResults) return;
       endCurrentQuestion(sessionCode);
       return;
@@ -3036,7 +3038,7 @@ function scheduleAutopilot(sessionCode, questionId) {
     advanceToNextStep(sessionCode).catch(err => {
       console.error('[AUTOPILOT] advance failed:', err);
     });
-  }, step.delayMs);
+  }, next.delayMs);
 }
 
 // Advances the room to the next step — question or section — or ends the
