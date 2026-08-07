@@ -363,6 +363,7 @@ function initSocket() {
       // True first connection — session genuinely doesn't exist, clear credentials
       clearCurrentIdentity({ forgetRecovery: true });
 
+      stopSectionCountdown();
       hideAllSections();
       sessionEndedMessage.textContent = data.message || 'This session is no longer available.';
       sessionEndedSection.classList.remove('hidden');
@@ -403,6 +404,7 @@ function initSocket() {
     canShuffleAvatar = false;
 
     // Show kicked message
+    stopSectionCountdown();
     hideAllSections();
     sessionEndedMessage.textContent = data.message || 'You have been removed from this session.';
     sessionEndedSection.classList.remove('hidden');
@@ -415,6 +417,7 @@ function initSocket() {
 
   socket.on('session_ended', (data) => {
     clearInterval(timerInterval);
+    stopSectionCountdown();
 
     // Show session ended screen
     hideAllSections();
@@ -432,6 +435,7 @@ function initSocket() {
 
   socket.on('trial_expired', (data) => {
     clearInterval(timerInterval);
+    stopSectionCountdown();
     hideAllSections();
     sessionEndedMessage.textContent = data.message || 'This temporary practice room has expired.';
     sessionEndedSection.classList.remove('hidden');
@@ -563,6 +567,7 @@ function initSocket() {
   socket.on('quiz_ended', (data) => {
     clearInterval(timerInterval);
     stopNextQuestionCountdown();
+    stopSectionCountdown();
 
     // Get my final results
     const myResults = data.participantResults ? data.participantResults[participantId] : null;
