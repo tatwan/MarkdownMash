@@ -2520,12 +2520,8 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
     return;
   }
 
-  if (session.quizState.currentStepIndex < 0
-    || session.quizState.currentStepIndex >= session.quiz.questions.length) {
-    return;
-  }
-
-  const question = session.quiz.questions[session.quizState.currentStepIndex];
+  const question = questionForStep(session.quiz, session.quizState.currentStepIndex);
+  if (!question) return;
   const timeRemaining = Math.max(
     0,
     Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000)
@@ -2535,7 +2531,7 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
     socket.emit('question_ended', {
       questionId: question.id,
       question,
-      questionNumber: session.quizState.currentStepIndex + 1,
+      questionNumber: question.gradedNumber,
       correctIndices: question.correctIndices,
       stats: calculateStats(session, question.id),
       presentation: session.lastQuestionPresentation,
@@ -2547,8 +2543,8 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
         ? getQuestionForParticipants(question)
         : question,
       timeRemaining,
-      questionNumber: session.quizState.currentStepIndex + 1,
-      totalQuestions: session.quiz.questions.length
+      questionNumber: question.gradedNumber,
+      totalQuestions: gradedCount(session.quiz)
     });
   }
 }
@@ -3279,7 +3275,7 @@ function endCurrentQuestion(sessionCode) {
   io.to(`admin:${sessionCode}`).emit('question_ended', {
     questionId: question.id,
     question,
-    questionNumber: session.quizState.currentStepIndex + 1,
+    questionNumber: question.gradedNumber,
     correctIndices: question.correctIndices,
     stats,
     presentation: session.lastQuestionPresentation,
@@ -3288,7 +3284,7 @@ function endCurrentQuestion(sessionCode) {
   io.to(`presenter:${sessionCode}`).emit('question_ended', {
     questionId: question.id,
     question,
-    questionNumber: session.quizState.currentStepIndex + 1,
+    questionNumber: question.gradedNumber,
     correctIndices: question.correctIndices,
     stats,
     presentation: session.lastQuestionPresentation,
