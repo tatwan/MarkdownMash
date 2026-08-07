@@ -2149,7 +2149,8 @@ app.post('/api/admin/session/:code/recover', authorizeAdminSession, async (req, 
     const participants = await db.getParticipantsBySession(dbSession.id);
     const answers = await db.getAnswersBySession(dbSession.id);
 
-    const pointsPerQuestion = quizData.totalScore / quizData.questions.length;
+    const normalized = normalizeStoredQuiz(quizData);
+    const pointsPer = pointsPerQuestion(normalized);
 
     // Recompute scores per participant from their DB answer rows
     for (const participant of participants) {
@@ -2157,13 +2158,14 @@ app.post('/api/admin/session/:code/recover', authorizeAdminSession, async (req, 
       let correctCount = 0;
 
       for (const answer of participantAnswers) {
-        const question = quizData.questions[answer.question_index];
-        if (question && question.correctIndices.includes(answer.answer_index)) {
+        const question = normalized.questions[answer.question_index];
+        if (!question || !isScored(question)) continue;
+        if (question.correctIndices.includes(answer.answer_index)) {
           correctCount++;
         }
       }
 
-      const finalScore = Math.round(correctCount * pointsPerQuestion);
+      const finalScore = Math.round(correctCount * pointsPer);
       await db.updateParticipantScore(participant.id, finalScore, correctCount);
     }
 
@@ -3070,18 +3072,21 @@ async function advanceToNextStep(sessionCode) {
 async function finishQuiz(sessionCode, session) {
   // Quiz ended
   session.quizState.isRunning = false;
-  const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
+  const pointsPer = pointsPerQuestion(session.quiz);
+  const totalGraded = gradedCount(session.quiz);
 
   // Update database status
   await session.repository.updateStatus('ended');
 
   // Save final scores to database and send results to each participant
-  console.log(`[FINAL SCORES] Points per question: ${pointsPerQuestion}`);
+  console.log(`[FINAL SCORES] Points per question: ${pointsPer}`);
   const finalLeaderboard = rankParticipants(session);
   for (const participant of Object.values(session.participants)) {
-    const finalScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
-    const percentage = Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100);
-    const passed = percentage >= session.quiz.passingPercent;
+    const finalScore = Math.round((participant.correctCount || 0) * pointsPer);
+    const percentage = totalGraded === 0
+      ? 0
+      : Math.round(((participant.correctCount || 0) / totalGraded) * 100);
+    const passed = totalGraded > 0 && percentage >= session.quiz.passingPercent;
     const standing = finalLeaderboard.find(entry => entry.id === participant.id);
     participant.score = finalScore;
 
@@ -3097,7 +3102,10 @@ async function finishQuiz(sessionCode, session) {
         finalScore,
         totalScore: session.quiz.totalScore,
         correctCount: participant.correctCount || 0,
-        totalQuestions: session.quiz.questions.length,
+        totalQuestions: totalGraded,
+        hasScore: totalGraded > 0,
+        funCorrectCount: participant.funCorrectCount || 0,
+        funTotal: participant.funTotal || 0,
         percentage,
         passed,
         passingPercent: session.quiz.passingPercent,
@@ -3189,20 +3197,27 @@ function endCurrentQuestion(sessionCode) {
   scheduleAutopilot(sessionCode);
   const nextInMs = pendingAutopilotMs(session);
   const stats = calculateStats(session, question.id);
-  const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
+  const pointsPer = pointsPerQuestion(session.quiz);
 
   // Update scores
   console.log(`[SCORING] Question ${question.id} ended. Correct indices: [${question.correctIndices}]`);
+  const scored = isScored(question);
+
   for (const participant of Object.values(session.participants)) {
     const answer = participant.answers[question.id];
     const wasCorrect = answer !== undefined && question.correctIndices.includes(answer);
+
+    if (!scored) {
+      // Ungraded: record the result, leave score, streak, and rank alone.
+      participant.funTotal = (participant.funTotal || 0) + 1;
+      if (wasCorrect) participant.funCorrectCount = (participant.funCorrectCount || 0) + 1;
+      continue;
+    }
+
     if (wasCorrect) {
       participant.correctCount = (participant.correctCount || 0) + 1;
       participant.currentStreak = (participant.currentStreak || 0) + 1;
-      participant.bestStreak = Math.max(
-        participant.bestStreak || 0,
-        participant.currentStreak
-      );
+      participant.bestStreak = Math.max(participant.bestStreak || 0, participant.currentStreak);
     } else {
       participant.currentStreak = 0;
     }
@@ -3218,7 +3233,7 @@ function endCurrentQuestion(sessionCode) {
 
   // Send each participant only their own private result record.
   for (const participant of Object.values(session.participants)) {
-    const currentScore = Math.round((participant.correctCount || 0) * pointsPerQuestion);
+    const currentScore = Math.round((participant.correctCount || 0) * pointsPer);
     const standing = presentation.leaderboard.find(entry => entry.id === participant.id);
     const participantResult = {
       yourAnswer: participant.answers[question.id],
@@ -3240,8 +3255,11 @@ function endCurrentQuestion(sessionCode) {
           [participant.id]: participantResult
         },
         totalScore: session.quiz.totalScore,
-        questionsAnswered: session.quizState.currentStepIndex + 1,
-        totalQuestions: session.quiz.questions.length,
+        scored,
+        funCorrectCount: participant.funCorrectCount || 0,
+        funTotal: participant.funTotal || 0,
+        questionsAnswered: question.gradedNumber,
+        totalQuestions: gradedCount(session.quiz),
         autopilotNextInMs: nextInMs
       });
     }
