@@ -2532,6 +2532,10 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
     });
     return;
   }
+  // Not dead code: questionForStep also returns null when currentStepIndex is
+  // out of range, which is the normal state before a quiz starts (it is -1
+  // until then) and this function has no isRunning gate. Deleting this guard
+  // crashes on the next line for any admin or presenter who connects early.
   if (!question) return;
   const timeRemaining = Math.max(
     0,
@@ -2758,6 +2762,8 @@ io.on('connection', (socket) => {
         });
         return;
       }
+      // Reached only if currentStepIndex is out of range; a section step is
+      // handled by the branch above.
       if (!question) return;
       const timeRemaining = Math.max(0, Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000));
 
