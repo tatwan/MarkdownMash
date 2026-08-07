@@ -297,4 +297,41 @@ assert.equal(
   'indexing questions[] with a step index runs off the end — the bug this guards'
 );
 
+// --- scoring denominators are graded-only ---
+//
+// correctCount, the score, and the "of N" denominator must all agree. Mixing a
+// graded-only numerator with a total-questions denominator reports "2 of 3"
+// where the room saw "2 of 2".
+
+const mixed = parseQuizMarkdown([
+  '# Course',
+  '# Score 100',
+  '',
+  '## Q1: graded?',
+  '- [x] yes',
+  '',
+  '## Q2: fun one',
+  '::type=ungraded',
+  '- [x] yes',
+  '',
+  '## Q3: graded too?',
+  '- [x] yes'
+].join('\n'));
+
+assert.equal(mixed.questions.length, 3, 'three questions in total');
+assert.equal(gradedCount(mixed), 2, 'but only two are scored');
+assert.equal(pointsPerQuestion(mixed), 50, '100 points across two graded questions');
+assert.notEqual(
+  pointsPerQuestion(mixed),
+  mixed.totalScore / mixed.questions.length,
+  'dividing by the full question count gives a different, wrong figure'
+);
+assert.equal(
+  Math.round(2 * pointsPerQuestion(mixed)),
+  100,
+  'answering both graded questions correctly scores the full total'
+);
+assert.equal(mixed.questions[1].gradedNumber, null, 'the ungraded question has no graded number');
+assert.equal(mixed.questions[2].gradedNumber, 2, 'graded numbering skips it');
+
 console.log('All quiz structure tests passed.');

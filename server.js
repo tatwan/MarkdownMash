@@ -1210,7 +1210,7 @@ app.get(
     const results = rankParticipants(session).map(participant => ({
       name: participant.name,
       score: participant.correctCount,
-      total: session.quiz.questions.length,
+      total: gradedCount(session.quiz),
       avgResponseTime: participant.avgResponseTimeMs
     }));
     res.json({ success: true, results });
@@ -1609,7 +1609,7 @@ app.get('/api/admin/session/:code/results', authorizeAdminSession, async (req, r
   const results = rankParticipants(session).map(participant => ({
     name: participant.name,
     score: participant.correctCount,
-    total: session.quiz.questions.length,
+    total: gradedCount(session.quiz),
     avgResponseTime: participant.avgResponseTimeMs
   }));
 
@@ -2739,7 +2739,7 @@ io.on('connection', (socket) => {
       const timeRemaining = Math.max(0, Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000));
 
       if (session.quizState.showingResults) {
-        const pointsPerQuestion = session.quiz.totalScore / session.quiz.questions.length;
+        const pointsPer = pointsPerQuestion(session.quiz);
         const standing = session.lastQuestionPresentation?.leaderboard
           ?.find(entry => entry.id === participant.id);
         socket.emit('question_ended', {
@@ -2750,7 +2750,7 @@ io.on('connection', (socket) => {
           participantResults: {
             [participant.id]: {
               yourAnswer: participant.answers[question.id],
-              currentScore: Math.round((participant.correctCount || 0) * pointsPerQuestion),
+              currentScore: Math.round((participant.correctCount || 0) * pointsPer),
               correctCount: participant.correctCount || 0,
               currentStreak: participant.currentStreak || 0,
               bestStreak: participant.bestStreak || 0,
@@ -2803,6 +2803,8 @@ io.on('connection', (socket) => {
       p.currentStreak = 0;
       p.bestStreak = 0;
       p.responseTimes = {};
+      p.funCorrectCount = 0;
+      p.funTotal = 0;
     }
 
     io.to(`session:${sessionCode}`).emit('quiz_started', {
