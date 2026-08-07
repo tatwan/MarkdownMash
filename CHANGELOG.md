@@ -2,6 +2,35 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [1.4.0] - 2026-08-07
+
+### Added
+
+- **Sections** via `# Section: Name`, with an optional `>` subtitle. Each section is announced by a curtain screen on the participant device, the presenter, and the host studio before its questions begin.
+- **Ungraded questions** via `::type=ungraded` (or as a section default under a section heading). Correctness is still captured and celebrated, but these questions award no points and never touch streaks.
+- Section hold under Autopilot: a fixed five-second curtain, then automatic advance into the section's first question.
+- Host studio preview for section cards and ungraded badges, plus starter-template examples of the new syntax.
+- `quiz-structure.js`, a pure parser module that returns parallel `questions[]` and `steps[]` views, with a dedicated suite and a browser-preview drift guard.
+
+### Changed
+
+- The live flow walks a `steps[]` array that interleaves sections and questions. `answers.question_index` remains the dense index into `questions[]` for analytics compatibility.
+- Total score is divided among **graded** questions only. Visible "Question X of N" counters, scores, and pass/fail use graded counts.
+- Analytics and CSV export keep ungraded rows in the raw data while excluding them from scored totals, streak math, and the hardest-questions recap. CSV includes a `Question Type` column.
+- New sessions store `total_questions` as the graded count so average-score denominators match what the room saw.
+- Reconnect and resume restore a mid-curtain section with the true remaining Autopilot hold time.
+
+### Security
+
+- Every admin, including the deployment master, is scoped to their own sessions for history, analytics, and export. Live-room emergency control by the master is retained on purpose.
+- Migration `20260807143000_backfill_legacy_session_owner.sql` assigns pre-multi-admin sessions (`owner_id IS NULL`) to the master account.
+
+### Notes
+
+- Legacy quizzes without sections or `::type=` parse and run as before.
+- An all-ungraded quiz completes with a score of 0 and no pass/fail verdict.
+- The host studio preview parser remains a browser-side copy of the server parser for this release; a drift test keeps them aligned.
+
 ## [1.3.1] - 2026-08-06
 
 ### Added

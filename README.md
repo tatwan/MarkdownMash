@@ -10,6 +10,21 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
+## What's New in v1.4.0
+
+### Sections & Ungraded Questions
+
+Group a quiz into named modules and mark questions that should feel real without affecting the score.
+
+- **`# Section: Module name`** — announces a curtain on participant devices, the presenter screen, and the host studio before that module's questions. An optional `>` line under the heading becomes the section subtitle.
+- **`::type=ungraded`** — captures and celebrates correctness, but awards no points and never changes streaks. Place it on a question, or under a section heading to default every question in that section.
+- **Graded-only scoring** — `# Score N` divides among graded questions only, and every "Question X of N" counter matches what the room sees.
+- **Autopilot-aware** — section curtains hold for five seconds under Autopilot, then advance on their own.
+- **Studio preview** — the host preview walks sections and badges ungraded questions before you run the room.
+- **Analytics stay honest** — ungraded answers remain in raw data and CSV (with a Question Type column) without distorting scored averages or the hardest-questions recap.
+
+Legacy quizzes without sections or `::type=` run exactly as before. This release also hardens hosted account scoping so each host, including the deployment master, only sees their own session history and analytics.
+
 ## What's New in v1.3.1
 
 ### Autopilot
@@ -43,6 +58,8 @@ Existing classroom sessions remain compatible. Hosted billing and public signup 
 
 - **Real-time Synchronization** - Questions, timers, and results sync instantly via WebSockets.
 - **Markdown-based Quizzes** - Write and upload questions in a simple, portable Markdown format.
+- **Sections** - Group questions into named modules with a curtain announcement before each module begins.
+- **Ungraded / Just-for-fun questions** - Capture correctness without awarding points or changing streaks.
 - **Comprehensive Scoring & Leaderboards** - Captures both correctness and speed. Automatically ranks winners, utilizing response times as tie-breakers.
 - **Live Momentum Highlights** - Celebrates correct responders, fastest answers, winning streaks, and participants moving up the ranking after each question.
 - **Animated Classroom Finale** - Reveals third, second, and first place on a projector-ready podium, followed by fourth/fifth place and the hardest questions.
@@ -196,6 +213,9 @@ Create quizzes in Markdown format:
 # Intro to Python
 # Score 100
 
+# Section: Basics
+> Warm-up questions
+
 ## Q1: What does the following code print?
 ```python
 def greet(name):
@@ -215,7 +235,15 @@ greet("Alice")
 - [ ] Integer
 ::time=15
 
-## Q3: Is the Earth flat?
+## Q3: Favorite snack while coding?
+::type=ungraded
+- [x] Fruit
+- [ ] Chips
+::time=10
+
+# Section: Check for understanding
+
+## Q4: Is the Earth flat?
 > "The Earth is a sphere." - Science
 - [ ] True
 - [x] False
@@ -227,18 +255,21 @@ greet("Alice")
 | Element | Syntax | Description |
 |---------|--------|-------------|
 | Quiz title | `# Title` | Single `#` at the start |
-| Total score | `# Score 100` | Points distributed across questions (default: 100) |
+| Total score | `# Score 100` | Points distributed across **graded** questions (default: 100) |
+| Section | `# Section: Name` | Starts a module; optional `>` line beneath becomes its subtitle |
 | Question | `## Q1: Text` | The `Q1:` prefix is optional. Any unmatched lines below this will be appended as multi-line text (e.g., code blocks) |
 | Wrong answer | `- [ ] Option` | Unchecked checkbox |
 | Correct answer | `- [x] Option` | Checked checkbox |
 | Time limit | `::time=20` | Seconds per question (default: 20) |
+| Ungraded | `::type=ungraded` | Captures correctness but awards no points; under a section heading it becomes that section's default |
 
 ### Scoring
 
 - Set total points with `# Score X` (e.g., `# Score 1000`)
-- Points are divided equally among questions
-- Participants see their score after each question
-- At the end: **Pass** (70%+) or motivating message to study more
+- Points are divided equally among **graded** questions only
+- Ungraded questions never change score, `correctCount`, or streaks
+- Participants see their score after each graded question
+- At the end: **Pass** (70%+) or motivating message to study more (skipped when a quiz has no graded questions)
 
 ## Hosting a Quiz
 
