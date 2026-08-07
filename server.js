@@ -2715,16 +2715,20 @@ io.on('connection', (socket) => {
     if (session.finale) {
       const standing = session.finale.leaderboard
         ?.find(entry => entry.id === participant.id);
-      const percentage = session.quiz.questions.length > 0
-        ? Math.round(((participant.correctCount || 0) / session.quiz.questions.length) * 100)
-        : 0;
+      const totalGraded = gradedCount(session.quiz);
+      const percentage = totalGraded === 0
+        ? 0
+        : Math.round(((participant.correctCount || 0) / totalGraded) * 100);
       socket.emit('quiz_ended', {
         finalScore: standing?.score || 0,
         totalScore: session.quiz.totalScore,
         correctCount: participant.correctCount || 0,
-        totalQuestions: session.quiz.questions.length,
+        totalQuestions: totalGraded,
+        hasScore: totalGraded > 0,
+        funCorrectCount: participant.funCorrectCount || 0,
+        funTotal: participant.funTotal || 0,
         percentage,
-        passed: percentage >= session.quiz.passingPercent,
+        passed: totalGraded > 0 && percentage >= session.quiz.passingPercent,
         passingPercent: session.quiz.passingPercent,
         rank: standing?.rank || null,
         participantCount: session.finale.leaderboard?.length || 0,
@@ -2735,7 +2739,8 @@ io.on('connection', (socket) => {
 
     // If quiz is in progress, send current state
     if (session.quizState.isRunning && session.quizState.currentStepIndex >= 0) {
-      const question = session.quiz.questions[session.quizState.currentStepIndex];
+      const question = questionForStep(session.quiz, session.quizState.currentStepIndex);
+      if (!question) return;
       const timeRemaining = Math.max(0, Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000));
 
       if (session.quizState.showingResults) {
@@ -2760,16 +2765,19 @@ io.on('connection', (socket) => {
             }
           },
           totalScore: session.quiz.totalScore,
-          questionsAnswered: session.quizState.currentStepIndex + 1,
-          totalQuestions: session.quiz.questions.length,
+          scored: isScored(question),
+          funCorrectCount: participant.funCorrectCount || 0,
+          funTotal: participant.funTotal || 0,
+          questionsAnswered: question.gradedNumber,
+          totalQuestions: gradedCount(session.quiz),
           autopilotNextInMs: pendingAutopilotMs(session)
         });
       } else if (timeRemaining > 0) {
         socket.emit('question_started', {
           question: getQuestionForParticipants(question),
           timeRemaining,
-          questionNumber: session.quizState.currentStepIndex + 1,
-          totalQuestions: session.quiz.questions.length
+          questionNumber: question.gradedNumber,
+          totalQuestions: gradedCount(session.quiz)
         });
       }
     }
