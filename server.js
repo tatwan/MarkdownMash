@@ -2813,16 +2813,16 @@ io.on('connection', (socket) => {
 
     io.to(`session:${sessionCode}`).emit('quiz_started', {
       title: session.quiz.title,
-      totalQuestions: session.quiz.questions.length
+      totalQuestions: gradedCount(session.quiz)
     });
 
     io.to(`admin:${sessionCode}`).emit('quiz_started', {
       title: session.quiz.title,
-      totalQuestions: session.quiz.questions.length
+      totalQuestions: gradedCount(session.quiz)
     });
     io.to(`presenter:${sessionCode}`).emit('quiz_started', {
       title: session.quiz.title,
-      totalQuestions: session.quiz.questions.length
+      totalQuestions: gradedCount(session.quiz)
     });
 
     scheduleAutopilot(sessionCode);
