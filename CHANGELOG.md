@@ -2,6 +2,23 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [1.5.0] - 2026-08-08
+
+### Added
+
+- **Survey sessions** as a separate session type from quizzes. Host Home includes **Host a survey** with its own studio and Markdown format (plain `- Option` lists; checkbox marks ignored).
+- Session-level anonymity: answers are held in memory until the question ends, then written as a shuffled batch with `participant_id` and `is_correct` null. Live `answer_received` events carry counts only — never names or ids.
+- Survey results and analytics show **option distributions**, not scores, difficulty, or leaderboards. CSV export is aggregated (no participant column).
+- Survey starter templates: food, movies, and sports under `templates/survey-*.md`, loaded by the studio like quiz starters.
+- Example Mashes gallery in `templates/` (from the post-v1.4.0 gallery work): quiz starters plus the classroom-modules showcase, served at `/templates` so GitHub and the product stay in sync.
+- `survey-structure.js` pure parser and `sessions.session_type` column (`quiz` | `survey`, default `quiz`).
+
+### Notes
+
+- Guest trial remains quiz-only.
+- Sections and Autopilot work in survey sessions the same way as in quizzes.
+- Migration: `20260808120000_add_session_type.sql` (also applied via startup self-host migrations when the column is missing).
+
 ## [1.4.0] - 2026-08-07
 
 ### Added

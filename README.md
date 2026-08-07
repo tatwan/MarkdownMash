@@ -10,6 +10,16 @@
 
 A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
 
+## What's New in v1.5.0
+
+### Survey sessions & example templates
+
+- **Host a survey** on Host Home — a separate session type for anonymous pulse checks (no scores, no named answer rows).
+- Survey Markdown uses plain options (`- Choice`); answers batch-write anonymously when a question ends.
+- Live room reuses sections, Autopilot, Sidekicks, and the presenter — results show **distributions**, not leaderboards.
+- Starter surveys: food, movies, sports in [`templates/`](templates/).
+- **Example Mashes** gallery (quiz + survey) lives in [`templates/`](templates/) and is what the studio loads for **Starter templates**.
+
 ## What's New in v1.4.0
 
 ### Sections & Ungraded Questions
@@ -75,6 +85,7 @@ Existing classroom sessions remain compatible. Hosted billing and public signup 
 - **Markdown-based Quizzes** - Write and upload questions in a simple, portable Markdown format.
 - **Sections** - Group questions into named modules with a curtain announcement before each module begins.
 - **Ungraded / Just-for-fun questions** - Capture correctness without awarding points or changing streaks.
+- **Survey sessions** - Anonymous opinion rooms with distribution-only results (separate from scored quizzes).
 - **Comprehensive Scoring & Leaderboards** - Captures both correctness and speed. Automatically ranks winners, utilizing response times as tie-breakers.
 - **Live Momentum Highlights** - Celebrates correct responders, fastest answers, winning streaks, and participants moving up the ranking after each question.
 - **Animated Classroom Finale** - Reveals third, second, and first place on a projector-ready podium, followed by fourth/fifth place and the hardest questions.
