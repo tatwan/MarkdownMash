@@ -7163,3 +7163,9 @@ select:focus-visible {
   .presenter-curtain-right { animation: fadeIn 200ms ease both; }
   .presenter-section-intro { animation: fadeIn 200ms ease both; }
 }
+
+.presenter-qbadge {
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  font-weight: 700;
+  color: #ffd84d;
+}

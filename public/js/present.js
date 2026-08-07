@@ -49,6 +49,8 @@ const finaleProgress = document.getElementById('finale-progress');
 const allAnsweredBanner = document.getElementById('all-answered-banner');
 const presenterTimerRing = document.querySelector('.presenter-timer-ring');
 const presenterNextCountdown = document.getElementById('presenter-next-countdown');
+const presenterQnum = document.querySelector('.presenter-qnum');
+const presenterQbadge = document.getElementById('presenter-qbadge');
 const sectionIntroSection = document.getElementById('section-intro-section');
 const presenterSectionEyebrow = document.getElementById('presenter-section-eyebrow');
 const presenterSectionTitle = document.getElementById('presenter-section-title');
@@ -213,8 +215,13 @@ function initSocket() {
     stopPresenterSectionCountdown();
     currentQuestion = data.question;
     timerDuration = Math.max(1, data.timeRemaining);
-    currentQNum.textContent = data.questionNumber;
-    totalQNum.textContent = data.totalQuestions;
+    const isUngraded = data.question.type === 'ungraded';
+    presenterQnum.classList.toggle('hidden', isUngraded);
+    presenterQbadge.classList.toggle('hidden', !isUngraded);
+    if (!isUngraded) {
+      currentQNum.textContent = data.questionNumber;
+      totalQNum.textContent = data.totalQuestions;
+    }
     questionText.innerHTML = markdown.block(data.question.text);
     answeredCount.textContent = '0';
     renderOptions(data.question.options);
