@@ -29,6 +29,15 @@ const {
   canAdminAccessStoredSession,
   canControlSession
 } = require('./controller-authorization');
+const {
+  parseQuizMarkdown,
+  normalizeStoredQuiz,
+  gradedCount,
+  pointsPerQuestion,
+  isScored,
+  stepAt,
+  questionForStep
+} = require('./quiz-structure');
 const { createTrialManager } = require('./trial-manager');
 const {
   createOpaqueToken,
@@ -435,81 +444,6 @@ function createSessionState({
 //   lastQuestionPresentation: object,
 //   finale: object
 // }
-
-// ============================================
-// MARKDOWN QUIZ PARSER
-// ============================================
-function parseQuizMarkdown(markdown) {
-  const lines = markdown.split('\n');
-  const quiz = { title: '', questions: [], totalScore: 100, passingPercent: 70 };
-  let currentQuestion = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Score setting (# Score 100)
-    const scoreMatch = trimmed.match(/^#\s*Score\s+(\d+)$/i);
-    if (scoreMatch) {
-      quiz.totalScore = parseInt(scoreMatch[1], 10);
-      continue;
-    }
-
-    // Quiz title (# Title) - but not # Score
-    if (trimmed.startsWith('# ') && !trimmed.startsWith('## ') && !trimmed.toLowerCase().startsWith('# score')) {
-      quiz.title = trimmed.slice(2).trim();
-      continue;
-    }
-
-    // Question (## Q1: Question text)
-    if (trimmed.startsWith('## ')) {
-      if (currentQuestion) {
-        quiz.questions.push(currentQuestion);
-      }
-      const questionText = trimmed.slice(3).replace(/^Q\d+:\s*/, '').trim();
-      currentQuestion = {
-        id: quiz.questions.length + 1,
-        text: questionText,
-        options: [],
-        correctIndices: [],
-        timeLimit: 20 // default
-      };
-      continue;
-    }
-
-    // Option (- [ ] or - [x])
-    const optionMatch = trimmed.match(/^-\s*\[([ xX])\]\s*(.+)$/);
-    if (optionMatch && currentQuestion) {
-      const isCorrect = optionMatch[1].toLowerCase() === 'x';
-      const optionText = optionMatch[2].trim();
-      const optionIndex = currentQuestion.options.length;
-      currentQuestion.options.push(optionText);
-      if (isCorrect) {
-        currentQuestion.correctIndices.push(optionIndex);
-      }
-      continue;
-    }
-
-    // Time metadata (::time=20)
-    const timeMatch = trimmed.match(/^::time=(\d+)$/);
-    if (timeMatch && currentQuestion) {
-      currentQuestion.timeLimit = parseInt(timeMatch[1], 10);
-      continue;
-    }
-
-    // If it doesn't match any directive, append it to the current question's text
-    // We use the original 'line' to preserve indentation (important for code blocks)
-    if (currentQuestion) {
-      currentQuestion.text += '\n' + line;
-    }
-  }
-
-  // Push last question
-  if (currentQuestion) {
-    quiz.questions.push(currentQuestion);
-  }
-
-  return quiz;
-}
 
 // ============================================
 // HELPER FUNCTIONS
