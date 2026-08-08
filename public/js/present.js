@@ -56,6 +56,22 @@ const presenterSectionEyebrow = document.getElementById('presenter-section-eyebr
 const presenterSectionTitle = document.getElementById('presenter-section-title');
 const presenterSectionSubtitle = document.getElementById('presenter-section-subtitle');
 const presenterSectionCountdown = document.getElementById('presenter-section-countdown');
+const surveyLockedSection = document.getElementById('survey-locked-section');
+const surveyLockedCount = document.getElementById('survey-locked-count');
+const surveyLockedProgress = document.getElementById('survey-locked-progress');
+const surveyNextCountdown = document.getElementById('survey-next-countdown');
+const surveyFinaleSection = document.getElementById('survey-finale-section');
+const surveyFinaleTitle = document.getElementById('survey-finale-title');
+const surveyFinaleSubtitle = document.getElementById('survey-finale-subtitle');
+const surveyFinaleRate = document.getElementById('survey-finale-rate');
+const surveyFinaleProgress = document.getElementById('survey-finale-progress');
+const surveyFinaleResponseCount = document.getElementById('survey-finale-response-count');
+const surveyFinaleQuestion = document.getElementById('survey-finale-question');
+const surveyFinaleTopChoice = document.getElementById('survey-finale-top-choice');
+const surveyFinaleDistribution = document.getElementById('survey-finale-distribution');
+const surveyFinalePrev = document.getElementById('survey-finale-prev');
+const surveyFinaleNext = document.getElementById('survey-finale-next');
+const surveyFinaleDots = document.getElementById('survey-finale-dots');
 
 let socket = null;
 let sessionCode = null;
@@ -68,6 +84,9 @@ let finaleData = null;
 let finaleTimeouts = [];
 let presenterNextInterval = null;
 let presenterSectionTimer = null;
+let presenterSectionExitTimer = null;
+let currentSessionMode = 'quiz';
+let surveyFinaleIndex = 0;
 
 function iconHref(icon) {
   return `/assets/icons.svg#${icon}`;
@@ -185,6 +204,7 @@ function initSocket() {
   });
 
   socket.on('quiz_started', data => {
+    currentSessionMode = data.mode === 'survey' ? 'survey' : 'quiz';
     quizTitle.textContent = data.title;
     totalQNum.textContent = data.totalQuestions;
     hideAllSections();
@@ -201,6 +221,7 @@ function initSocket() {
     presenterSectionTitle.textContent = data.title;
     presenterSectionSubtitle.textContent = data.subtitle || '';
     presenterSectionSubtitle.classList.toggle('hidden', !data.subtitle);
+    sectionIntroSection.classList.remove('curtain-opening');
 
     startPresenterSectionCountdown(data.autopilotNextInMs);
 
@@ -209,11 +230,13 @@ function initSocket() {
   });
 
   socket.on('question_started', data => {
+    const leavingSection = !sectionIntroSection.classList.contains('hidden');
     clearPresenterTimers();
     hideAllAnsweredBanner();
     stopPresenterNextCountdown();
     stopPresenterSectionCountdown();
     currentQuestion = data.question;
+    currentSessionMode = data.mode === 'survey' ? 'survey' : currentSessionMode;
     timerDuration = Math.max(1, data.timeRemaining);
     const isUngraded = data.question.type === 'ungraded' && data.mode !== 'survey';
     presenterQnum.classList.toggle('hidden', isUngraded);
@@ -228,6 +251,15 @@ function initSocket() {
     startTimer(data.timeRemaining);
     hideAllSections();
     questionSection.classList.remove('hidden');
+    if (leavingSection && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      sectionIntroSection.classList.add('curtain-opening');
+      sectionIntroSection.classList.remove('hidden');
+      presenterSectionExitTimer = setTimeout(() => {
+        sectionIntroSection.classList.add('hidden');
+        sectionIntroSection.classList.remove('curtain-opening');
+        presenterSectionExitTimer = null;
+      }, 640);
+    }
   });
 
   socket.on('answer_received', data => {
@@ -247,21 +279,10 @@ function initSocket() {
     if (!currentQuestion && data.mode !== 'survey') return;
 
     if (data.mode === 'survey') {
-      const q = data.question || currentQuestion;
-      resultQNum.textContent = data.questionNumber || currentQNum.textContent;
-      resultQuestionText.innerHTML = markdown.block(q.text);
-      correctCount.textContent = '—';
-      totalAnswered.textContent = data.distribution?.answered ?? 0;
-      renderSurveyDistribution(data);
-      renderCorrectResponders([]);
-      startHighlightRotation([{
-        type: 'steady',
-        icon: 'check-circle',
-        eyebrow: 'Survey',
-        message: 'Responses are anonymous — showing the room totals only'
-      }]);
+      surveyLockedCount.textContent = `${data.answered || 0} ${Number(data.answered) === 1 ? 'response' : 'responses'} recorded anonymously.`;
+      surveyLockedProgress.textContent = `Question ${data.questionNumber || 1} of ${data.totalQuestions || 1}`;
       hideAllSections();
-      resultsSection.classList.remove('hidden');
+      surveyLockedSection.classList.remove('hidden');
       return;
     }
 
@@ -387,70 +408,67 @@ function renderAnswerDistribution(data) {
   });
 }
 
-function renderSurveyDistribution(data) {
-  answerDistribution.innerHTML = '';
-  const counts = data.distribution?.counts || [];
-  const options = data.distribution?.options || data.question?.options || [];
-  const total = Math.max(1, data.distribution?.totalParticipants || data.distribution?.answered || 1);
-  const maxCount = Math.max(1, ...counts, 1);
-
-  options.forEach((option, index) => {
-    const count = counts[index] || 0;
-    const percent = Math.round((count / total) * 100);
-    const row = document.createElement('div');
-    row.className = 'answer-bar-row';
-    row.innerHTML = `
-      <div class="answer-bar-label">
-        <span class="answer-letter">${String.fromCharCode(65 + index)}</span>
-        <span class="answer-copy">${markdown.inline(option)}</span>
-      </div>
-      <div class="answer-bar-track">
-        <div class="answer-bar-fill" style="--bar-width: ${(count / maxCount) * 100}%"></div>
-        <span class="answer-bar-value">${count} · ${percent}%</span>
-      </div>
-    `;
-    answerDistribution.appendChild(row);
-  });
+function showSurveyFinale(data) {
+  finaleData = data || { mode: 'survey', questions: [] };
+  currentSessionMode = 'survey';
+  surveyFinaleIndex = 0;
+  hideAllSections();
+  surveyFinaleSection.classList.remove('hidden');
+  surveyFinaleTitle.textContent = data.quizTitle || 'What the room said';
+  surveyFinaleSubtitle.textContent = `${data.participantCount || 0} ${Number(data.participantCount) === 1 ? 'participant' : 'participants'} · answers stay anonymous`;
+  surveyFinaleRate.textContent = `${data.responseRate || 0}%`;
+  renderSurveyFinaleQuestion();
 }
 
-function showSurveyFinale(data) {
-  finaleData = {
-    mode: 'survey',
-    leaderboard: [],
-    hardestQuestions: [],
-    questions: data.questions || [],
-    participantCount: data.participantCount || 0,
-    quizTitle: data.quizTitle
-  };
-  hideAllSections();
-  endedSection.classList.remove('hidden');
-  finaleSubtitle.textContent = data.participantCount
-    ? `${data.participantCount} ${data.participantCount === 1 ? 'participant' : 'participants'} — answers stay anonymous`
-    : 'Survey complete — answers stay anonymous';
-  podiumStage.querySelectorAll('.podium-place').forEach(place => {
-    place.classList.add('absent');
-    place.querySelector('[data-podium-name]').textContent = '';
-    place.querySelector('[data-podium-score]').textContent = '';
-    const avatar = place.querySelector('[data-podium-avatar]');
-    if (avatar) avatar.classList.add('hidden');
-  });
-  runnersUp.innerHTML = '';
-  hardestQuestions.innerHTML = '';
-  (data.questions || []).slice(0, 3).forEach((q, i) => {
-    const total = (q.counts || []).reduce((s, n) => s + n, 0);
-    const topIdx = (q.counts || []).reduce((best, n, idx, arr) => (n > arr[best] ? idx : best), 0);
-    const card = document.createElement('article');
-    card.className = 'hardest-card';
-    card.innerHTML = `
-      <span class="hardest-rank">${i + 1}</span>
-      <div>
-        <strong></strong>
-        <span>${total} responses${q.options?.[topIdx] ? ` · top: ${q.options[topIdx]}` : ''}</span>
+function renderSurveyFinaleQuestion() {
+  const questions = finaleData?.questions || [];
+  if (questions.length === 0) {
+    surveyFinaleProgress.textContent = 'No questions';
+    surveyFinaleResponseCount.textContent = '0 responses';
+    surveyFinaleQuestion.textContent = 'No responses were recorded.';
+    surveyFinaleTopChoice.textContent = '';
+    surveyFinaleDistribution.innerHTML = '';
+    surveyFinalePrev.disabled = true;
+    surveyFinaleNext.disabled = true;
+    return;
+  }
+
+  surveyFinaleIndex = Math.max(0, Math.min(surveyFinaleIndex, questions.length - 1));
+  const question = questions[surveyFinaleIndex];
+  surveyFinaleProgress.textContent = `Question ${surveyFinaleIndex + 1} of ${questions.length}`;
+  surveyFinaleResponseCount.textContent = `${question.responseCount || 0} ${Number(question.responseCount) === 1 ? 'response' : 'responses'}`;
+  surveyFinaleQuestion.textContent = question.text || `Question ${surveyFinaleIndex + 1}`;
+
+  if ((question.topOptions || []).length > 1) {
+    surveyFinaleTopChoice.textContent = `Top choice: tie between ${question.topOptions.join(' and ')}`;
+  } else if (question.topOptions?.length === 1) {
+    surveyFinaleTopChoice.textContent = `Most popular: ${question.topOptions[0]}`;
+  } else {
+    surveyFinaleTopChoice.textContent = 'No responses recorded';
+  }
+
+  surveyFinaleDistribution.innerHTML = '';
+  (question.options || []).forEach((option, optionIndex) => {
+    const distribution = question.optionDistribution?.[optionIndex] || { count: 0, percent: 0 };
+    const row = document.createElement('div');
+    row.className = question.topOptionIndices?.includes(optionIndex)
+      ? 'survey-finale-option is-top'
+      : 'survey-finale-option';
+    row.innerHTML = `
+      <div class="survey-finale-option-heading">
+        <span><strong>${String.fromCharCode(65 + optionIndex)}.</strong> ${markdown.inline(option)}</span>
+        <strong>${distribution.count} · ${distribution.percent}%</strong>
       </div>
+      <div class="survey-finale-option-track"><span style="width:${distribution.percent}%"></span></div>
     `;
-    card.querySelector('strong').textContent = q.text || `Question ${i + 1}`;
-    hardestQuestions.appendChild(card);
+    surveyFinaleDistribution.appendChild(row);
   });
+
+  surveyFinaleDots.innerHTML = questions.map((_, index) =>
+    `<span class="${index === surveyFinaleIndex ? 'active' : ''}"></span>`
+  ).join('');
+  surveyFinalePrev.disabled = surveyFinaleIndex === 0;
+  surveyFinaleNext.disabled = surveyFinaleIndex === questions.length - 1;
 }
 
 function renderCorrectResponders(participants) {
@@ -700,15 +718,18 @@ function stopPresenterNextCountdown() {
   presenterNextInterval = null;
   presenterNextCountdown.classList.add('hidden');
   presenterNextCountdown.textContent = '';
+  surveyNextCountdown.classList.add('hidden');
+  surveyNextCountdown.textContent = '';
 }
 
 function startPresenterNextCountdown(nextInMs) {
   stopPresenterNextCountdown();
   if (!nextInMs || nextInMs <= 0) return;
 
+  const target = currentSessionMode === 'survey' ? surveyNextCountdown : presenterNextCountdown;
   let remaining = Math.ceil(nextInMs / 1000);
-  presenterNextCountdown.textContent = `Next question in ${remaining}…`;
-  presenterNextCountdown.classList.remove('hidden');
+  target.textContent = `Next question in ${remaining}…`;
+  target.classList.remove('hidden');
 
   presenterNextInterval = setInterval(() => {
     remaining -= 1;
@@ -716,7 +737,7 @@ function startPresenterNextCountdown(nextInMs) {
       stopPresenterNextCountdown();
       return;
     }
-    presenterNextCountdown.textContent = `Next question in ${remaining}…`;
+    target.textContent = `Next question in ${remaining}…`;
   }, 1000);
 }
 
@@ -749,6 +770,11 @@ function startPresenterSectionCountdown(nextInMs) {
 }
 
 function hideAllSections() {
+  if (presenterSectionExitTimer) {
+    clearTimeout(presenterSectionExitTimer);
+    presenterSectionExitTimer = null;
+  }
+  sectionIntroSection.classList.remove('curtain-opening');
   sessionInputSection.classList.add('hidden');
   waitingSection.classList.add('hidden');
   sessionEndedSection.classList.add('hidden');
@@ -757,6 +783,8 @@ function hideAllSections() {
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
   endedSection.classList.add('hidden');
+  surveyLockedSection.classList.add('hidden');
+  surveyFinaleSection.classList.add('hidden');
 }
 
 function showSessionError(message) {
@@ -774,7 +802,27 @@ finaleNextBtn.addEventListener('click', () => {
   }
 });
 
+surveyFinalePrev.addEventListener('click', () => {
+  if (surveyFinaleIndex <= 0) return;
+  surveyFinaleIndex -= 1;
+  renderSurveyFinaleQuestion();
+});
+
+surveyFinaleNext.addEventListener('click', () => {
+  if (surveyFinaleIndex >= (finaleData?.questions?.length || 0) - 1) return;
+  surveyFinaleIndex += 1;
+  renderSurveyFinaleQuestion();
+});
+
 document.addEventListener('keydown', event => {
+  if (!surveyFinaleSection.classList.contains('hidden')) {
+    if (event.key === 'ArrowLeft') surveyFinalePrev.click();
+    if (event.key === 'ArrowRight' || event.key === ' ') {
+      event.preventDefault();
+      surveyFinaleNext.click();
+    }
+    return;
+  }
   if (endedSection.classList.contains('hidden')) return;
   if (event.key.toLowerCase() === 'r') replayPodium();
   if (event.key === 'ArrowRight' || event.key === ' ') {

@@ -44,6 +44,8 @@ const {
   questionCount: surveyQuestionCount,
   isSurveyPayload
 } = require('./survey-structure');
+const { buildSurveySummary } = require('./survey-results');
+const { decodeMarkdownPayload } = require('./markdown-transport');
 const { createTrialManager } = require('./trial-manager');
 const {
   createOpaqueToken,
@@ -431,6 +433,7 @@ function createSessionState({
     sidekickState: createSidekickState(),
     sidekicksEnabled: true,
     participants: Object.create(null),
+    surveyCounts: Object.create(null),
     quizState: {
       isRunning: false,
       currentStepIndex: -1,
@@ -501,6 +504,14 @@ function shuffleCopy(items) {
 }
 
 function buildSurveyDistribution(session, question) {
+  const storedCounts = session.surveyCounts?.[question.index];
+  if (Array.isArray(storedCounts)) {
+    return {
+      counts: storedCounts.slice(),
+      answered: storedCounts.reduce((sum, count) => sum + Number(count || 0), 0),
+      totalParticipants: Object.keys(session.participants || {}).length
+    };
+  }
   const counts = new Array((question.options || []).length).fill(0);
   let answered = 0;
   for (const participant of Object.values(session.participants || {})) {
@@ -516,6 +527,20 @@ function buildSurveyDistribution(session, question) {
     answered,
     totalParticipants: Object.keys(session.participants || {}).length
   };
+}
+
+function surveySummaryForSession(session) {
+  const participantCount = Object.keys(session.participants || {}).length;
+  const questions = (session.quiz?.questions || []).map(question => {
+    const distribution = buildSurveyDistribution(session, question);
+    return {
+      text: question.text,
+      options: question.options,
+      counts: distribution.counts,
+      displayNumber: question.displayNumber
+    };
+  });
+  return buildSurveySummary(questions, participantCount);
 }
 
 // The flow index walks steps[], which mixes sections and questions, so the
@@ -1212,12 +1237,18 @@ app.post('/api/trial/session', authenticateTrial, async (req, res) => {
         && req.body.markdown.trim()
         ? req.body.markdown
         : null;
-      const quiz = parseQuizMarkdown(customMarkdown || guestQuizMarkdown);
+      const customSessionType = customMarkdown && req.body?.sessionType === 'survey'
+        ? 'survey'
+        : 'quiz';
+      const quiz = customSessionType === 'survey'
+        ? parseSurveyMarkdown(customMarkdown)
+        : parseQuizMarkdown(customMarkdown || guestQuizMarkdown);
       session = createSessionState({
         id: `trial:${trial.id}`,
         code: trial.sessionCode,
         quiz,
         kind: 'trial',
+        sessionType: customSessionType,
         controller: { type: 'trial', id: trial.id },
         repository: createTransientSessionRepository(),
         expiresAt: trial.expiresAt,
@@ -1241,6 +1272,24 @@ app.post('/api/trial/session', authenticateTrial, async (req, res) => {
     console.error('Practice-room launch error:', error);
     return res.status(500).json({ success: false, error: 'Unable to launch the practice room' });
   }
+});
+
+app.delete('/api/trial/session', authenticateTrial, (req, res) => {
+  const trial = trialManager.get(req.trial.id);
+  const session = trial ? activeSessions.get(trial.sessionCode) : null;
+  if (!trial || !session || session.kind !== 'trial' || session.controller.id !== trial.id) {
+    return res.status(404).json({ success: false, error: 'Practice room not found' });
+  }
+  if (session.quizState.isRunning) {
+    return res.status(409).json({ success: false, error: 'A running practice room must be ended, not cancelled' });
+  }
+
+  clearAutopilotTimer(session);
+  io.to(`presenter:${session.code}`).emit('session_ended', {
+    message: 'This practice room was cancelled.'
+  });
+  activeSessions.delete(session.code);
+  return res.json({ success: true, message: 'Practice room cancelled' });
 });
 
 app.post(
@@ -1273,13 +1322,20 @@ app.get(
   requireTrialSession,
   (req, res) => {
     const session = req.activeSession;
+    if (isSurveySession(session)) {
+      return res.json({
+        success: true,
+        mode: 'survey',
+        ...surveySummaryForSession(session)
+      });
+    }
     const results = rankParticipants(session).map(participant => ({
       name: participant.name,
       score: participant.correctCount,
       total: gradedCount(session.quiz),
       avgResponseTime: participant.avgResponseTimeMs
     }));
-    res.json({ success: true, results });
+    return res.json({ success: true, results });
   }
 );
 
@@ -1432,9 +1488,10 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
 
 // Create a new session (upload quiz or survey, get session code + QR)
 app.post('/api/admin/session', async (req, res) => {
-  const { markdown, courseName, sessionType: rawSessionType } = req.body;
+  const { courseName, sessionType: rawSessionType } = req.body;
   const sessionType = rawSessionType === 'survey' ? 'survey' : 'quiz';
   try {
+    const markdown = decodeMarkdownPayload(req.body);
     const quiz = sessionType === 'survey'
       ? parseSurveyMarkdown(markdown)
       : parseQuizMarkdown(markdown);
@@ -1686,6 +1743,13 @@ app.get('/api/admin/session/:code/results', authorizeAdminSession, async (req, r
     return res.json({ results: [] });
   }
 
+  if (isSurveySession(session)) {
+    return res.json({
+      mode: 'survey',
+      ...surveySummaryForSession(session)
+    });
+  }
+
   const results = rankParticipants(session).map(participant => ({
     name: participant.name,
     score: participant.correctCount,
@@ -1752,6 +1816,7 @@ app.post('/api/session/:code/join', async (req, res) => {
       participantToken: existingParticipantToken,
       sessionCode: code,
       quizTitle: session.quiz.title,
+      sessionType: isSurveySession(session) ? 'survey' : 'quiz',
       avatarId: existing.avatarId,
       canShuffleAvatar: getShuffleAvailability(session, existing).allowed
     });
@@ -1781,6 +1846,7 @@ app.post('/api/session/:code/join', async (req, res) => {
     bestStreak: 0,
     answers: {},
     responseTimes: {},
+    surveyAnsweredQuestions: Object.create(null),
     socketId: null,
     avatarId: participantRecord.avatarId || avatarId,
     avatarShuffled: false,
@@ -1804,6 +1870,7 @@ app.post('/api/session/:code/join', async (req, res) => {
     participantToken: participantCredential.token,
     sessionCode: code,
     quizTitle: session.quiz.title,
+    sessionType: isSurveySession(session) ? 'survey' : 'quiz',
     avatarId: session.participants[id].avatarId,
     canShuffleAvatar: getShuffleAvailability(session, session.participants[id]).allowed
   });
@@ -2288,6 +2355,9 @@ app.get('/api/admin/analytics/overview', async (req, res) => {
     stats: {
       totalSessions: stats.total_sessions || 0,
       completedSessions: stats.completed_sessions || 0,
+      quizSessions: stats.quiz_sessions || 0,
+      surveySessions: stats.survey_sessions || 0,
+      surveyResponses: stats.survey_responses || 0,
       totalParticipants: stats.total_participants || 0,
       overallAvgScore: stats.overall_avg_score || 0,
       totalCourses: stats.total_courses || 0,
@@ -2317,6 +2387,15 @@ app.get('/api/admin/analytics/sessions', async (req, res) => {
       endedAt: s.ended_at,
       totalQuestions: s.total_questions,
       participantCount: s.participant_count || 0,
+      responseCount: s.response_count || 0,
+      responseRate: s.session_type === 'survey'
+        && Number(s.participant_count) > 0
+        && Number(s.total_questions) > 0
+        ? Math.round(
+            (Number(s.response_count) * 100)
+            / (Number(s.participant_count) * Number(s.total_questions))
+          )
+        : null,
       avgScorePercent: s.avg_score_percent == null ? null : s.avg_score_percent,
       courseName: s.course_name,
       isTest: s.is_test,
@@ -2338,36 +2417,24 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
     ? 'survey'
     : 'quiz';
 
-  const questionAnalytics = await db.getQuestionAnalytics(session.id);
-  const participantPerformance = await db.getParticipantPerformance(session.id);
   const answerDistribution = await db.getAnswerDistribution(session.id);
-  const participantAnswers = await db.getParticipantAnswers(session.id);
 
   if (sessionType === 'survey') {
     const survey = normalizeStoredSurvey(session.quiz_data || {});
-    const questions = survey.questions.map((quizQuestion, index) => {
-      const analytics = questionAnalytics.find(q => q.question_index === index) || {};
+    const participantCount = await db.getParticipantCount(session.id);
+    const summary = buildSurveySummary(survey.questions.map((quizQuestion, index) => {
       const distribution = answerDistribution.filter(a => a.question_index === index);
       const counts = (quizQuestion.options || []).map((_, optIdx) => {
         const hit = distribution.find(d => d.answer_index === optIdx);
         return hit ? Number(hit.count) : 0;
       });
-      const totalAnswers = counts.reduce((sum, n) => sum + n, 0);
       return {
-        index,
         displayNumber: quizQuestion.displayNumber,
-        type: 'survey',
         text: quizQuestion.text,
         options: quizQuestion.options,
-        counts,
-        totalAnswers,
-        optionDistribution: counts.map((count, optionIndex) => ({
-          optionIndex,
-          count,
-          percent: totalAnswers > 0 ? Math.round((count * 100) / totalAnswers) : 0
-        }))
+        counts
       };
-    });
+    }), participantCount);
 
     return res.json({
       success: true,
@@ -2377,22 +2444,24 @@ app.get('/api/admin/analytics/session/:code', authorizeAdminSession, async (req,
         status: session.status,
         sessionType: 'survey',
         totalQuestions: survey.questions.length,
+        participantCount: summary.participantCount,
+        responseCount: summary.responseCount,
+        responseRate: summary.responseRate,
         totalScore: 0,
         createdAt: session.created_at,
         startedAt: session.started_at,
         endedAt: session.ended_at
       },
-      questions,
+      questions: summary.questions,
       questionsByDifficulty: [],
-      participants: participantPerformance.map(p => ({
-        id: p.id,
-        name: p.name,
-        // Attendance only — answers are anonymous and not linked.
-        joinedOnly: true
-      })),
+      participants: [],
       mode: 'survey'
     });
   }
+
+  const questionAnalytics = await db.getQuestionAnalytics(session.id);
+  const participantPerformance = await db.getParticipantPerformance(session.id);
+  const participantAnswers = await db.getParticipantAnswers(session.id);
 
   const normalized = normalizeStoredQuiz(session.quiz_data || {});
   const totalGraded = gradedCount(normalized);
@@ -2736,6 +2805,19 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
   );
 
   if (session.quizState.showingResults && session.lastQuestionPresentation) {
+    if (isSurveySession(session)) {
+      socket.emit('question_ended', {
+        mode: 'survey',
+        questionId: question.id,
+        question,
+        questionNumber: question.displayNumber ?? question.index + 1,
+        totalQuestions: surveyQuestionCount(session.quiz),
+        answered: session.lastQuestionPresentation.answered,
+        totalParticipants: session.lastQuestionPresentation.totalParticipants,
+        autopilotNextInMs: pendingAutopilotMs(session)
+      });
+      return;
+    }
     socket.emit('question_ended', {
       questionId: question.id,
       question,
@@ -2746,13 +2828,15 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
       autopilotNextInMs: pendingAutopilotMs(session)
     });
   } else if (session.quizState.isRunning) {
+    const survey = isSurveySession(session);
     socket.emit('question_started', {
       question: audience === 'presenter'
         ? getQuestionForParticipants(question)
         : question,
       timeRemaining,
-      questionNumber: question.gradedNumber,
-      totalQuestions: gradedCount(session.quiz)
+      questionNumber: survey ? (question.displayNumber ?? question.index + 1) : question.gradedNumber,
+      totalQuestions: survey ? surveyQuestionCount(session.quiz) : gradedCount(session.quiz),
+      mode: survey ? 'survey' : 'quiz'
     });
   }
 }
@@ -2917,6 +3001,16 @@ io.on('connection', (socket) => {
 
     // Restore the participant's personal finale after a refresh.
     if (session.finale) {
+      if (isSurveySession(session)) {
+        socket.emit('quiz_ended', {
+          mode: 'survey',
+          quizTitle: session.finale.quizTitle,
+          participantCount: session.finale.participantCount,
+          responseCount: session.finale.responseCount,
+          responseRate: session.finale.responseRate
+        });
+        return;
+      }
       const standing = session.finale.leaderboard
         ?.find(entry => entry.id === participant.id);
       const totalGraded = gradedCount(session.quiz);
@@ -2961,6 +3055,21 @@ io.on('connection', (socket) => {
       const timeRemaining = Math.max(0, Math.ceil((session.quizState.questionEndTime - Date.now()) / 1000));
 
       if (session.quizState.showingResults) {
+        if (isSurveySession(session)) {
+          const presentation = session.lastQuestionPresentation || {};
+          socket.emit('question_ended', {
+            mode: 'survey',
+            questionId: question.id,
+            question: getQuestionForParticipants(question),
+            responseRecorded: participant.surveyAnsweredQuestions?.[question.index] === true,
+            answered: presentation.answered || 0,
+            totalParticipants: presentation.totalParticipants || Object.keys(session.participants).length,
+            questionsAnswered: question.displayNumber ?? question.index + 1,
+            totalQuestions: surveyQuestionCount(session.quiz),
+            autopilotNextInMs: pendingAutopilotMs(session)
+          });
+          return;
+        }
         const pointsPer = pointsPerQuestion(session.quiz);
         const standing = session.lastQuestionPresentation?.leaderboard
           ?.find(entry => entry.id === participant.id);
@@ -2990,11 +3099,13 @@ io.on('connection', (socket) => {
           autopilotNextInMs: pendingAutopilotMs(session)
         });
       } else if (timeRemaining > 0) {
+        const survey = isSurveySession(session);
         socket.emit('question_started', {
           question: getQuestionForParticipants(question),
           timeRemaining,
-          questionNumber: question.gradedNumber,
-          totalQuestions: gradedCount(session.quiz)
+          questionNumber: survey ? (question.displayNumber ?? question.index + 1) : question.gradedNumber,
+          totalQuestions: survey ? surveyQuestionCount(session.quiz) : gradedCount(session.quiz),
+          mode: survey ? 'survey' : 'quiz'
         });
       }
     }
@@ -3016,6 +3127,7 @@ io.on('connection', (socket) => {
     session.rankSnapshot = {};
     session.lastQuestionPresentation = null;
     session.finale = null;
+    session.surveyCounts = Object.create(null);
 
     // Update database status
     await session.repository.updateStatus('active');
@@ -3028,6 +3140,7 @@ io.on('connection', (socket) => {
       p.currentStreak = 0;
       p.bestStreak = 0;
       p.responseTimes = {};
+      p.surveyAnsweredQuestions = Object.create(null);
       p.funCorrectCount = 0;
       p.funTotal = 0;
     }
@@ -3323,21 +3436,11 @@ async function finishQuiz(sessionCode, session) {
   await session.repository.updateStatus('ended');
 
   if (isSurveySession(session)) {
-    const questions = session.quiz.questions.map(question => {
-      const distribution = buildSurveyDistribution(session, question);
-      return {
-        text: question.text,
-        options: question.options,
-        counts: distribution.counts,
-        answered: distribution.answered,
-        displayNumber: question.displayNumber
-      };
-    });
+    const summary = surveySummaryForSession(session);
     session.finale = {
       mode: 'survey',
       quizTitle: session.quiz.title,
-      participantCount: Object.keys(session.participants).length,
-      questions
+      ...summary
     };
     for (const participant of Object.values(session.participants)) {
       if (!participant.socketId) continue;
@@ -3351,7 +3454,9 @@ async function finishQuiz(sessionCode, session) {
         totalQuestions: surveyQuestionCount(session.quiz),
         percentage: 0,
         passed: false,
-        participantCount: session.finale.participantCount
+        participantCount: session.finale.participantCount,
+        responseCount: session.finale.responseCount,
+        responseRate: session.finale.responseRate
       });
     }
     clearAutopilotTimer(session);
@@ -3510,36 +3615,46 @@ async function endCurrentQuestion(sessionCode) {
 
     const questionNumber = question.displayNumber ?? question.index + 1;
     const totalQuestions = surveyQuestionCount(session.quiz);
+    session.surveyCounts[question.index] = distribution.counts.slice();
     const surveyPayload = {
       mode: 'survey',
       questionId: question.id,
       question,
       questionNumber,
       totalQuestions,
-      distribution: {
-        options: question.options,
-        counts: distribution.counts,
-        answered: distribution.answered,
-        totalParticipants: distribution.totalParticipants
-      },
+      answered: distribution.answered,
+      totalParticipants: distribution.totalParticipants,
       autopilotNextInMs: nextInMs
     };
     session.lastQuestionPresentation = {
       mode: 'survey',
-      distribution: surveyPayload.distribution
+      answered: distribution.answered,
+      totalParticipants: distribution.totalParticipants,
+      questionNumber,
+      totalQuestions
     };
 
     for (const participant of Object.values(session.participants)) {
       if (!participant.socketId) continue;
+      const yourAnswer = participant.answers[question.id];
       io.to(participant.socketId).emit('question_ended', {
         mode: 'survey',
         questionId: question.id,
-        yourAnswer: participant.answers[question.id],
-        distribution: surveyPayload.distribution,
+        yourAnswer,
+        responseRecorded: yourAnswer !== undefined,
+        answered: distribution.answered,
+        totalParticipants: distribution.totalParticipants,
         questionsAnswered: questionNumber,
         totalQuestions,
         autopilotNextInMs: nextInMs
       });
+    }
+    for (const participant of Object.values(session.participants)) {
+      if (participant.answers[question.id] !== undefined) {
+        participant.surveyAnsweredQuestions[question.index] = true;
+      }
+      delete participant.answers[question.id];
+      delete participant.responseTimes?.[question.id];
     }
     io.to(`admin:${sessionCode}`).emit('question_ended', surveyPayload);
     io.to(`presenter:${sessionCode}`).emit('question_ended', surveyPayload);

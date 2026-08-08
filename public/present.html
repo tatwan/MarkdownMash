@@ -194,6 +194,47 @@
       <p id="presenter-next-countdown" class="presenter-next-countdown hidden"></p>
     </div>
 
+    <!-- Survey Collection Pause -->
+    <div id="survey-locked-section" class="presenter-section hidden">
+      <div class="survey-locked-card">
+        <div class="survey-locked-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg></div>
+        <p class="section-eyebrow">Responses locked</p>
+        <h1>Survey question complete.</h1>
+        <p id="survey-locked-count">0 responses recorded anonymously.</p>
+        <p id="survey-locked-progress" class="survey-locked-progress"></p>
+        <p id="survey-next-countdown" class="presenter-next-countdown hidden"></p>
+      </div>
+    </div>
+
+    <!-- Survey Finale -->
+    <div id="survey-finale-section" class="presenter-section survey-finale-section hidden">
+      <header class="survey-finale-header">
+        <div>
+          <p class="finale-kicker">Survey summary</p>
+          <h1 id="survey-finale-title">What the room said</h1>
+          <p id="survey-finale-subtitle"></p>
+        </div>
+        <div class="survey-finale-overview">
+          <strong id="survey-finale-rate">0%</strong>
+          <span>overall response rate</span>
+        </div>
+      </header>
+      <article class="survey-finale-card">
+        <div class="survey-finale-question-heading">
+          <span id="survey-finale-progress">Question 1 of 1</span>
+          <span id="survey-finale-response-count">0 responses</span>
+        </div>
+        <h2 id="survey-finale-question"></h2>
+        <p id="survey-finale-top-choice" class="survey-top-choice"></p>
+        <div id="survey-finale-distribution" class="survey-finale-distribution"></div>
+      </article>
+      <nav class="survey-finale-controls" aria-label="Survey result questions">
+        <button type="button" id="survey-finale-prev" class="finale-control"><svg aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>Previous</button>
+        <div id="survey-finale-dots" class="survey-finale-dots" aria-hidden="true"></div>
+        <button type="button" id="survey-finale-next" class="finale-control primary">Next<svg aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
+      </nav>
+    </div>
+
     <!-- Animated Finale -->
     <div id="ended-section" class="presenter-section finale-section hidden">
       <section id="podium-scene" class="finale-scene">

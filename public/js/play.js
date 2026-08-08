@@ -55,6 +55,11 @@ const resultResponseTotal = document.getElementById('result-response-total');
 const resultsDistribution = document.getElementById('results-distribution');
 const resultSidekick = document.getElementById('result-sidekick');
 const resultWaiting = document.getElementById('result-waiting');
+const surveyResponseSection = document.getElementById('survey-response-section');
+const surveyResponseTitle = document.getElementById('survey-response-title');
+const surveyResponseCopy = document.getElementById('survey-response-copy');
+const surveyResponseProgress = document.getElementById('survey-response-progress');
+const surveyResponseWaiting = document.getElementById('survey-response-waiting');
 
 const endedSection = document.getElementById('ended-section');
 const finalIcon = document.getElementById('final-icon');
@@ -67,6 +72,10 @@ const finalRank = document.getElementById('final-rank');
 const finalCorrect = document.getElementById('final-correct');
 const finalStreak = document.getElementById('final-streak');
 const finalSidekick = document.getElementById('final-sidekick');
+const surveyCompleteSection = document.getElementById('survey-complete-section');
+const surveyCompleteParticipants = document.getElementById('survey-complete-participants');
+const surveyCompleteRate = document.getElementById('survey-complete-rate');
+const playerScore = document.querySelector('.player-score');
 const participantStore = MarkdownMashParticipantStorage.createParticipantStore(
   window.sessionStorage,
   window.localStorage
@@ -86,6 +95,8 @@ let currentScore = 0;
 let avatarId = null;
 let canShuffleAvatar = false;
 let isFirstConnect = true; // Tracks whether this is the initial connection or a reconnect
+let currentSessionMode = 'quiz';
+let sectionExitTimer = null;
 
 // Motivating messages
 const motivatingMessages = [
@@ -247,6 +258,7 @@ async function attemptJoin(
       participantId = data.participantId;
       participantToken = data.participantToken;
       sessionCode = data.sessionCode;
+      currentSessionMode = data.sessionType === 'survey' ? 'survey' : 'quiz';
       avatarId = data.avatarId || null;
       canShuffleAvatar = Boolean(data.canShuffleAvatar);
 
@@ -448,6 +460,7 @@ function initSocket() {
   });
 
   socket.on('quiz_started', (data) => {
+    currentSessionMode = data.mode === 'survey' ? 'survey' : 'quiz';
     quizTitleDisplay.textContent = data.title;
     totalQNum.textContent = data.totalQuestions;
     currentScore = 0;
@@ -464,6 +477,7 @@ function initSocket() {
     sectionIntroTitle.textContent = data.title;
     sectionIntroSubtitle.textContent = data.subtitle || '';
     sectionIntroSubtitle.classList.toggle('hidden', !data.subtitle);
+    sectionIntroSection.classList.remove('section-transition-opening');
 
     startSectionCountdown(data.autopilotNextInMs);
 
@@ -472,6 +486,7 @@ function initSocket() {
   });
 
   socket.on('question_started', (data) => {
+    const leavingSection = !sectionIntroSection.classList.contains('hidden');
     hideAllAnsweredBanner();
     stopNextQuestionCountdown();
     stopSectionCountdown();
@@ -480,9 +495,12 @@ function initSocket() {
     selectedAnswer = null;
     timerDuration = data.timeRemaining;
 
-    const isUngraded = data.question.type === 'ungraded';
+    currentSessionMode = data.mode === 'survey' ? 'survey' : currentSessionMode;
+    const isSurvey = currentSessionMode === 'survey';
+    const isUngraded = data.question.type === 'ungraded' && !isSurvey;
     playerQnum.classList.toggle('hidden', isUngraded);
     playerQbadge.classList.toggle('hidden', !isUngraded);
+    playerScore.classList.toggle('hidden', isSurvey);
     if (!isUngraded) {
       currentQNum.textContent = data.questionNumber;
       totalQNum.textContent = data.totalQuestions;
@@ -495,6 +513,15 @@ function initSocket() {
 
     hideAllSections();
     questionSection.classList.remove('hidden');
+    if (leavingSection && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      sectionIntroSection.classList.add('section-transition-opening');
+      sectionIntroSection.classList.remove('hidden');
+      sectionExitTimer = setTimeout(() => {
+        sectionIntroSection.classList.add('hidden');
+        sectionIntroSection.classList.remove('section-transition-opening');
+        sectionExitTimer = null;
+      }, 520);
+    }
   });
 
   socket.on('answer_confirmed', () => {
@@ -515,26 +542,24 @@ function initSocket() {
 
     if (data.mode === 'survey') {
       const yourAnswerIdx = data.yourAnswer;
-      resultIcon.className = 'result-icon correct';
-      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
-      if (yourAnswerIdx === undefined) {
-        resultText.textContent = "Time's up!";
-        yourAnswer.textContent = 'No answer';
+      if (yourAnswerIdx === undefined && !data.responseRecorded) {
+        surveyResponseTitle.textContent = 'This question has closed.';
+        surveyResponseCopy.textContent = `No response was recorded. ${data.answered || 0} people responded.`;
+      } else if (yourAnswerIdx === undefined) {
+        surveyResponseTitle.textContent = 'Thanks — your choice is locked in.';
+        surveyResponseCopy.textContent = 'Your response was recorded anonymously.';
       } else {
-        resultText.textContent = 'Got it — thanks!';
         const opt = currentQuestion?.options?.[yourAnswerIdx];
-        yourAnswer.innerHTML = opt
-          ? `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(opt)}`
-          : 'Recorded';
+        surveyResponseTitle.textContent = 'Thanks — your choice is locked in.';
+        surveyResponseCopy.textContent = opt
+          ? `You selected ${String.fromCharCode(65 + yourAnswerIdx)}. ${opt}`
+          : 'Your response was recorded anonymously.';
       }
-      resultRank.textContent = '—';
-      resultStreak.textContent = '—';
-      resultMovement.textContent = '—';
-      const correctRow = document.querySelector('.result-detail-row.correct');
-      if (correctRow) correctRow.style.display = 'none';
-      showSurveyResultsChart(data);
+      const completed = Number(data.questionsAnswered || 0);
+      const total = Number(data.totalQuestions || 0);
+      surveyResponseProgress.style.width = total > 0 ? `${Math.round((completed * 100) / total)}%` : '0%';
       hideAllSections();
-      resultsSection.classList.remove('hidden');
+      surveyResponseSection.classList.remove('hidden');
       return;
     }
 
@@ -546,30 +571,12 @@ function initSocket() {
     const correctIdx = data.correctIndices[0];
     const isCorrect = yourAnswerIdx !== undefined && data.correctIndices.includes(yourAnswerIdx);
 
-    // Update score
-    const isSurvey = data.mode === 'survey';
+    document.querySelector('.result-score-display')?.classList.remove('hidden');
+    document.querySelector('.personal-result-grid')?.classList.remove('hidden');
 
-    // Set result display
-    if (isSurvey) {
-      resultIcon.className = 'result-icon correct';
-      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
-      resultText.textContent = 'Response Recorded';
-      document.querySelector('.result-score-display')?.classList.add('hidden');
-      document.querySelector('.personal-result-grid')?.classList.add('hidden');
-      document.querySelector('.result-detail-row.correct').style.display = 'none';
-
-      if (yourAnswerIdx === undefined) {
-        yourAnswer.textContent = 'No response';
-      } else {
-        yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
-      }
-    } else {
-      document.querySelector('.result-score-display')?.classList.remove('hidden');
-      document.querySelector('.personal-result-grid')?.classList.remove('hidden');
-
-      currentScore = myResults.currentScore || 0;
-      scoreDisplay.textContent = currentScore;
-      currentScoreEl.textContent = currentScore;
+    currentScore = myResults.currentScore || 0;
+    scoreDisplay.textContent = currentScore;
+    currentScoreEl.textContent = currentScore;
 
       if (yourAnswerIdx === undefined) {
         resultIcon.className = 'result-icon timeout';
@@ -598,9 +605,8 @@ function initSocket() {
         resultMovement.textContent = myResults.previousRank ? 'Held' : 'New';
       }
 
-      correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${markdown.inline(currentQuestion.options[correctIdx])}`;
-      document.querySelector('.result-detail-row.correct').style.display = isCorrect ? 'none' : 'flex';
-    }
+    correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${markdown.inline(currentQuestion.options[correctIdx])}`;
+    document.querySelector('.result-detail-row.correct').style.display = isCorrect ? 'none' : 'flex';
 
     // Show results chart
     showResultsChart(data);
@@ -615,19 +621,10 @@ function initSocket() {
     stopSectionCountdown();
 
     if (data.mode === 'survey') {
-      finalIcon.className = 'final-icon passed';
-      finalIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
-      finalStatus.textContent = 'Thanks for sharing!';
-      finalScoreValue.textContent = '—';
-      finalScoreMax.textContent = '—';
-      finalPercentage.textContent = '';
-      finalPercentage.className = 'final-pct';
-      finalRank.textContent = data.participantCount ? `${data.participantCount} in the room` : '—';
-      finalCorrect.textContent = '—';
-      finalStreak.textContent = '—';
-      finalMessage.textContent = 'Your answers were recorded anonymously.';
+      surveyCompleteParticipants.textContent = data.participantCount || 0;
+      surveyCompleteRate.textContent = `${data.responseRate || 0}%`;
       hideAllSections();
-      finalSection.classList.remove('hidden');
+      surveyCompleteSection.classList.remove('hidden');
       return;
     }
 
@@ -689,6 +686,7 @@ function stopNextQuestionCountdown() {
   clearInterval(nextQuestionCountdown);
   nextQuestionCountdown = null;
   resultWaiting.lastChild.textContent = 'Next question coming up';
+  surveyResponseWaiting.lastChild.textContent = 'Next survey question coming up';
 }
 
 function startNextQuestionCountdown(nextInMs) {
@@ -696,17 +694,20 @@ function startNextQuestionCountdown(nextInMs) {
   if (!nextInMs || nextInMs <= 0) return;
 
   let remaining = Math.ceil(nextInMs / 1000);
-  resultWaiting.lastChild.textContent = `Next question in ${remaining}…`;
+  const target = currentSessionMode === 'survey' ? surveyResponseWaiting : resultWaiting;
+  target.lastChild.textContent = `Next question in ${remaining}…`;
 
   nextQuestionCountdown = setInterval(() => {
     remaining -= 1;
     if (remaining <= 0) {
       clearInterval(nextQuestionCountdown);
       nextQuestionCountdown = null;
-      resultWaiting.lastChild.textContent = 'Next question coming up';
+      target.lastChild.textContent = currentSessionMode === 'survey'
+        ? 'Next survey question coming up'
+        : 'Next question coming up';
       return;
     }
-    resultWaiting.lastChild.textContent = `Next question in ${remaining}…`;
+    target.lastChild.textContent = `Next question in ${remaining}…`;
   }, 1000);
 }
 
@@ -757,11 +758,11 @@ function showReconnectBanner(reason) {
     'box-shadow:0 2px 8px rgba(0,0,0,0.4)'
   ].join(';');
 
-  const msg = escapeText(reason || 'Connection to quiz server was interrupted.');
+  const msg = escapeText(reason || 'Connection to the room was interrupted.');
   banner.innerHTML = `
     <svg class="banner-icon" aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg>
     <strong>Connection interrupted.</strong> ${msg}
-    <br><small>Wait for your teacher to let you know if the quiz will continue.
+    <br><small>Wait for your teacher to let you know if the Mash will continue.
     <button type="button" class="reconnect-refresh" style="color:#fde68a;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer">Refresh</button>
     to try reconnecting.</small>
   `;
@@ -832,30 +833,6 @@ function showResultsChart(data) {
   });
 }
 
-function showSurveyResultsChart(data) {
-  const counts = data.distribution?.counts || [];
-  const options = data.distribution?.options || currentQuestion?.options || [];
-  const totalResponses = counts.reduce((sum, count) => sum + Number(count || 0), 0);
-  const largestCount = Math.max(1, ...counts, 1);
-
-  resultResponseTotal.textContent = `${totalResponses} ${totalResponses === 1 ? 'response' : 'responses'}`;
-  resultsDistribution.innerHTML = '';
-
-  options.forEach((option, index) => {
-    const count = Number(counts[index] || 0);
-    const width = Math.round((count / largestCount) * 100);
-    const row = document.createElement('div');
-    row.className = 'distribution-row';
-    row.innerHTML = `
-      <div class="distribution-answer"><strong>${String.fromCharCode(65 + index)}.</strong> ${markdown.inline(option)}</div>
-      <div class="distribution-track" aria-hidden="true"><span style="width: ${width}%"></span></div>
-      <div class="distribution-count">${count}</div>
-    `;
-    resultsDistribution.appendChild(row);
-  });
-}
-
-
 // Timer with circular progress
 function startTimer(seconds) {
   clearInterval(timerInterval);
@@ -892,6 +869,11 @@ function startTimer(seconds) {
 
 // Hide all sections
 function hideAllSections() {
+  if (sectionExitTimer) {
+    clearTimeout(sectionExitTimer);
+    sectionExitTimer = null;
+  }
+  sectionIntroSection.classList.remove('section-transition-opening');
   joinSection.classList.add('hidden');
   sessionEndedSection.classList.add('hidden');
   waitingSection.classList.add('hidden');
@@ -899,6 +881,8 @@ function hideAllSections() {
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
   endedSection.classList.add('hidden');
+  surveyResponseSection.classList.add('hidden');
+  surveyCompleteSection.classList.add('hidden');
 }
 
 // Show error

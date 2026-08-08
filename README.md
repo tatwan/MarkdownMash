@@ -8,7 +8,18 @@
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-Real--time-black?logo=socketdotio&style=flat-square)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)
 
-A lightweight, real-time quiz application for classrooms and events. Host interactive quizzes with live results, scoring, and pass/fail feedback - no accounts required for participants.
+A lightweight, real-time quiz and survey application for classrooms and events. Host interactive quizzes with live scoring or anonymous surveys with shared summaries — no participant accounts required.
+
+## What's New in v1.6.0
+
+### Survey polish, clearer analytics, and safer quiz loading
+
+- **Collect first, reveal together** — survey choices remain private between questions. Participants get a calm confirmation screen; the presenter shows distributions only after the survey ends.
+- **A real survey finale** — step through every question with previous/next controls, response rates, most-popular choices, ties, and full option distributions.
+- **Quiz and survey analytics are distinct** — session type badges and filters keep quiz averages separate from survey response summaries.
+- **Consistent dialogs** — logout, cancel, end, delete, recover, kick, and template replacement share one keyboard-accessible styled dialog.
+- **More reliable technical quizzes** — the host transports Markdown safely so code and shell-command examples do not trigger common hosting firewall false positives.
+- **Smoother section transitions** — the curtain now opens into the next question and respects reduced-motion preferences.
 
 ## What's New in v1.5.0
 
@@ -296,6 +307,31 @@ greet("Alice")
 - Ungraded questions never change score, `correctCount`, or streaks
 - Participants see their score after each graded question
 - At the end: **Pass** (70%+) or motivating message to study more (skipped when a quiz has no graded questions)
+
+## Survey Format
+
+Choose **Host a survey** on Host Home. Survey options may use plain Markdown lists; checkbox marks are also accepted but never represent correctness. `# Score` and `::type` are ignored.
+
+```markdown
+# Classroom pulse
+
+# Section: Check-in
+> A quick anonymous read of the room.
+
+## Q1: How is the pace?
+- Too slow
+- Just right
+- Too fast
+::time=20
+
+## Q2: What should we revisit?
+- Dictionaries
+- Loops
+- Functions
+::time=30
+```
+
+Responses are stored without a participant identity. During collection, the room sees response counts only; after the final question, the presenter and host can review the aggregate summary one question at a time.
 
 ## Hosting a Quiz
 
@@ -594,9 +630,11 @@ npm run simulate 10   # 10 participants
 ```
 ## Analytics Dashboard
 
-View detailed insights from completed quiz sessions:
+View detailed insights from completed quiz and survey sessions:
 
-- **Platform Overview**: Total sessions, participants, average scores
+- **Platform Overview**: Quiz and survey counts, participants, quiz-only average score, and survey response totals
+- **Session Type Filters**: Separate quizzes from surveys at a glance
+- **Survey Summaries**: Response rate, most-popular choices, and anonymous option distributions
 - **Question Difficulty**: Automatic difficulty ratings (easy/medium/hard)
 - **Answer Distribution**: See which options players chose
 - **Response Times**: Track how quickly participants answered

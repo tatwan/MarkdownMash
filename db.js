@@ -485,6 +485,14 @@ const dbApi = {
     return result.rows;
   },
 
+  async getParticipantCount(sessionId) {
+    const result = await pool.query(
+      'SELECT COUNT(*)::integer AS count FROM participants WHERE session_id = $1',
+      [sessionId]
+    );
+    return result.rows[0]?.count || 0;
+  },
+
   async updateParticipantScore(id, score, correctCount) {
     return pool.query(
       'UPDATE participants SET score = $1, correct_count = $2 WHERE id = $3',
@@ -565,12 +573,18 @@ const dbApi = {
         s.total_questions, s.total_score, s.course_name, s.is_test,
         COALESCE(s.session_type, 'quiz') as session_type,
         COUNT(DISTINCT p.id) as participant_count,
+        COALESCE(MAX(a.response_count), 0) as response_count,
         CASE
           WHEN COALESCE(s.session_type, 'quiz') = 'survey' THEN NULL
           ELSE ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1)
         END as avg_score_percent
       FROM sessions s
       LEFT JOIN participants p ON p.session_id = s.id
+      LEFT JOIN (
+        SELECT session_id, COUNT(*) as response_count
+        FROM answers
+        GROUP BY session_id
+      ) a ON a.session_id = s.id
       WHERE ${conditions.join(' AND ')}
       GROUP BY s.id
       ORDER BY COALESCE(s.ended_at, s.started_at, s.created_at) DESC
@@ -635,6 +649,15 @@ const dbApi = {
       `SELECT
         (SELECT COUNT(*) FROM sessions WHERE ($1::integer IS NULL OR owner_id = $1)) as total_sessions,
         (SELECT COUNT(*) FROM sessions WHERE status = 'ended' AND ($1::integer IS NULL OR owner_id = $1)) as completed_sessions,
+        (SELECT COUNT(*) FROM sessions
+          WHERE COALESCE(session_type, 'quiz') = 'quiz'
+            AND ($1::integer IS NULL OR owner_id = $1)) as quiz_sessions,
+        (SELECT COUNT(*) FROM sessions
+          WHERE COALESCE(session_type, 'quiz') = 'survey'
+            AND ($1::integer IS NULL OR owner_id = $1)) as survey_sessions,
+        (SELECT COUNT(*) FROM answers a JOIN sessions s ON s.id = a.session_id
+          WHERE COALESCE(s.session_type, 'quiz') = 'survey'
+            AND ($1::integer IS NULL OR s.owner_id = $1)) as survey_responses,
         (SELECT COUNT(*) FROM participants p JOIN sessions s ON s.id = p.session_id
           WHERE ($1::integer IS NULL OR s.owner_id = $1)) as total_participants,
         (SELECT COUNT(DISTINCT course_name) FROM sessions
@@ -644,6 +667,7 @@ const dbApi = {
          FROM participants p
          JOIN sessions s ON s.id = p.session_id
          WHERE s.status = 'ended'
+           AND COALESCE(s.session_type, 'quiz') = 'quiz'
            AND ($1::integer IS NULL OR s.owner_id = $1)) as overall_avg_score`,
       [ownerId]
     );

@@ -35,11 +35,19 @@ supabase/.temp/
 
 # Internal documentation (not for public repo)
 CLAUDE.md
+AGENTS.md
 DEPLOYMENT-CHECKLIST.md
 MIGRATION.md
 SAFE-PUSH-GUIDE.md
 MULTI_ADMIN_PLAN.md
 idea.md
+
+# Session working logs
+log_latest.md
+log_*.md
+
+# Local verification drivers
+scratch/
 
 # Business and strategy documents (not for public repo).
 # docs/ is ignored by default so working notes never leak; public docs are

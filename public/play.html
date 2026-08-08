@@ -47,7 +47,7 @@
           <input type="text" id="session-code" class="code-input" placeholder="ABC123" required maxlength="6" autocomplete="off" autocapitalize="characters">
           <label for="player-name">Your name</label>
           <input type="text" id="player-name" placeholder="Enter your name" required maxlength="30" autocomplete="name">
-          <button type="submit" class="btn btn-primary btn-block btn-lg">Join the quiz <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
+          <button type="submit" class="btn btn-primary btn-block btn-lg">Join the Mash <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
         </form>
         <p class="participant-privacy-note">Use a nickname or first name when possible. <a href="/privacy.html">How Markdown Mash handles participant data</a>.</p>
         <p id="join-error" class="error-text hidden" role="alert"></p>
@@ -169,6 +169,18 @@
       <p id="result-waiting" class="waiting-pulse result-waiting"><span></span>Next question coming up</p>
     </div>
 
+    <!-- Survey Response Acknowledgement -->
+    <div id="survey-response-section" class="player-section hidden">
+      <div class="survey-response-card">
+        <div class="survey-response-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg></div>
+        <p class="section-eyebrow">Response recorded</p>
+        <h2 id="survey-response-title">Thanks — your choice is locked in.</h2>
+        <p id="survey-response-copy" class="text-muted"></p>
+        <div class="survey-response-progress"><span id="survey-response-progress"></span></div>
+        <p id="survey-response-waiting" class="waiting-pulse result-waiting"><span></span>Next survey question coming up</p>
+      </div>
+    </div>
+
     <!-- Quiz Ended Section -->
     <div id="ended-section" class="player-section hidden">
       <div class="final-display">
@@ -187,6 +199,21 @@
           <div><strong id="final-streak">0</strong><span>Best streak</span></div>
         </div>
         <p id="final-message" class="final-msg"></p>
+        <a href="/play.html" class="btn btn-primary">Join another Mash <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#replay"></use></svg></a>
+      </div>
+    </div>
+
+    <!-- Survey Complete -->
+    <div id="survey-complete-section" class="player-section hidden">
+      <div class="survey-complete-card">
+        <div class="survey-response-icon"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg></div>
+        <p class="section-eyebrow">Survey complete</p>
+        <h2>Thanks for sharing.</h2>
+        <p>Your responses were recorded anonymously and will be revealed with the room summary.</p>
+        <div class="survey-complete-metrics">
+          <div><strong id="survey-complete-participants">0</strong><span>Participants</span></div>
+          <div><strong id="survey-complete-rate">0%</strong><span>Response rate</span></div>
+        </div>
         <a href="/play.html" class="btn btn-primary">Join another Mash <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#replay"></use></svg></a>
       </div>
     </div>

@@ -2,6 +2,35 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [1.6.0] - 2026-08-08
+
+### Added
+
+- A collection-first survey flow: participants receive a neutral response acknowledgement between questions, while distributions stay hidden until the survey is complete.
+- A dedicated presenter finale with overall response rate, most-popular choice (including ties), full option distributions, and previous/next navigation across every survey question.
+- Survey-aware host results and analytics summaries with session-type badges, quiz/survey filtering, response totals, and response rates.
+- Pure, dependency-free modules for anonymous survey summaries and Base64 Markdown transport, plus survey preview-drift and client-contract regression coverage.
+
+### Changed
+
+- Survey participant and presenter screens no longer reuse quiz result, score, difficulty, ranking, or podium UI.
+- Platform average score now uses quiz sessions only; surveys report participation signals separately.
+- Section curtains use a layered stage treatment and animate open into the next question, with reduced-motion support.
+- Logout, cancellation, session ending, recovery, kicking, template replacement, and deletion use one accessible styled dialog with focus trapping, Escape handling, and action-specific copy.
+- Quiz Markdown is Base64-encoded in the host request to avoid false-positive hosting WAF rules on technical content such as shell commands, while the server retains backward compatibility for older clients.
+
+### Fixed
+
+- Survey question close no longer reaches quiz-only `correctIndices` handling in the host studio.
+- Survey finales and analytics no longer render empty quiz scores, participant rankings, or blank reports.
+- Trial rooms can be cancelled before starting, and cancellation errors no longer reset the host UI as if the request succeeded.
+- Participant refresh and presenter/admin reconnect restore the correct survey pause or finale state.
+
+### Notes
+
+- No database migration is required for v1.6.0.
+- Guest trial remains quiz-only in the product; custom survey trial payloads are accepted only when the local runtime-verification flag is enabled.
+
 ## [1.5.0] - 2026-08-08
 
 ### Added

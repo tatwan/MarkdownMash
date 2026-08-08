@@ -314,14 +314,15 @@
             </section>
 
             <section id="results-section" class="card hidden">
-              <p class="section-eyebrow">Quiz complete</p>
-              <h2>Final Results</h2>
-              <div class="table-scroll">
+              <p id="live-results-eyebrow" class="section-eyebrow">Quiz complete</p>
+              <h2 id="live-results-title">Final Results</h2>
+              <div id="quiz-live-results" class="table-scroll">
                 <table class="results-table">
                   <thead><tr><th>Rank</th><th>Name</th><th>Score</th></tr></thead>
                   <tbody id="results-body"></tbody>
                 </table>
               </div>
+              <div id="survey-live-results" class="survey-summary-grid hidden"></div>
               <div id="trial-completion-cta" class="trial-completion-cta hidden">
                 <div>
                   <p class="section-eyebrow">Make it yours</p>
@@ -451,8 +452,11 @@
               <div class="stats-grid analytics-stats-grid">
                 <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="stat-value" id="total-sessions-stat">0</span><span class="stat-label">Total sessions</span></div>
                 <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg><span class="stat-value" id="completed-sessions-stat">0</span><span class="stat-label">Completed</span></div>
+                <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg><span class="stat-value" id="quiz-sessions-stat">0</span><span class="stat-label">Quizzes</span></div>
+                <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#users"></use></svg><span class="stat-value" id="survey-sessions-stat">0</span><span class="stat-label">Surveys</span></div>
                 <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#users"></use></svg><span class="stat-value" id="total-participants-stat">0</span><span class="stat-label">Participants</span></div>
-                <div class="stat-card stat-card-highlight"><svg aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg><span class="stat-value" id="avg-score-stat">0%</span><span class="stat-label">Average score</span></div>
+                <div class="stat-card stat-card-highlight"><svg aria-hidden="true"><use href="/assets/icons.svg#target-alert"></use></svg><span class="stat-value" id="avg-score-stat">0%</span><span class="stat-label">Quiz average</span></div>
+                <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg><span class="stat-value" id="survey-responses-stat">0</span><span class="stat-label">Survey responses</span></div>
                 <div class="stat-card"><svg aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg><span class="stat-value" id="total-courses-stat">0</span><span class="stat-label">Mash groups</span></div>
               </div>
               <div class="analytics-chart-grid">
@@ -476,6 +480,11 @@
                 <input id="session-search-input" type="search" placeholder="Search code, quiz, or Mash group">
               </label>
               <select id="course-filter-select" aria-label="Filter by Mash group"><option value="all">All Mash groups</option></select>
+              <select id="session-type-filter" aria-label="Filter by session type">
+                <option value="all">All types</option>
+                <option value="quiz">Quizzes</option>
+                <option value="survey">Surveys</option>
+              </select>
               <div class="filter-pills">
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="ended">Completed</button>
@@ -485,7 +494,7 @@
             </div>
             <div class="table-card table-scroll">
               <table class="results-table sessions-table">
-                <thead><tr><th>Session</th><th>Mash group</th><th>Quiz title</th><th>Participants</th><th>Avg score</th><th>Date</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <thead><tr><th>Session</th><th>Type</th><th>Mash group</th><th>Title</th><th>Participants</th><th>Summary</th><th>Date</th><th><span class="sr-only">Actions</span></th></tr></thead>
                 <tbody id="analytics-sessions-body"></tbody>
               </table>
             </div>
@@ -501,10 +510,10 @@
           </div>
 
           <div class="stats-grid detail-stats-grid">
-            <div class="stat-card"><span class="stat-value" id="detail-participants">0</span><span class="stat-label">Participants</span></div>
-            <div class="stat-card stat-card-highlight"><span class="stat-value" id="detail-avg-score">0%</span><span class="stat-label">Average score</span></div>
+            <div class="stat-card"><span class="stat-value" id="detail-participants">0</span><span class="stat-label" id="detail-participants-label">Participants</span></div>
+            <div class="stat-card stat-card-highlight"><span class="stat-value" id="detail-avg-score">0%</span><span class="stat-label" id="detail-primary-label">Average score</span></div>
             <div class="stat-card"><span class="stat-value" id="detail-questions">0</span><span class="stat-label">Questions</span></div>
-            <div class="stat-card" id="engagement-stat-card"><span class="stat-value" id="detail-completion-rate">0%</span><span class="stat-label">Completion rate</span><span class="stat-note" id="detail-dropoff-note"></span></div>
+            <div class="stat-card" id="engagement-stat-card"><span class="stat-value" id="detail-completion-rate">0%</span><span class="stat-label" id="detail-secondary-label">Completion rate</span><span class="stat-note" id="detail-dropoff-note"></span></div>
           </div>
 
           <div class="analytics-chart-grid detail-chart-grid">
@@ -847,7 +856,7 @@
   </div>
 
   <!-- Custom Confirmation Modal -->
-  <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+  <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-message">
     <div class="modal-content confirm-modal-content">
       <div class="modal-header">
         <h3 id="confirm-modal-title">Confirmation</h3>

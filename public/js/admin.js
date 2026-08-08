@@ -173,6 +173,10 @@ const optionsDisplay = document.getElementById('options-display');
 
 const resultsSection = document.getElementById('results-section');
 const resultsBody = document.getElementById('results-body');
+const liveResultsEyebrow = document.getElementById('live-results-eyebrow');
+const liveResultsTitle = document.getElementById('live-results-title');
+const quizLiveResults = document.getElementById('quiz-live-results');
+const surveyLiveResults = document.getElementById('survey-live-results');
 const liveWorkspace = document.getElementById('live-workspace');
 const liveLobbyPanel = document.getElementById('live-lobby-panel');
 const liveLobbyEyebrow = document.getElementById('live-lobby-eyebrow');
@@ -204,6 +208,9 @@ const analyticsEmptyHostBtn = document.getElementById('analytics-empty-host-btn'
 // Analytics stats elements
 const totalSessionsStat = document.getElementById('total-sessions-stat');
 const completedSessionsStat = document.getElementById('completed-sessions-stat');
+const quizSessionsStat = document.getElementById('quiz-sessions-stat');
+const surveySessionsStat = document.getElementById('survey-sessions-stat');
+const surveyResponsesStat = document.getElementById('survey-responses-stat');
 const totalParticipantsStat = document.getElementById('total-participants-stat');
 const avgScoreStat = document.getElementById('avg-score-stat');
 const totalCoursesStat = document.getElementById('total-courses-stat');
@@ -216,6 +223,11 @@ const exportCsvBtn = document.getElementById('export-csv-btn');
 const detailParticipants = document.getElementById('detail-participants');
 const detailAvgScore = document.getElementById('detail-avg-score');
 const detailQuestions = document.getElementById('detail-questions');
+const detailParticipantsLabel = document.getElementById('detail-participants-label');
+const detailPrimaryLabel = document.getElementById('detail-primary-label');
+const detailSecondaryLabel = document.getElementById('detail-secondary-label');
+const detailCompletionRate = document.getElementById('detail-completion-rate');
+const detailDropoffNote = document.getElementById('detail-dropoff-note');
 const questionBreakdownBody = document.getElementById('question-breakdown-body');
 const rankingParticipantsBody = document.getElementById('ranking-participants-body');
 const rankingThresholdNote = document.getElementById('ranking-threshold-note');
@@ -846,7 +858,7 @@ loginForm.addEventListener('submit', async (e) => {
       if (data.admin.authSource !== 'hosted'
         && (data.isFirstLogin || !data.admin.hasSecurityQuestions)) {
         setTimeout(() => {
-          alert('Welcome! Please set up security questions in Settings for password recovery.');
+          showNoticeModal('Welcome! Please set up security questions in Settings for password recovery.', 'Secure Your Account');
           openSettings();
           switchSettingsTab('security');
         }, 500);
@@ -955,11 +967,17 @@ copyJoinUrlBtn?.addEventListener('click', () => {
 });
 
 // Logout function
-function logout() {
+async function logout() {
   const prompt = isTrialMode()
     ? 'Leave this temporary trial? The practice room will no longer be available from this tab.'
     : 'Are you sure you want to logout?';
-  if (!confirm(prompt)) return;
+  const confirmed = await showConfirmModal({
+    title: isTrialMode() ? 'Leave Trial' : 'Log Out',
+    message: prompt,
+    confirmText: isTrialMode() ? 'Leave Trial' : 'Log Out',
+    cancelText: isTrialMode() ? 'Stay Here' : 'Stay Signed In'
+  });
+  if (!confirmed) return;
 
   clearTrialCredentials();
   authToken = null;
@@ -994,8 +1012,24 @@ async function authFetch(url, options = {}) {
   return fetch(url, { ...options, headers });
 }
 
+function encodeMarkdownBase64(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (let index = 0; index < bytes.length; index++) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+  return btoa(binary);
+}
+
 // Reusable styled confirmation modal dialog
-function showConfirmModal({ title = 'Confirm', message = 'Are you sure?', confirmText = 'Confirm', danger = false } = {}) {
+function showConfirmModal({
+  title = 'Confirm',
+  message = 'Are you sure?',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  danger = false,
+  showCancel = true
+} = {}) {
   return new Promise((resolve) => {
     const modal = document.getElementById('confirm-modal');
     const titleEl = document.getElementById('confirm-modal-title');
@@ -1005,20 +1039,27 @@ function showConfirmModal({ title = 'Confirm', message = 'Are you sure?', confir
     const closeBtn = document.getElementById('confirm-modal-close');
 
     if (!modal) {
-      resolve(window.confirm(message));
+      resolve(false);
       return;
     }
 
+    const previousFocus = document.activeElement;
     titleEl.textContent = title;
     messageEl.textContent = message;
     okBtn.textContent = confirmText;
     okBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+    cancelBtn.textContent = cancelText;
+    cancelBtn.classList.toggle('hidden', !showCancel);
 
     function cleanup() {
       modal.classList.add('hidden');
       cancelBtn.removeEventListener('click', onCancel);
       okBtn.removeEventListener('click', onOk);
       closeBtn.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKeydown);
+      cancelBtn.classList.remove('hidden');
+      if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
     }
 
     function onCancel() {
@@ -1031,10 +1072,45 @@ function showConfirmModal({ title = 'Confirm', message = 'Are you sure?', confir
       resolve(true);
     }
 
+    function onBackdrop(event) {
+      if (event.target === modal) onCancel();
+    }
+
+    function onKeydown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [closeBtn, cancelBtn, okBtn].filter(button => !button.classList.contains('hidden'));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
     cancelBtn.addEventListener('click', onCancel);
     okBtn.addEventListener('click', onOk);
     closeBtn.addEventListener('click', onCancel);
+    modal.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKeydown);
     modal.classList.remove('hidden');
+    (showCancel ? cancelBtn : okBtn).focus();
+  });
+}
+
+function showNoticeModal(message, title = 'Markdown Mash') {
+  return showConfirmModal({
+    title,
+    message,
+    confirmText: 'OK',
+    showCancel: false
   });
 }
 
@@ -1160,13 +1236,15 @@ function initSocket(code) {
     endQuestionBtn.classList.add('hidden');
     nextBtn.classList.remove('hidden');
 
-    // Highlight correct answers in options
-    const optionBtns = optionsDisplay.querySelectorAll('.option-btn');
-    optionBtns.forEach((btn, i) => {
-      if (data.correctIndices.includes(i)) {
-        btn.classList.add('correct');
-      }
-    });
+    if (data.mode === 'survey') {
+      answersReceived.textContent = data.answered || 0;
+      updateResponseProgress(data.answered || 0, data.totalParticipants || 0);
+    } else {
+      const optionBtns = optionsDisplay.querySelectorAll('.option-btn');
+      optionBtns.forEach((btn, i) => {
+        if (data.correctIndices.includes(i)) btn.classList.add('correct');
+      });
+    }
 
     startAutopilotCountdown(data.autopilotNextInMs);
   });
@@ -1182,7 +1260,7 @@ function initSocket(code) {
     clearInterval(timerInterval);
   });
 
-  socket.on('quiz_ended', () => {
+  socket.on('quiz_ended', (data) => {
     stopAutopilotCountdown();
     quizStatus.textContent = 'Ended';
     quizStatus.className = 'badge badge-warning';
@@ -1192,13 +1270,14 @@ function initSocket(code) {
     nextBtn.classList.add('hidden');
     endQuestionBtn.classList.add('hidden');
     showResultsBtn.classList.remove('hidden');
+    showResultsBtn.textContent = data?.mode === 'survey' ? 'View survey summary' : 'Show final results';
     endSessionBtn.classList.remove('hidden');
   });
 
   socket.on('session_ended', (data) => {
     // Only show alert and reset if it's an intentional end (has a code field)
     // or if we're not mid-quiz (avoids false positives on reconnections)
-    alert(data.message || 'Session has ended');
+    showNoticeModal(data.message || 'Session has ended', 'Session Ended');
     resetToUploadState();
   });
 
@@ -1207,7 +1286,7 @@ function initSocket(code) {
   });
 
   socket.on('control_error', (data) => {
-    alert(data?.message || 'You do not have permission to control this session.');
+    showNoticeModal(data?.message || 'You do not have permission to control this session.', 'Control Unavailable');
   });
 
   socket.on('connect_error', (error) => {
@@ -1269,11 +1348,11 @@ function showSessionLostBanner(code) {
         btn.remove();
       } else {
         btn.textContent = 'Recovery Failed';
-        alert('Recovery failed: ' + data.error);
+        showNoticeModal('Recovery failed: ' + data.error, 'Recovery Failed');
       }
     } catch (err) {
       btn.textContent = 'Recovery Failed';
-      alert('Network error during recovery');
+      showNoticeModal('Network error during recovery', 'Recovery Failed');
     }
   });
 }
@@ -1290,26 +1369,36 @@ uploadBtn.addEventListener('click', async () => {
     uploadStatus.style.color = '';
     uploadStatus.classList.remove('hidden');
 
+    const requestBody = isTrialMode()
+      ? { markdown, courseName, sessionType: 'quiz' }
+      : {
+          markdownBase64: encodeMarkdownBase64(markdown),
+          courseName,
+          sessionType: studioMode
+        };
+
     const res = await authFetch(
       isTrialMode() ? '/api/trial/session' : '/api/admin/session',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          markdown,
-          courseName,
-          sessionType: isTrialMode() ? 'quiz' : studioMode
-        })
+        body: JSON.stringify(requestBody)
       }
     );
 
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       uploadStatus.textContent = 'Session expired. Please log in again.';
       uploadStatus.style.color = 'var(--danger)';
       return;
     }
 
     const data = await res.json().catch(() => null);
+    if (res.status === 403) {
+      uploadStatus.textContent = data?.error
+        || 'The request was refused before Markdown Mash could process it. Reload and try again.';
+      uploadStatus.style.color = 'var(--danger)';
+      return;
+    }
     if (!data) {
       uploadStatus.textContent = `Server error (${res.status}). Please try again.`;
       uploadStatus.style.color = 'var(--danger)';
@@ -1360,7 +1449,7 @@ uploadBtn.addEventListener('click', async () => {
 previewBtn.addEventListener('click', () => {
   const markdown = quizMarkdown.value.trim();
   if (!markdown) {
-    alert('Please enter some markdown to preview');
+    showNoticeModal('Please enter some Markdown to preview.', 'Nothing to Preview');
     return;
   }
   
@@ -1372,7 +1461,7 @@ previewBtn.addEventListener('click', () => {
     : parseQuizMarkdownLocal(markdown);
 
   if (previewQuizData.steps.length === 0) {
-    alert('No valid questions found in markdown.');
+    showNoticeModal('No valid questions were found in the Markdown.', 'Check Your Markdown');
     return;
   }
 
@@ -1537,6 +1626,12 @@ function showSessionInfo(session) {
   endSessionBtn.classList.add('hidden');
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
+  liveResultsEyebrow.textContent = isSurvey ? 'Survey complete' : 'Quiz complete';
+  liveResultsTitle.textContent = isSurvey ? 'Survey summary' : 'Final results';
+  quizLiveResults.classList.toggle('hidden', isSurvey);
+  surveyLiveResults.classList.toggle('hidden', !isSurvey);
+  resultsBody.replaceChildren();
+  surveyLiveResults.replaceChildren();
 
   quizStatus.textContent = isSurvey ? 'Survey Not Started' : 'Not Started';
   quizStatus.className = 'badge badge-warning';
@@ -1561,6 +1656,10 @@ function resetToUploadState() {
   controlsSection.classList.add('hidden');
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
+  quizLiveResults.classList.remove('hidden');
+  surveyLiveResults.classList.add('hidden');
+  resultsBody.replaceChildren();
+  surveyLiveResults.replaceChildren();
   liveWorkspace.classList.add('hidden');
   setLobbyPanel('ready');
   liveLobbyPanel.classList.remove('hidden');
@@ -1593,15 +1692,21 @@ cancelSessionBtn?.addEventListener('click', async () => {
     title: 'Cancel Session',
     message: 'Are you sure you want to cancel this session? The room will be closed.',
     confirmText: 'Cancel Session',
+    cancelText: 'Keep Session',
     danger: true
   });
   if (!confirmed) return;
   try {
-    await authFetch(isTrialMode() ? '/api/trial/session' : `/api/admin/session/${sessionCode}`, { method: 'DELETE' });
+    const res = await authFetch(isTrialMode() ? '/api/trial/session' : `/api/admin/session/${sessionCode}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'The session could not be cancelled.');
+    }
+    resetToUploadState();
   } catch (err) {
     console.error('Failed to delete unstarted session:', err);
+    showNoticeModal(err.message || 'The session could not be cancelled.', 'Cancel Failed');
   }
-  resetToUploadState();
 });
 
 // Start quiz
@@ -1655,6 +1760,7 @@ endSessionBtn.addEventListener('click', async () => {
     title: 'End Session',
     message: 'Are you sure you want to end this session? All participants will be disconnected.',
     confirmText: 'End Session',
+    cancelText: 'Keep Session',
     danger: true
   });
   if (!confirmed) {
@@ -1665,12 +1771,12 @@ endSessionBtn.addEventListener('click', async () => {
     const res = await authFetch(sessionApiPath(`/${sessionCode}/end`), {
       method: 'POST'
     });
-    const data = await res.json();
-    if (data.success) {
-      resetToUploadState();
-    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) throw new Error(data.error || 'The session could not be ended.');
+    resetToUploadState();
   } catch (err) {
     console.error('Failed to end session', err);
+    showNoticeModal(err.message || 'The session could not be ended.', 'End Failed');
   }
 });
 
@@ -1682,16 +1788,30 @@ showResultsBtn.addEventListener('click', async () => {
     const res = await authFetch(sessionApiPath(`/${sessionCode}/results`));
     const data = await res.json();
 
-    resultsBody.innerHTML = '';
-    data.results.forEach((r, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${i + 1}</td>
-        <td>${escapeHtml(r.name)}</td>
-        <td>${r.score} / ${r.total}</td>
-      `;
-      resultsBody.appendChild(tr);
-    });
+    if (!res.ok) throw new Error(data.error || 'Results are unavailable.');
+
+    if (data.mode === 'survey') {
+      liveResultsEyebrow.textContent = 'Survey complete';
+      liveResultsTitle.textContent = 'Survey summary';
+      quizLiveResults.classList.add('hidden');
+      surveyLiveResults.classList.remove('hidden');
+      renderSurveySummary(surveyLiveResults, data);
+    } else {
+      liveResultsEyebrow.textContent = 'Quiz complete';
+      liveResultsTitle.textContent = 'Final results';
+      surveyLiveResults.classList.add('hidden');
+      quizLiveResults.classList.remove('hidden');
+      resultsBody.innerHTML = '';
+      (data.results || []).forEach((r, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${escapeHtml(r.name)}</td>
+          <td>${r.score} / ${r.total}</td>
+        `;
+        resultsBody.appendChild(tr);
+      });
+    }
 
     questionSection.classList.add('hidden');
     liveLobbyPanel.classList.add('hidden');
@@ -1700,8 +1820,71 @@ showResultsBtn.addEventListener('click', async () => {
     trialCompletionCta.classList.toggle('hidden', !isTrialMode());
   } catch (err) {
     console.error('Failed to load results', err);
+    showNoticeModal(err.message || 'Results are unavailable.', 'Results Unavailable');
   }
 });
+
+function renderSurveySummary(container, summary) {
+  container.replaceChildren();
+
+  const overview = document.createElement('div');
+  overview.className = 'survey-summary-overview';
+  overview.innerHTML = `
+    <div><strong>${Number(summary.participantCount) || 0}</strong><span>Participants</span></div>
+    <div><strong>${Number(summary.responseCount) || 0}</strong><span>Total responses</span></div>
+    <div><strong>${Number(summary.responseRate) || 0}%</strong><span>Response rate</span></div>
+  `;
+  container.appendChild(overview);
+
+  (summary.questions || []).forEach((question, questionIndex) => {
+    const card = document.createElement('article');
+    card.className = 'survey-summary-card';
+
+    const heading = document.createElement('div');
+    heading.className = 'survey-summary-heading';
+    const title = document.createElement('h3');
+    title.textContent = `Q${question.displayNumber || questionIndex + 1}: ${question.text || ''}`;
+    const meta = document.createElement('p');
+    meta.textContent = `${question.responseCount || 0} responses · ${question.responseRate || 0}% of the room`;
+    heading.append(title, meta);
+    card.appendChild(heading);
+
+    const top = document.createElement('p');
+    top.className = 'survey-top-choice';
+    const topOptions = question.topOptions || [];
+    top.textContent = topOptions.length === 0
+      ? 'No responses collected'
+      : topOptions.length === 1
+        ? `Most popular: ${topOptions[0]}`
+        : `Top choices tied: ${topOptions.join(' · ')}`;
+    card.appendChild(top);
+
+    (question.options || []).forEach((option, optionIndex) => {
+      const distribution = question.optionDistribution?.[optionIndex] || { count: 0, percent: 0 };
+      const row = document.createElement('div');
+      row.className = 'survey-option-row';
+
+      const header = document.createElement('div');
+      header.className = 'survey-option-header';
+      const label = document.createElement('span');
+      label.textContent = `${String.fromCharCode(65 + optionIndex)}. ${option}`;
+      const value = document.createElement('strong');
+      value.textContent = `${distribution.count || 0} · ${distribution.percent || 0}%`;
+      header.append(label, value);
+
+      const track = document.createElement('div');
+      track.className = 'survey-option-track';
+      const fill = document.createElement('span');
+      fill.className = 'survey-option-fill';
+      fill.style.width = `${Math.max(0, Math.min(100, Number(distribution.percent) || 0))}%`;
+      track.appendChild(fill);
+      row.append(header, track);
+      card.appendChild(row);
+    });
+
+    container.appendChild(card);
+  });
+}
 
 // Show current question
 function showQuestion(data) {
@@ -1867,7 +2050,7 @@ exportCsvBtn.addEventListener('click', async () => {
     link.remove();
     URL.revokeObjectURL(downloadUrl);
   } catch (error) {
-    alert('Unable to export this session.');
+    showNoticeModal('Unable to export this session.', 'Export Failed');
   }
 });
 
@@ -1909,6 +2092,9 @@ async function loadPlatformStats() {
     if (data.success) {
       totalSessionsStat.textContent = data.stats.totalSessions;
       completedSessionsStat.textContent = data.stats.completedSessions;
+      quizSessionsStat.textContent = data.stats.quizSessions;
+      surveySessionsStat.textContent = data.stats.surveySessions;
+      surveyResponsesStat.textContent = data.stats.surveyResponses;
       totalParticipantsStat.textContent = data.stats.totalParticipants;
       avgScoreStat.textContent = `${Math.round(data.stats.overallAvgScore || 0)}%`;
       if (totalCoursesStat) {
@@ -2021,9 +2207,11 @@ async function loadSessionsList() {
       noSessionsMsg.classList.add('hidden');
       
       const selectedCourse = courseFilterSelect.value;
+      const selectedType = document.getElementById('session-type-filter')?.value || 'all';
       const searchTerm = sessionSearchInput?.value.trim().toLowerCase() || '';
       const filteredSessions = data.sessions.filter(s => {
         if (selectedCourse !== 'all' && s.courseName !== selectedCourse) return false;
+        if (selectedType !== 'all' && s.sessionType !== selectedType) return false;
         if (currentSessionsFilter === 'test' && !s.isTest) return false;
         if (currentSessionsFilter === 'ended' && s.status !== 'ended') return false;
         if (currentSessionsFilter === 'incomplete' && (s.status === 'ended' || s.isTest)) return false;
@@ -2042,6 +2230,7 @@ async function loadSessionsList() {
         const tr = document.createElement('tr');
         const isInterrupted = session.status === 'active';
         const isCreated = session.status === 'created';
+        const isSurvey = session.sessionType === 'survey';
 
         let dateDisplay = 'N/A';
         if (session.endedAt) {
@@ -2081,10 +2270,15 @@ async function loadSessionsList() {
 
         tr.innerHTML = `
           <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
+          <td><span class="session-type-badge session-type-${isSurvey ? 'survey' : 'quiz'}">${isSurvey ? 'Survey' : 'Quiz'}</span></td>
           <td>${escapeHtml(session.courseName || '-')}</td>
           <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
           <td>${session.participantCount}</td>
-          <td>${(isInterrupted || isCreated) ? '—' : Math.round(session.avgScorePercent || 0) + '%'}</td>
+          <td>${(isInterrupted || isCreated)
+            ? '—'
+            : isSurvey
+              ? `${session.responseCount || 0} responses · ${session.responseRate || 0}%`
+              : `${Math.round(session.avgScorePercent || 0)}% average`}</td>
           <td>${dateDisplay}</td>
           <td>${actionBtn}</td>
         `;
@@ -2105,15 +2299,15 @@ async function loadSessionsList() {
               const res = await authFetch(`/api/admin/session/${session.code}/recover`, { method: 'POST' });
               const result = await res.json();
               if (result.success) {
-                alert(`Recovered: ${result.participantsRecovered} participants, ${result.answersFound} answers. Session is now viewable in Analytics.`);
+                showNoticeModal(`Recovered: ${result.participantsRecovered} participants, ${result.answersFound} answers. Session is now viewable in Analytics.`, 'Session Recovered');
                 loadSessionsList(); // Reload to show it as ended now
               } else {
-                alert('Recovery failed: ' + result.error);
+                showNoticeModal('Recovery failed: ' + result.error, 'Recovery Failed');
                 recoverBtn.disabled = false;
                 recoverBtn.textContent = 'Recover';
               }
             } catch (err) {
-              alert('Network error during recovery');
+              showNoticeModal('Network error during recovery', 'Recovery Failed');
               recoverBtn.disabled = false;
               recoverBtn.textContent = 'Recover';
             }
@@ -2154,10 +2348,10 @@ async function loadSessionsList() {
               if (result.success) {
                 loadSessionsList();
               } else {
-                alert('Delete failed: ' + result.error);
+                showNoticeModal('Delete failed: ' + result.error, 'Delete Failed');
               }
             } catch (err) {
-              alert('Network error');
+              showNoticeModal('A network error interrupted the request.', 'Connection Error');
             }
           });
         }
@@ -2190,10 +2384,10 @@ editMetadataForm.addEventListener('submit', async (e) => {
       editMetadataModal.classList.add('hidden');
       loadSessionsList();
     } else {
-      alert('Update failed: ' + result.error);
+      showNoticeModal('Update failed: ' + result.error, 'Update Failed');
     }
   } catch (err) {
-    alert('Network error');
+    showNoticeModal('A network error interrupted the request.', 'Connection Error');
   }
 });
 
@@ -2203,6 +2397,10 @@ closeEditMetadataBtn.addEventListener('click', () => {
 
 // Update the filter logic to re-render using local data, or just re-fetch
 document.getElementById('course-filter-select')?.addEventListener('change', () => {
+  loadSessionsList();
+});
+
+document.getElementById('session-type-filter')?.addEventListener('change', () => {
   loadSessionsList();
 });
 
@@ -2443,7 +2641,7 @@ async function loadSessionDetail(code) {
     const data = await res.json();
 
     if (!data.success) {
-      alert('Failed to load session details');
+      showNoticeModal('Failed to load session details.', 'Report Unavailable');
       return;
     }
 
@@ -2460,7 +2658,9 @@ async function loadSessionDetail(code) {
 
     // Populate session info
     detailQuizTitle.textContent = data.session.quizTitle || (isSurvey ? 'Untitled Survey' : 'Untitled Quiz');
-    detailParticipants.textContent = data.participants.length;
+    detailParticipants.textContent = isSurvey
+      ? data.session.participantCount || 0
+      : data.participants.length;
     detailQuestions.textContent = data.session.totalQuestions;
 
     const chartGrid = document.querySelector('.detail-chart-grid');
@@ -2468,7 +2668,12 @@ async function loadSessionDetail(code) {
     const surveyBreakdownSection = document.getElementById('survey-breakdown-section');
 
     if (isSurvey) {
-      detailAvgScore.textContent = 'N/A';
+      detailParticipantsLabel.textContent = 'Participants';
+      detailPrimaryLabel.textContent = 'Response rate';
+      detailSecondaryLabel.textContent = 'Total responses';
+      detailAvgScore.textContent = `${data.session.responseRate || 0}%`;
+      detailCompletionRate.textContent = data.session.responseCount || 0;
+      detailDropoffNote.textContent = '';
       if (chartGrid) chartGrid.classList.add('hidden');
       if (questionBreakdownCard) questionBreakdownCard.classList.add('hidden');
       trickyQuestionsSection.classList.add('hidden');
@@ -2477,34 +2682,17 @@ async function loadSessionDetail(code) {
       if (surveyBreakdownSection) {
         surveyBreakdownSection.classList.remove('hidden');
         const container = document.getElementById('survey-breakdown-container');
-        container.innerHTML = '';
-        (data.questions || []).forEach((q, idx) => {
-          const card = document.createElement('div');
-          card.className = 'survey-q-card';
-          let optionsHtml = '';
-          (q.options || []).forEach((optText, optIdx) => {
-            const dist = q.optionDistribution?.[optIdx] || { count: 0, percent: 0 };
-            optionsHtml += `
-              <div class="survey-option-row">
-                <div class="survey-option-header">
-                  <span>${String.fromCharCode(65 + optIdx)}. ${escapeHtml(optText)}</span>
-                  <strong>${dist.count} responses (${dist.percent}%)</strong>
-                </div>
-                <div class="survey-option-track">
-                  <div class="survey-option-fill" style="width: ${dist.percent}%;"></div>
-                </div>
-              </div>
-            `;
-          });
-          card.innerHTML = `
-            <div style="font-weight: 600; font-size: 1rem; margin-bottom: 8px;">Q${idx + 1}: ${escapeHtml(q.text)}</div>
-            <div class="text-muted" style="font-size: 0.85rem; margin-bottom: 12px;">Total responses: ${q.totalAnswers || 0}</div>
-            ${optionsHtml}
-          `;
-          container.appendChild(card);
+        renderSurveySummary(container, {
+          participantCount: data.session.participantCount,
+          responseCount: data.session.responseCount,
+          responseRate: data.session.responseRate,
+          questions: data.questions
         });
       }
     } else {
+      detailParticipantsLabel.textContent = 'Participants';
+      detailPrimaryLabel.textContent = 'Average score';
+      detailSecondaryLabel.textContent = 'Completion rate';
       if (chartGrid) chartGrid.classList.remove('hidden');
       if (questionBreakdownCard) questionBreakdownCard.classList.remove('hidden');
       if (surveyBreakdownSection) surveyBreakdownSection.classList.add('hidden');
@@ -3204,11 +3392,11 @@ async function kickParticipant(participantId, participantName) {
       participantCount.textContent = currentCount;
       totalParticipants.textContent = currentCount;
     } else {
-      alert(data.error || 'Failed to remove participant');
+      showNoticeModal(data.error || 'Failed to remove participant', 'Participant Not Removed');
     }
   } catch (err) {
     console.error('Kick error:', err);
-    alert('Failed to remove participant');
+    showNoticeModal('Failed to remove participant', 'Participant Not Removed');
   }
 }
 

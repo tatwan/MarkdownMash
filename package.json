@@ -1,13 +1,13 @@
 {
   "name": "markdown-mash",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "A real-time quiz platform with Markdown-based questions and scoring",
   "license": "Apache-2.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test-presentation.js && node test-participant-identity.js && node test-participant-capacity.js && node test-hosted-room-guard.js && node test-account-identity.js && node test-account-invitations.js && node test-email-service.js && node test-billing.js && node test-stripe-webhook.js && node test-sidekick-assets.js && node test-sidekick-assignment.js && node test-instructor-home.js && node test-settings-privacy.js && node test-legal-pages.js && node test-page-metadata.js && node test-guest-trial.js && node test-security.js && node test-autopilot.js && node test-owner-scoping.js && node test-quiz-structure.js && node test-preview-parser-drift.js && node test-templates.js && node test-survey-structure.js",
+    "test": "node test-presentation.js && node test-participant-identity.js && node test-participant-capacity.js && node test-hosted-room-guard.js && node test-account-identity.js && node test-account-invitations.js && node test-email-service.js && node test-billing.js && node test-stripe-webhook.js && node test-sidekick-assets.js && node test-sidekick-assignment.js && node test-instructor-home.js && node test-settings-privacy.js && node test-legal-pages.js && node test-page-metadata.js && node test-guest-trial.js && node test-security.js && node test-autopilot.js && node test-owner-scoping.js && node test-quiz-structure.js && node test-preview-parser-drift.js && node test-templates.js && node test-survey-structure.js && node test-survey-preview-parser-drift.js && node test-survey-results.js && node test-survey-client-contract.js && node test-markdown-transport.js",
     "test:db:invitations": "node test-account-invitations-db.js",
     "test:http:invitations": "node test-account-invitations-http.js",
     "test:http:registration": "node test-public-registration-http.js",
