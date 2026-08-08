@@ -171,6 +171,17 @@ function run() {
     'the ungraded question must not appear in the hardest recap'
   );
 
+  // Survey session handling in presentation
+  const surveySession = {
+    sessionType: 'survey',
+    quiz: { title: 'Survey Title', questions: [{ id: 1, text: 'Opt Question', options: ['A', 'B'] }] },
+    participants: { p1: { id: 'p1', answers: { 1: 0 } }, p2: { id: 'p2', answers: { 1: 1 } } }
+  };
+  const surveyPres = buildQuestionPresentation(surveySession, surveySession.quiz.questions[0]);
+  assert.equal(surveyPres.correctParticipants.length, 0);
+  assert.equal(surveyPres.leaderboard.length, 0);
+  assert.equal(surveyPres.highlights[0].message, '2 responses recorded');
+
   console.log('Presentation calculations passed');
 }
 

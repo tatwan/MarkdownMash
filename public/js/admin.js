@@ -602,9 +602,13 @@ templateCards.forEach(card => {
     const templateKey = card.dataset.template;
     const templateUrl = STARTER_TEMPLATE_FILES[templateKey];
     if (!templateUrl) return;
-    if (quizMarkdown.value.trim()
-      && !confirm('Replace the Markdown currently in the editor with this starter template?')) {
-      return;
+    if (quizMarkdown.value.trim()) {
+      const confirmed = await showConfirmModal({
+        title: 'Replace Markdown',
+        message: 'Replace the Markdown currently in the editor with this starter template?',
+        confirmText: 'Replace'
+      });
+      if (!confirmed) return;
     }
 
     card.disabled = true;
@@ -990,6 +994,50 @@ async function authFetch(url, options = {}) {
   return fetch(url, { ...options, headers });
 }
 
+// Reusable styled confirmation modal dialog
+function showConfirmModal({ title = 'Confirm', message = 'Are you sure?', confirmText = 'Confirm', danger = false } = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('confirm-modal');
+    const titleEl = document.getElementById('confirm-modal-title');
+    const messageEl = document.getElementById('confirm-modal-message');
+    const cancelBtn = document.getElementById('confirm-modal-cancel');
+    const okBtn = document.getElementById('confirm-modal-ok');
+    const closeBtn = document.getElementById('confirm-modal-close');
+
+    if (!modal) {
+      resolve(window.confirm(message));
+      return;
+    }
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    okBtn.textContent = confirmText;
+    okBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+
+    function cleanup() {
+      modal.classList.add('hidden');
+      cancelBtn.removeEventListener('click', onCancel);
+      okBtn.removeEventListener('click', onOk);
+      closeBtn.removeEventListener('click', onCancel);
+    }
+
+    function onCancel() {
+      cleanup();
+      resolve(false);
+    }
+
+    function onOk() {
+      cleanup();
+      resolve(true);
+    }
+
+    cancelBtn.addEventListener('click', onCancel);
+    okBtn.addEventListener('click', onOk);
+    closeBtn.addEventListener('click', onCancel);
+    modal.classList.remove('hidden');
+  });
+}
+
 // Initialize Socket.IO for a specific session
 function initSocket(code) {
   if (socket) {
@@ -1238,20 +1286,36 @@ uploadBtn.addEventListener('click', async () => {
 
   try {
     uploadBtn.disabled = true;
+    uploadStatus.textContent = 'Creating session...';
+    uploadStatus.style.color = '';
+    uploadStatus.classList.remove('hidden');
+
     const res = await authFetch(
       isTrialMode() ? '/api/trial/session' : '/api/admin/session',
       {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        markdown,
-        courseName,
-        sessionType: isTrialMode() ? 'quiz' : studioMode
-      })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          markdown,
+          courseName,
+          sessionType: isTrialMode() ? 'quiz' : studioMode
+        })
       }
     );
 
-    const data = await res.json();
+    if (res.status === 401 || res.status === 403) {
+      uploadStatus.textContent = 'Session expired. Please log in again.';
+      uploadStatus.style.color = 'var(--danger)';
+      return;
+    }
+
+    const data = await res.json().catch(() => null);
+    if (!data) {
+      uploadStatus.textContent = `Server error (${res.status}). Please try again.`;
+      uploadStatus.style.color = 'var(--danger)';
+      return;
+    }
+
     if (data.success) {
       sessionCode = data.session.code;
       currentQuiz = data.session.quiz;
@@ -1270,17 +1334,21 @@ uploadBtn.addEventListener('click', async () => {
       statusBadge.className = 'badge badge-success';
       statusBadge.textContent = isTrialMode()
         ? 'Practice room ready!'
-        : 'Session created!';
+        : (data.session.sessionType === 'survey' ? 'Survey room ready!' : 'Session created!');
       uploadStatus.appendChild(statusBadge);
       uploadStatus.style.color = '';
       uploadStatus.classList.remove('hidden');
     } else {
-      uploadStatus.textContent = data.error || 'Unable to load quiz';
+      if (res.status === 409 && data.code === 'HOSTED_ROOM_LIMIT') {
+        uploadStatus.innerHTML = `You already have an open room (${data.activeSession ? data.activeSession.code : 'active'}). End or recover it first.`;
+      } else {
+        uploadStatus.textContent = data.error || 'Unable to load quiz';
+      }
       uploadStatus.style.color = 'var(--danger)';
       uploadStatus.classList.remove('hidden');
     }
   } catch (err) {
-    uploadStatus.textContent = 'Connection error';
+    uploadStatus.textContent = 'Connection error. Please check your network and try again.';
     uploadStatus.style.color = 'var(--danger)';
     uploadStatus.classList.remove('hidden');
   } finally {
@@ -1456,7 +1524,13 @@ function showSessionInfo(session) {
   controlsSection.classList.remove('hidden');
 
   // Reset control buttons state
+  const isSurvey = session.sessionType === 'survey';
+  startBtn.innerHTML = (isSurvey ? 'Start survey ' : 'Start quiz ') + '<svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>';
   startBtn.classList.remove('hidden');
+  
+  const cancelSessionBtn = document.getElementById('cancel-session-btn');
+  if (cancelSessionBtn) cancelSessionBtn.classList.remove('hidden');
+
   nextBtn.classList.add('hidden');
   endQuestionBtn.classList.add('hidden');
   showResultsBtn.classList.add('hidden');
@@ -1464,7 +1538,7 @@ function showSessionInfo(session) {
   questionSection.classList.add('hidden');
   resultsSection.classList.add('hidden');
 
-  quizStatus.textContent = 'Not Started';
+  quizStatus.textContent = isSurvey ? 'Survey Not Started' : 'Not Started';
   quizStatus.className = 'badge badge-warning';
 }
 
@@ -1506,8 +1580,33 @@ function resetToUploadState() {
   }
 }
 
+const cancelStudioBtn = document.getElementById('cancel-studio-btn');
+const cancelSessionBtn = document.getElementById('cancel-session-btn');
+
+cancelStudioBtn?.addEventListener('click', () => {
+  showInstructorHome();
+});
+
+cancelSessionBtn?.addEventListener('click', async () => {
+  if (!sessionCode) return;
+  const confirmed = await showConfirmModal({
+    title: 'Cancel Session',
+    message: 'Are you sure you want to cancel this session? The room will be closed.',
+    confirmText: 'Cancel Session',
+    danger: true
+  });
+  if (!confirmed) return;
+  try {
+    await authFetch(isTrialMode() ? '/api/trial/session' : `/api/admin/session/${sessionCode}`, { method: 'DELETE' });
+  } catch (err) {
+    console.error('Failed to delete unstarted session:', err);
+  }
+  resetToUploadState();
+});
+
 // Start quiz
 startBtn.addEventListener('click', () => {
+  if (cancelSessionBtn) cancelSessionBtn.classList.add('hidden');
   if (socket && sessionCode) {
     socket.emit('start_quiz', sessionCode);
   }
@@ -1552,7 +1651,13 @@ endQuestionBtn.addEventListener('click', () => {
 endSessionBtn.addEventListener('click', async () => {
   if (!sessionCode) return;
 
-  if (!confirm('Are you sure you want to end this session? All participants will be disconnected.')) {
+  const confirmed = await showConfirmModal({
+    title: 'End Session',
+    message: 'Are you sure you want to end this session? All participants will be disconnected.',
+    confirmText: 'End Session',
+    danger: true
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -1988,7 +2093,12 @@ async function loadSessionsList() {
           // Recover button: calls recovery endpoint, then reloads list
           const recoverBtn = tr.querySelector('.recover-btn');
           recoverBtn.addEventListener('click', async () => {
-            if (!confirm(`Recover interrupted session ${session.code}? This will compute scores from saved answers and mark it as ended.`)) return;
+            const confirmed = await showConfirmModal({
+              title: 'Recover Session',
+              message: `Recover interrupted session ${session.code}? This will compute scores from saved answers and mark it as ended.`,
+              confirmText: 'Recover'
+            });
+            if (!confirmed) return;
             recoverBtn.disabled = true;
             recoverBtn.textContent = 'Recovering...';
             try {
@@ -2031,7 +2141,13 @@ async function loadSessionsList() {
         const delBtn = tr.querySelector('.delete-btn');
         if (delBtn) {
           delBtn.addEventListener('click', async () => {
-            if (!confirm(`Are you sure you want to permanently delete session ${session.code}?`)) return;
+            const confirmed = await showConfirmModal({
+              title: 'Delete Session',
+              message: `Are you sure you want to permanently delete session ${session.code}? This action cannot be undone.`,
+              confirmText: 'Delete Permanently',
+              danger: true
+            });
+            if (!confirmed) return;
             try {
               const res = await authFetch(`/api/admin/session/${session.code}`, { method: 'DELETE' });
               const result = await res.json();
@@ -2340,121 +2456,163 @@ async function loadSessionDetail(code) {
     analyticsSection.classList.add('hidden');
     sessionDetailSection.classList.remove('hidden');
 
+    const isSurvey = data.session.sessionType === 'survey' || data.mode === 'survey';
+
     // Populate session info
-    detailQuizTitle.textContent = data.session.quizTitle || 'Untitled Quiz';
+    detailQuizTitle.textContent = data.session.quizTitle || (isSurvey ? 'Untitled Survey' : 'Untitled Quiz');
     detailParticipants.textContent = data.participants.length;
     detailQuestions.textContent = data.session.totalQuestions;
 
-    // Calculate average score
-    const avgScore = data.participants.length > 0
-      ? data.participants.reduce((sum, p) => sum + (p.correctCount / data.session.totalQuestions * 100), 0) / data.participants.length
-      : 0;
-    detailAvgScore.textContent = `${Math.round(avgScore)}%`;
+    const chartGrid = document.querySelector('.detail-chart-grid');
+    const questionBreakdownCard = document.getElementById('question-breakdown-card');
+    const surveyBreakdownSection = document.getElementById('survey-breakdown-section');
 
-    // Feature 4: Engagement / Completion Rate
-    renderEngagement(data.participants, data.session.totalQuestions);
+    if (isSurvey) {
+      detailAvgScore.textContent = 'N/A';
+      if (chartGrid) chartGrid.classList.add('hidden');
+      if (questionBreakdownCard) questionBreakdownCard.classList.add('hidden');
+      trickyQuestionsSection.classList.add('hidden');
+      rankingSection.classList.add('hidden');
 
-    // Feature 1: Score Distribution Histogram
-    renderScoreDistribution(data.participants, data.session.totalQuestions);
+      if (surveyBreakdownSection) {
+        surveyBreakdownSection.classList.remove('hidden');
+        const container = document.getElementById('survey-breakdown-container');
+        container.innerHTML = '';
+        (data.questions || []).forEach((q, idx) => {
+          const card = document.createElement('div');
+          card.className = 'survey-q-card';
+          let optionsHtml = '';
+          (q.options || []).forEach((optText, optIdx) => {
+            const dist = q.optionDistribution?.[optIdx] || { count: 0, percent: 0 };
+            optionsHtml += `
+              <div class="survey-option-row">
+                <div class="survey-option-header">
+                  <span>${String.fromCharCode(65 + optIdx)}. ${escapeHtml(optText)}</span>
+                  <strong>${dist.count} responses (${dist.percent}%)</strong>
+                </div>
+                <div class="survey-option-track">
+                  <div class="survey-option-fill" style="width: ${dist.percent}%;"></div>
+                </div>
+              </div>
+            `;
+          });
+          card.innerHTML = `
+            <div style="font-weight: 600; font-size: 1rem; margin-bottom: 8px;">Q${idx + 1}: ${escapeHtml(q.text)}</div>
+            <div class="text-muted" style="font-size: 0.85rem; margin-bottom: 12px;">Total responses: ${q.totalAnswers || 0}</div>
+            ${optionsHtml}
+          `;
+          container.appendChild(card);
+        });
+      }
+    } else {
+      if (chartGrid) chartGrid.classList.remove('hidden');
+      if (questionBreakdownCard) questionBreakdownCard.classList.remove('hidden');
+      if (surveyBreakdownSection) surveyBreakdownSection.classList.add('hidden');
 
-    // Feature 2: Question Difficulty Bar Chart
-    renderQuestionDifficultyChart(data.questions);
+      // Calculate average score for Quiz
+      const avgScore = data.participants.length > 0 && data.session.totalQuestions > 0
+        ? data.participants.reduce((sum, p) => sum + ((p.correctCount || 0) / data.session.totalQuestions * 100), 0) / data.participants.length
+        : 0;
+      detailAvgScore.textContent = `${Math.round(avgScore)}%`;
 
-    // Populate question difficulty table (sorted by difficulty - hardest first)
-    questionBreakdownBody.innerHTML = '';
-    data.questionsByDifficulty.forEach(q => {
-      const tr = document.createElement('tr');
-      const avgTime = q.avgResponseTimeMs ? `${(q.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
-      const difficultyClass = `difficulty-${q.difficulty}`;
+      renderEngagement(data.participants, data.session.totalQuestions);
+      renderScoreDistribution(data.participants, data.session.totalQuestions);
+      renderQuestionDifficultyChart(data.questions);
 
-      tr.innerHTML = `
-        <td>Q${q.index + 1}</td>
-        <td class="question-text-cell" title="${escapeHtml(q.text)}">${escapeHtml(truncateText(q.text, 50))}</td>
-        <td>${Math.round(q.correctPercent)}%</td>
-        <td>${avgTime}</td>
-        <td><span class="difficulty-badge ${difficultyClass}">${q.difficulty}</span></td>
-      `;
-      questionBreakdownBody.appendChild(tr);
-    });
+      // Populate question difficulty table
+      questionBreakdownBody.innerHTML = '';
+      (data.questionsByDifficulty || []).forEach(q => {
+        const tr = document.createElement('tr');
+        const avgTime = q.avgResponseTimeMs ? `${(q.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
+        const difficultyClass = `difficulty-${q.difficulty}`;
 
-    // Feature 3: Tricky Questions
-    renderTrickyQuestions(data.questions);
-
-    // Build one true overall ranking, using the passing threshold saved with the session.
-    rankingParticipantsBody.innerHTML = '';
-    const passingPercent = Number(data.session.passingPercent ?? 70);
-    const rankedParticipants = [...data.participants]
-      .sort((a, b) => {
-        if ((b.correctCount || 0) !== (a.correctCount || 0)) {
-          return (b.correctCount || 0) - (a.correctCount || 0);
-        }
-        const aTime = a.avgResponseTimeMs ?? Number.POSITIVE_INFINITY;
-        const bTime = b.avgResponseTimeMs ?? Number.POSITIVE_INFINITY;
-        if (aTime !== bTime) return aTime - bTime;
-        return String(a.name || '').localeCompare(String(b.name || ''));
-      })
-      .map((participant, index) => {
-        const scorePercent = data.session.totalQuestions > 0
-          ? ((participant.correctCount || 0) / data.session.totalQuestions) * 100
-          : 0;
-        return {
-          ...participant,
-          overallRank: index + 1,
-          scorePercent,
-          passed: scorePercent >= passingPercent
-        };
+        tr.innerHTML = `
+          <td>Q${q.index + 1}</td>
+          <td class="question-text-cell" title="${escapeHtml(q.text)}">${escapeHtml(truncateText(q.text, 50))}</td>
+          <td>${Math.round(q.correctPercent)}%</td>
+          <td>${avgTime}</td>
+          <td><span class="difficulty-badge ${difficultyClass}">${q.difficulty}</span></td>
+        `;
+        questionBreakdownBody.appendChild(tr);
       });
 
-    const totalScore = data.session.totalScore || 100;
-    const pointsPerQuestion = data.session.totalQuestions > 0 ? totalScore / data.session.totalQuestions : 0;
+      renderTrickyQuestions(data.questions);
 
-    function buildParticipantRow(p, rank, totalQuestions) {
-      const tr = document.createElement('tr');
-      const avgTime = p.avgResponseTimeMs ? `${(p.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
-      const computedScore = Math.round((p.correctCount || 0) * pointsPerQuestion);
+      // Leaderboard / Ranking table
+      rankingSection.classList.remove('hidden');
+      rankingParticipantsBody.innerHTML = '';
+      const passingPercent = Number(data.session.passingPercent ?? 70);
+      const rankedParticipants = [...data.participants]
+        .sort((a, b) => {
+          if ((b.correctCount || 0) !== (a.correctCount || 0)) {
+            return (b.correctCount || 0) - (a.correctCount || 0);
+          }
+          const aTime = a.avgResponseTimeMs ?? Number.POSITIVE_INFINITY;
+          const bTime = b.avgResponseTimeMs ?? Number.POSITIVE_INFINITY;
+          if (aTime !== bTime) return aTime - bTime;
+          return String(a.name || '').localeCompare(String(b.name || ''));
+        })
+        .map((participant, index) => {
+          const scorePercent = data.session.totalQuestions > 0
+            ? ((participant.correctCount || 0) / data.session.totalQuestions) * 100
+            : 0;
+          return {
+            ...participant,
+            overallRank: index + 1,
+            scorePercent,
+            passed: scorePercent >= passingPercent
+          };
+        });
 
-      // Rank display with trophy icons for top 5
-      let rankHtml;
-      if (rank === 1) {
-        rankHtml = `<span class="rank-trophy rank-gold"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg>${rank}</span>`;
-      } else if (rank === 2) {
-        rankHtml = `<span class="rank-trophy rank-silver"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
-      } else if (rank === 3) {
-        rankHtml = `<span class="rank-trophy rank-bronze"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
-      } else if (rank <= 5) {
-        rankHtml = `<span class="rank-trophy rank-top5"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
-      } else {
-        rankHtml = `${rank}`;
+      const totalScore = data.session.totalScore || 100;
+      const pointsPerQuestion = data.session.totalQuestions > 0 ? totalScore / data.session.totalQuestions : 0;
+
+      function buildParticipantRow(p, rank, totalQuestions) {
+        const tr = document.createElement('tr');
+        const avgTime = p.avgResponseTimeMs ? `${(p.avgResponseTimeMs / 1000).toFixed(1)}s` : 'N/A';
+        const computedScore = Math.round((p.correctCount || 0) * pointsPerQuestion);
+
+        let rankHtml;
+        if (rank === 1) {
+          rankHtml = `<span class="rank-trophy rank-gold"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#trophy"></use></svg>${rank}</span>`;
+        } else if (rank === 2) {
+          rankHtml = `<span class="rank-trophy rank-silver"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
+        } else if (rank === 3) {
+          rankHtml = `<span class="rank-trophy rank-bronze"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
+        } else if (rank <= 5) {
+          rankHtml = `<span class="rank-trophy rank-top5"><svg class="trophy-icon" aria-hidden="true"><use href="/assets/icons.svg#medal"></use></svg>${rank}</span>`;
+        } else {
+          rankHtml = `${rank}`;
+        }
+
+        const streak = p.bestStreak || 0;
+        const streakClass = streak >= Math.ceil(totalQuestions / 2) ? 'high' : '';
+        const streakHtml = streak > 0
+          ? `<span class="streak-badge ${streakClass}">${streak}</span>`
+          : '0';
+
+        tr.innerHTML = `
+          <td>${rankHtml}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${p.correctCount} / ${totalQuestions}</td>
+          <td>${computedScore} / ${totalScore}</td>
+          <td><span class="pass-badge ${p.passed ? 'pass-badge-passed' : 'pass-badge-failed'}">${p.passed ? 'Passed' : 'Below threshold'}</span></td>
+          <td>${avgTime}</td>
+          <td>${streakHtml}</td>
+        `;
+        return tr;
       }
 
-      // Streak badge
-      const streak = p.bestStreak || 0;
-      const streakClass = streak >= Math.ceil(totalQuestions / 2) ? 'high' : '';
-      const streakHtml = streak > 0
-        ? `<span class="streak-badge ${streakClass}">${streak}</span>`
-        : '0';
+      rankedParticipants.forEach(p => {
+        rankingParticipantsBody.appendChild(
+          buildParticipantRow(p, p.overallRank, data.session.totalQuestions)
+        );
+      });
 
-      tr.innerHTML = `
-        <td>${rankHtml}</td>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${p.correctCount} / ${totalQuestions}</td>
-        <td>${computedScore} / ${totalScore}</td>
-        <td><span class="pass-badge ${p.passed ? 'pass-badge-passed' : 'pass-badge-failed'}">${p.passed ? 'Passed' : 'Below threshold'}</span></td>
-        <td>${avgTime}</td>
-        <td>${streakHtml}</td>
-      `;
-      return tr;
+      noRankingMsg.classList.toggle('hidden', rankedParticipants.length > 0);
+      rankingCountBadge.textContent = rankedParticipants.length;
+      rankingThresholdNote.textContent = `Passing threshold: ${passingPercent}%`;
     }
-
-    rankedParticipants.forEach(p => {
-      rankingParticipantsBody.appendChild(
-        buildParticipantRow(p, p.overallRank, data.session.totalQuestions)
-      );
-    });
-
-    noRankingMsg.classList.toggle('hidden', rankedParticipants.length > 0);
-    rankingCountBadge.textContent = rankedParticipants.length;
-    rankingThresholdNote.textContent = `Passing threshold: ${passingPercent}%`;
 
   } catch (err) {
     console.error('Failed to load session detail', err);
@@ -3013,7 +3171,13 @@ function addParticipantChipWithKick(id, name, avatarId = null) {
   `;
 
   chip.querySelector('.kick-btn').addEventListener('click', async () => {
-    if (!confirm(`Remove ${name} from the session?`)) return;
+    const confirmed = await showConfirmModal({
+      title: 'Kick Participant',
+      message: `Remove ${name} from the session?`,
+      confirmText: 'Remove Participant',
+      danger: true
+    });
+    if (!confirmed) return;
     await kickParticipant(id, name);
   });
 

@@ -264,6 +264,10 @@
 - [x] Python
 - [ ] Java"></textarea>
             <div class="builder-actions">
+              <button id="cancel-studio-btn" type="button" class="btn btn-secondary">
+                <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#x-circle"></use></svg>
+                Cancel
+              </button>
               <button id="preview-btn" class="btn btn-preview">
                 <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#eye"></use></svg>
                 Preview questions
@@ -353,6 +357,7 @@
                 <span class="visually-hidden">seconds between questions</span>
               </label>
               <div class="quiz-controls">
+                <button id="cancel-session-btn" class="btn btn-secondary">Cancel session</button>
                 <button id="start-btn" class="btn btn-success">Start quiz <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg></button>
                 <button id="next-btn" class="btn btn-primary hidden"><span id="next-btn-label">Next question</span> <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></button>
                 <button id="end-question-btn" class="btn btn-warning hidden">End question</button>
@@ -507,7 +512,7 @@
             <article class="chart-card"><p class="section-eyebrow">Question quality</p><h3>Difficulty at a glance</h3><p class="text-muted">Lowest correct percentage appears first.</p><div class="chart-wrapper"><canvas id="question-difficulty-chart"></canvas></div></article>
           </div>
 
-          <article class="detail-card mt-4">
+          <article class="detail-card mt-4" id="question-breakdown-card">
             <div class="card-heading-row"><div><p class="section-eyebrow">Question breakdown</p><h3>Where the room struggled</h3></div></div>
             <div class="table-scroll">
               <table class="results-table" id="question-breakdown-table">
@@ -515,6 +520,11 @@
                 <tbody id="question-breakdown-body"></tbody>
               </table>
             </div>
+          </article>
+
+          <article class="detail-card mt-4 hidden" id="survey-breakdown-section">
+            <div class="card-heading-row"><div><p class="section-eyebrow">Survey response breakdown</p><h3>Option distribution</h3></div></div>
+            <div id="survey-breakdown-container" class="mt-4"></div>
           </article>
 
           <article class="detail-card mt-4 hidden" id="tricky-questions-section">
@@ -832,6 +842,23 @@
           </div>
           <button type="submit" class="btn btn-primary btn-block">Save Changes</button>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Confirmation Modal -->
+  <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+    <div class="modal-content confirm-modal-content">
+      <div class="modal-header">
+        <h3 id="confirm-modal-title">Confirmation</h3>
+        <button id="confirm-modal-close" class="btn-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message">Are you sure?</p>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+        <button id="confirm-modal-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="confirm-modal-ok" type="button" class="btn btn-danger">Confirm</button>
       </div>
     </div>
   </div>

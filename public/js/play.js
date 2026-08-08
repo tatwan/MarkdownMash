@@ -547,40 +547,60 @@ function initSocket() {
     const isCorrect = yourAnswerIdx !== undefined && data.correctIndices.includes(yourAnswerIdx);
 
     // Update score
-    currentScore = myResults.currentScore || 0;
-    scoreDisplay.textContent = currentScore;
-    currentScoreEl.textContent = currentScore;
+    const isSurvey = data.mode === 'survey';
 
     // Set result display
-    if (yourAnswerIdx === undefined) {
-      resultIcon.className = 'result-icon timeout';
-      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#clock"></use></svg>';
-      resultText.textContent = "Time's up!";
-      yourAnswer.textContent = 'No answer';
-    } else if (isCorrect) {
+    if (isSurvey) {
       resultIcon.className = 'result-icon correct';
       resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
-      resultText.textContent = 'Correct!';
-      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
-    } else {
-      resultIcon.className = 'result-icon incorrect';
-      resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#x-circle"></use></svg>';
-      resultText.textContent = 'Incorrect';
-      yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
-    }
+      resultText.textContent = 'Response Recorded';
+      document.querySelector('.result-score-display')?.classList.add('hidden');
+      document.querySelector('.personal-result-grid')?.classList.add('hidden');
+      document.querySelector('.result-detail-row.correct').style.display = 'none';
 
-    resultRank.textContent = myResults.rank ? `#${myResults.rank}` : '—';
-    resultStreak.textContent = myResults.currentStreak || 0;
-    if (myResults.movement > 0) {
-      resultMovement.textContent = `+${myResults.movement}`;
-    } else if (myResults.movement < 0) {
-      resultMovement.textContent = `${myResults.movement}`;
+      if (yourAnswerIdx === undefined) {
+        yourAnswer.textContent = 'No response';
+      } else {
+        yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
+      }
     } else {
-      resultMovement.textContent = myResults.previousRank ? 'Held' : 'New';
-    }
+      document.querySelector('.result-score-display')?.classList.remove('hidden');
+      document.querySelector('.personal-result-grid')?.classList.remove('hidden');
 
-    correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${markdown.inline(currentQuestion.options[correctIdx])}`;
-    document.querySelector('.result-detail-row.correct').style.display = isCorrect ? 'none' : 'flex';
+      currentScore = myResults.currentScore || 0;
+      scoreDisplay.textContent = currentScore;
+      currentScoreEl.textContent = currentScore;
+
+      if (yourAnswerIdx === undefined) {
+        resultIcon.className = 'result-icon timeout';
+        resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#clock"></use></svg>';
+        resultText.textContent = "Time's up!";
+        yourAnswer.textContent = 'No answer';
+      } else if (isCorrect) {
+        resultIcon.className = 'result-icon correct';
+        resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#check-circle"></use></svg>';
+        resultText.textContent = 'Correct!';
+        yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
+      } else {
+        resultIcon.className = 'result-icon incorrect';
+        resultIcon.innerHTML = '<svg aria-hidden="true"><use href="/assets/icons.svg#x-circle"></use></svg>';
+        resultText.textContent = 'Incorrect';
+        yourAnswer.innerHTML = `${String.fromCharCode(65 + yourAnswerIdx)}. ${markdown.inline(currentQuestion.options[yourAnswerIdx])}`;
+      }
+
+      resultRank.textContent = myResults.rank ? `#${myResults.rank}` : '—';
+      resultStreak.textContent = myResults.currentStreak || 0;
+      if (myResults.movement > 0) {
+        resultMovement.textContent = `+${myResults.movement}`;
+      } else if (myResults.movement < 0) {
+        resultMovement.textContent = `${myResults.movement}`;
+      } else {
+        resultMovement.textContent = myResults.previousRank ? 'Held' : 'New';
+      }
+
+      correctAnswer.innerHTML = `${String.fromCharCode(65 + correctIdx)}. ${markdown.inline(currentQuestion.options[correctIdx])}`;
+      document.querySelector('.result-detail-row.correct').style.display = isCorrect ? 'none' : 'flex';
+    }
 
     // Show results chart
     showResultsChart(data);

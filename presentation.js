@@ -153,6 +153,23 @@ function buildHighlights(leaderboard, correctParticipants, questionId) {
 }
 
 function buildQuestionPresentation(session, question) {
+  if (session.sessionType === 'survey') {
+    const responseCount = Object.values(session.participants || {})
+      .filter(p => p.answers && p.answers[question.id] !== undefined).length;
+    return {
+      correctParticipants: [],
+      leaderboard: [],
+      highlights: [{
+        type: 'steady',
+        icon: 'check-circle',
+        eyebrow: 'Survey responses',
+        message: `${responseCount} ${responseCount === 1 ? 'response' : 'responses'} recorded`,
+        questionId: question.id
+      }],
+      rankSnapshot: {}
+    };
+  }
+
   const correctParticipants = Object.values(session.participants)
     .filter(participant => question.correctIndices.includes(participant.answers[question.id]))
     .map(participant => ({

@@ -2873,6 +2873,44 @@ label {
   max-width: 880px;
 }
 
+.confirm-modal-content {
+  max-width: 440px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.survey-q-card {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.survey-option-row {
+  margin-top: 10px;
+}
+
+.survey-option-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+
+.survey-option-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.survey-option-fill {
+  height: 100%;
+  background: var(--primary, #3b82f6);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
