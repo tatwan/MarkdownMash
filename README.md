@@ -10,95 +10,7 @@
 
 A lightweight, real-time quiz and survey application for classrooms and events. Host interactive quizzes with live scoring or anonymous surveys with shared summaries — no participant accounts required.
 
-## What's New in v1.6.1
-
-### Analytics restoration and a more polished live-workflow UI
-
-- **Session reports are restored** — quiz leaderboards and survey response breakdowns render correctly for new and historical sessions.
-- **More confident dialogs** — confirmation and destructive actions have clearer hierarchy, intentional spacing, and polished phone layouts.
-- **True-to-life previews** — quiz and survey previews now mirror the participant question screen, including timers, live option cards, section cards, and a dedicated phone view.
-- **Larger participant section cards** — section transitions make better use of the screen without overflowing smaller phones.
-- **Clean studio switching** — quiz and survey drafts stay separate, completed sessions clear their Markdown, and both studios include an explicit Clear action.
-
-## What's New in v1.6.0
-
-### Survey polish, clearer analytics, and safer quiz loading
-
-- **Collect first, reveal together** — survey choices remain private between questions. Participants get a calm confirmation screen; the presenter shows distributions only after the survey ends.
-- **A real survey finale** — step through every question with previous/next controls, response rates, most-popular choices, ties, and full option distributions.
-- **Quiz and survey analytics are distinct** — session type badges and filters keep quiz averages separate from survey response summaries.
-- **Consistent dialogs** — logout, cancel, end, delete, recover, kick, and template replacement share one keyboard-accessible styled dialog.
-- **More reliable technical quizzes** — the host transports Markdown safely so code and shell-command examples do not trigger common hosting firewall false positives.
-- **Smoother section transitions** — the curtain now opens into the next question and respects reduced-motion preferences.
-
-## What's New in v1.5.0
-
-### Survey sessions & example templates
-
-- **Host a survey** on Host Home — a separate session type for anonymous pulse checks (no scores, no named answer rows).
-- Survey Markdown uses plain options (`- Choice`); answers batch-write anonymously when a question ends.
-- Live room reuses sections, Autopilot, Sidekicks, and the presenter — results show **distributions**, not leaderboards.
-- Starter surveys: food, movies, sports in [`templates/`](templates/).
-- **Example Mashes** gallery (quiz + survey) lives in [`templates/`](templates/) and is what the studio loads for **Starter templates**.
-
-## What's New in v1.4.0
-
-### Sections & Ungraded Questions
-
-Group a quiz into named modules and mark questions that should feel real without affecting the score.
-
-- **`# Section: Module name`** — announces a curtain on participant devices, the presenter screen, and the host studio before that module's questions. An optional `>` line under the heading becomes the section subtitle.
-- **`::type=ungraded`** — captures and celebrates correctness, but awards no points and never changes streaks. Place it on a question, or under a section heading to default every question in that section.
-- **Graded-only scoring** — `# Score N` divides among graded questions only, and every "Question X of N" counter matches what the room sees.
-- **Autopilot-aware** — section curtains hold for five seconds under Autopilot, then advance on their own.
-- **Studio preview** — the host preview walks sections and badges ungraded questions before you run the room.
-- **Example Mashes in [`templates/`](templates/)** — ready-to-run Markdown files that replace the old `sample-quiz.md`. The host studio **Starter templates** gallery loads these same files, so the product and the GitHub repo stay in sync.
-- **Analytics stay honest** — ungraded answers remain in raw data and CSV (with a Question Type column) without distorting scored averages or the hardest-questions recap.
-
-Legacy quizzes without sections or `::type=` run exactly as before. This release also hardens hosted account scoping so each host, including the deployment master, only sees their own session history and analytics.
-
-### Example templates
-
-| Template | Path | What it shows |
-|---|---|---|
-| Quick Math | [`templates/math.md`](templates/math.md) | Classic graded Mash |
-| Python Basics | [`templates/python.md`](templates/python.md) | Sections + ungraded opinion question |
-| Data Science | [`templates/data-science.md`](templates/data-science.md) | Classic graded Mash |
-| Marvel | [`templates/marvel.md`](templates/marvel.md) | Classic graded Mash |
-| Music & Lyrics | [`templates/music.md`](templates/music.md) | Classic graded Mash |
-| History Highlights | [`templates/history.md`](templates/history.md) | Bonus section with ungraded question |
-| Classroom Modules | [`templates/classroom-modules.md`](templates/classroom-modules.md) | Full showcase: two sections, mixed graded/ungraded |
-
-Open any file in the host studio, or choose **Starter templates** after **Host a Mash** — the cards fetch from `/templates/…` on your deployment.
-
-## What's New in v1.3.1
-
-### Autopilot
-
-Turn on **Autopilot** and the quiz runs itself. Start it once and the first question appears on its own; each question closes as soon as everyone still connected has answered, and the next one follows after a pause you choose. Both the participant screen and the presenter view explain what is happening, so an early close reads as intentional rather than as a glitch.
-
-It is built for the moments a host cannot stay at the dashboard — stepping out, or joining their own room as a player. Manual control never goes away: End question and Next question still work and simply pre-empt the timer, and switching Autopilot off hands the room straight back. Because the flow is driven from the server, a host can close their laptop entirely and the quiz still reaches the finale.
-
-Autopilot is off by default. Quizzes run exactly as before when it is never enabled.
-
-## What's New in v1.3.0
-
-### Hosted Accounts, Sidekicks, and a Friendlier Host Studio
-
-Version 1.3.0 adds an optional managed-hosting foundation while keeping normal self-hosted deployments open, unrestricted, and free to operate without Stripe or Resend.
-
-#### Key Highlights
-
-- **Self-Service Hosted Accounts** - Email verification through Resend, secure password setup, Stripe Checkout, annual billing, and Customer Portal access.
-- **Simple Hosted Plan** - One $15/year plan with one open room at a time and up to 50 participants; the deployment master remains exempt.
-- **20 Sticker Sidekicks** - Participants receive friendly avatars that appear across the waiting room, response highlights, rankings, and finale.
-- **Animated Lead Changes** - Swoop, high-five, spring-swap, and rocket-pass animations celebrate a new leader between questions.
-- **Host Home** - A focused signed-in launcher for hosting, analytics, account settings, and billing.
-- **Editable Starter Mashes** - Six starter templates (math, Python, data science, Marvel, music, history) plus a classroom showcase in [`templates/`](templates/), loaded by the host studio from the same files.
-- **Public Policies and Support** - Terms, privacy, refunds, and `info@markdownmash.com` are linked throughout the hosted experience.
-- **Shared-Browser Privacy Hardening** - Switching from the master account to a hosted account clears master-only Settings data and recalculates tab access.
-
-Existing classroom sessions remain compatible. Hosted billing and public signup stay disabled unless an operator explicitly configures and enables them.
+**Release history:** what changed in each version lives in [`CHANGELOG.md`](CHANGELOG.md) and on [GitHub Releases](https://github.com/tatwan/MarkdownMash/releases).
 
 ## Features
 
@@ -124,6 +36,8 @@ Existing classroom sessions remain compatible. Hosted billing and public signup 
 - **PostgreSQL Persistence** - Session histories, answers, and analytics survive server restarts. 
 - **Frictionless Onboarding** - Zero setup for participants; students just enter their name and jump right in.
 - **Self-hosted & Free-Tier Friendly** - Easily deployable to services like Render and Supabase for free.
+- **Sticker Sidekicks & Lead-Change Animations** - Participants receive friendly avatars that follow them from the waiting room to the finale, and a new leader is celebrated with an animation between questions.
+- **Optional Hosted Accounts** - Self-hosted deployments stay open and free to run. Operators can additionally enable invitation-only or self-service instructor accounts with Stripe billing; see Deployment.
 - **Autopilot** - Hand off the flow entirely. Questions close as soon as everyone still connected has answered, results hold for a pause you choose, and the next question appears on its own. Toggle it on or off at any point; the manual controls keep working and simply pre-empt the timer.
 
 
@@ -317,6 +231,20 @@ greet("Alice")
 - Ungraded questions never change score, `correctCount`, or streaks
 - Participants see their score after each graded question
 - At the end: **Pass** (70%+) or motivating message to study more (skipped when a quiz has no graded questions)
+
+### Starter templates
+
+| Template | Path | What it shows |
+|---|---|---|
+| Quick Math | [`templates/math.md`](templates/math.md) | Classic graded Mash |
+| Python Basics | [`templates/python.md`](templates/python.md) | Sections + ungraded opinion question |
+| Data Science | [`templates/data-science.md`](templates/data-science.md) | Classic graded Mash |
+| Marvel | [`templates/marvel.md`](templates/marvel.md) | Classic graded Mash |
+| Music & Lyrics | [`templates/music.md`](templates/music.md) | Classic graded Mash |
+| History Highlights | [`templates/history.md`](templates/history.md) | Bonus section with ungraded question |
+| Classroom Modules | [`templates/classroom-modules.md`](templates/classroom-modules.md) | Full showcase: two sections, mixed graded/ungraded |
+
+Open any file in the host studio, or choose **Starter templates** after **Host a Mash** — the cards fetch from `/templates/…` on your deployment.
 
 ## Survey Format
 
