@@ -37,6 +37,9 @@ function createPersistentSessionRepository(db, sessionId, sessionCode) {
     updateParticipantScore(participantId, score, correctCount) {
       return db.updateParticipantScore(participantId, score, correctCount);
     },
+    updateParticipantScores(entries) {
+      return db.updateParticipantScores(entries);
+    },
     deleteSession() {
       return db.deleteSession(sessionCode);
     }
@@ -69,6 +72,7 @@ function createTransientSessionRepository(options = {}) {
     async recordAnswer() {},
     async recordAnonymousAnswers() {},
     async updateParticipantScore() {},
+    async updateParticipantScores() {},
     async deleteSession() {}
   };
 }

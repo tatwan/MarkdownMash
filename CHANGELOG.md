@@ -2,6 +2,21 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- Survey question close no longer waits on the database. Anonymous responses are written in a single statement after the results have been sent, so a 150-person room closes in milliseconds rather than seconds, and Autopilot can no longer start the next question before the previous close has reached participants.
+- The quiz finale and session end write every participant's final score in one statement instead of one round trip per participant. In a 150-person room over a cross-region database hop the finale previously took several seconds to reach the host.
+
+### Changed
+
+- Autopilot's early close waits only on participants who are still connected. A closed tab no longer forces every remaining question to run its full timer, and a departure that leaves everyone else answered closes the question.
+
+### Notes
+
+- No database migration is required.
+
 ## [1.6.1] - 2026-08-08
 
 ### Fixed

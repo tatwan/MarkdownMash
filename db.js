@@ -500,6 +500,25 @@ const dbApi = {
     );
   },
 
+  // Final scores for the whole room in one statement. Entries are
+  // { id, score, correctCount }; see recordAnonymousAnswers for why a loop
+  // of single-row updates is not acceptable on the live path.
+  async updateParticipantScores(entries) {
+    if (!Array.isArray(entries) || entries.length === 0) return { rowCount: 0 };
+    const result = await pool.query(
+      `UPDATE participants AS p
+       SET score = v.score, correct_count = v.correct_count
+       FROM unnest($1::text[], $2::integer[], $3::integer[]) AS v(id, score, correct_count)
+       WHERE p.id = v.id`,
+      [
+        entries.map(entry => entry.id),
+        entries.map(entry => entry.score),
+        entries.map(entry => entry.correctCount)
+      ]
+    );
+    return { rowCount: result.rowCount };
+  },
+
   async updateParticipantSocket(id, socketId) {
     return pool.query('UPDATE participants SET socket_id = $1 WHERE id = $2', [socketId, id]);
   },
@@ -519,30 +538,24 @@ const dbApi = {
 
   // Survey anonymity: no participant_id, no is_correct. Rows should be shuffled
   // by the caller before insert so insertion order carries no identity signal.
+  // One statement for the whole room: a per-row loop cost one database round
+  // trip per participant, which at 150 participants across a cross-region hop
+  // held every question close for several seconds.
   async recordAnonymousAnswers(sessionId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return { rowCount: 0 };
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      for (const row of rows) {
-        await client.query(
-          `INSERT INTO answers (session_id, participant_id, question_index, answer_index, is_correct, response_time_ms)
-           VALUES ($1, NULL, $2, $3, NULL, $4)`,
-          [sessionId, row.questionIndex, row.answerIndex, row.responseTimeMs ?? null]
-        );
-      }
-      await client.query('COMMIT');
-      return { rowCount: rows.length };
-    } catch (error) {
-      try {
-        await client.query('ROLLBACK');
-      } catch (_) {
-        /* ignore */
-      }
-      throw error;
-    } finally {
-      client.release();
-    }
+    const result = await pool.query(
+      `INSERT INTO answers (session_id, participant_id, question_index, answer_index, is_correct, response_time_ms)
+       SELECT $1, NULL, t.question_index, t.answer_index, NULL, t.response_time_ms
+       FROM unnest($2::integer[], $3::integer[], $4::integer[])
+         AS t(question_index, answer_index, response_time_ms)`,
+      [
+        sessionId,
+        rows.map(row => row.questionIndex),
+        rows.map(row => row.answerIndex),
+        rows.map(row => row.responseTimeMs ?? null)
+      ]
+    );
+    return { rowCount: result.rowCount };
   },
 
   async getAnswersBySession(sessionId) {

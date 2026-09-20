@@ -75,7 +75,7 @@ Open any file in the host studio, or choose **Starter templates** after **Host a
 
 ### Autopilot
 
-Turn on **Autopilot** and the quiz runs itself. Start it once and the first question appears on its own; each question closes as soon as everyone has answered, and the next one follows after a pause you choose. Both the participant screen and the presenter view explain what is happening, so an early close reads as intentional rather than as a glitch.
+Turn on **Autopilot** and the quiz runs itself. Start it once and the first question appears on its own; each question closes as soon as everyone still connected has answered, and the next one follows after a pause you choose. Both the participant screen and the presenter view explain what is happening, so an early close reads as intentional rather than as a glitch.
 
 It is built for the moments a host cannot stay at the dashboard — stepping out, or joining their own room as a player. Manual control never goes away: End question and Next question still work and simply pre-empt the timer, and switching Autopilot off hands the room straight back. Because the flow is driven from the server, a host can close their laptop entirely and the quiz still reaches the finale.
 
@@ -124,7 +124,7 @@ Existing classroom sessions remain compatible. Hosted billing and public signup 
 - **PostgreSQL Persistence** - Session histories, answers, and analytics survive server restarts. 
 - **Frictionless Onboarding** - Zero setup for participants; students just enter their name and jump right in.
 - **Self-hosted & Free-Tier Friendly** - Easily deployable to services like Render and Supabase for free.
-- **Autopilot** - Hand off the flow entirely. Questions close as soon as everyone has answered, results hold for a pause you choose, and the next question appears on its own. Toggle it on or off at any point; the manual controls keep working and simply pre-empt the timer.
+- **Autopilot** - Hand off the flow entirely. Questions close as soon as everyone still connected has answered, results hold for a pause you choose, and the next question appears on its own. Toggle it on or off at any point; the manual controls keep working and simply pre-empt the timer.
 
 
 

@@ -1603,13 +1603,7 @@ app.post('/api/admin/session/:code/end', authorizeAdminSession, async (req, res)
   await session.repository.updateStatus('ended');
 
   // Save final participant scores to database
-  for (const participant of Object.values(session.participants)) {
-    await session.repository.updateParticipantScore(
-      participant.id,
-      participant.score || 0,
-      participant.correctCount || 0
-    );
-  }
+  await session.repository.updateParticipantScores(finalScoreEntries(session));
 
   // Notify all clients in this session
   io.to(`session:${code}`).emit('session_ended', {
@@ -3285,22 +3279,7 @@ io.on('connection', (socket) => {
       socket.emit('answer_confirmed', { questionId, answerIndex });
     }
 
-    // Guarded per-question: two participants can both resolve their DB await
-    // after everyoneAnswered() has gone true (their in-memory answers land
-    // synchronously before either await), so without this guard both would
-    // emit 'all_answered' and both would call scheduleAutopilot — the second
-    // call would restart the 2s beat late by the inter-arrival gap between
-    // the two submissions. scheduleAutopilot stays inside the guard so only
-    // the call that "wins" the race schedules the close.
-    if (autopilot.shouldCloseEarly(session, questionId)
-      && session.quizState.allAnsweredEmittedFor !== questionId) {
-      session.quizState.allAnsweredEmittedFor = questionId;
-      const closingInMs = autopilot.ALL_ANSWERED_BEAT_MS;
-      io.to(`session:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
-      io.to(`admin:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
-      io.to(`presenter:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
-      scheduleAutopilot(sessionCode, questionId);
-    }
+    closeEarlyIfRoomIsIn(sessionCode, session, questionId);
   });
 
   // Admin ends session
@@ -3315,13 +3294,7 @@ io.on('connection', (socket) => {
     await session.repository.updateStatus('ended');
 
     // Save final participant scores
-    for (const participant of Object.values(session.participants)) {
-      await session.repository.updateParticipantScore(
-        participant.id,
-        participant.score || 0,
-        participant.correctCount || 0
-      );
-    }
+    await session.repository.updateParticipantScores(finalScoreEntries(session));
 
     // Notify all clients
     io.to(`session:${sessionCode}`).emit('session_ended', {
@@ -3343,8 +3316,51 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
+
+    // Presence feeds autopilot's early close. Only clear when this socket is
+    // still the one attached, so a late disconnect from a socket that has
+    // already been replaced by a reconnect is a no-op.
+    if (!socket.participantId) return;
+    const session = activeSessions.get(socket.sessionCode);
+    const participant = session?.participants?.[socket.participantId];
+    if (!participant || participant.socketId !== socket.id) return;
+    participant.socketId = null;
+
+    // The departed participant may have been the last one the room was
+    // waiting on; nothing else re-runs the check until the next submission.
+    if (!session.quizState.isRunning || session.quizState.showingResults) return;
+    const question = currentQuestionOf(session);
+    if (question) closeEarlyIfRoomIsIn(socket.sessionCode, session, question.id);
   });
 });
+
+// Guarded per-question: two participants can both resolve their DB await
+// after everyoneAnswered() has gone true (their in-memory answers land
+// synchronously before either await), so without this guard both would
+// emit 'all_answered' and both would call scheduleAutopilot — the second
+// call would restart the 2s beat late by the inter-arrival gap between
+// the two submissions. scheduleAutopilot stays inside the guard so only
+// the call that "wins" the race schedules the close.
+function closeEarlyIfRoomIsIn(sessionCode, session, questionId) {
+  if (!autopilot.shouldCloseEarly(session, questionId)) return;
+  if (session.quizState.allAnsweredEmittedFor === questionId) return;
+  session.quizState.allAnsweredEmittedFor = questionId;
+  const closingInMs = autopilot.ALL_ANSWERED_BEAT_MS;
+  io.to(`session:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
+  io.to(`admin:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
+  io.to(`presenter:${sessionCode}`).emit('all_answered', { questionId, closingInMs });
+  scheduleAutopilot(sessionCode, questionId);
+}
+
+// { id, score, correctCount } for every participant, the shape
+// repository.updateParticipantScores writes in one statement.
+function finalScoreEntries(session) {
+  return Object.values(session.participants).map(participant => ({
+    id: participant.id,
+    score: participant.score || 0,
+    correctCount: participant.correctCount || 0
+  }));
+}
 
 function clearAutopilotTimer(session) {
   if (!session) return;
@@ -3434,7 +3450,6 @@ async function advanceToNextStep(sessionCode) {
 
 async function finishQuiz(sessionCode, session) {
   session.quizState.isRunning = false;
-  await session.repository.updateStatus('ended');
 
   if (isSurveySession(session)) {
     const summary = surveySummaryForSession(session);
@@ -3461,6 +3476,7 @@ async function finishQuiz(sessionCode, session) {
       });
     }
     clearAutopilotTimer(session);
+    await persistQuizEnd(session, []);
     io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
     io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
     return;
@@ -3480,12 +3496,6 @@ async function finishQuiz(sessionCode, session) {
     const passed = totalGraded > 0 && percentage >= session.quiz.passingPercent;
     const standing = finalLeaderboard.find(entry => entry.id === participant.id);
     participant.score = finalScore;
-
-    await session.repository.updateParticipantScore(
-      participant.id,
-      finalScore,
-      participant.correctCount || 0
-    );
 
     if (participant.socketId) {
       io.to(participant.socketId).emit('quiz_ended', {
@@ -3508,8 +3518,23 @@ async function finishQuiz(sessionCode, session) {
 
   session.finale = buildFinaleSummary(session);
   clearAutopilotTimer(session);
+
+  // Participants already have their results; the host's finale waits only for
+  // the single batched write so the results endpoint reads settled scores.
+  await persistQuizEnd(session, finalScoreEntries(session));
   io.to(`admin:${sessionCode}`).emit('quiz_ended', session.finale);
   io.to(`presenter:${sessionCode}`).emit('quiz_ended', session.finale);
+}
+
+// A failed write must not strand the room without a finale: log it and rely
+// on the recovery endpoint, which rescores from the raw answers rows.
+async function persistQuizEnd(session, finalScores) {
+  try {
+    await session.repository.updateStatus('ended');
+    await session.repository.updateParticipantScores(finalScores);
+  } catch (err) {
+    console.error('[FINALE] persisting final state failed:', err.message);
+  }
 }
 
 function startSectionStep(sessionCode, session, step) {
@@ -3608,11 +3633,12 @@ async function endCurrentQuestion(sessionCode) {
           responseTimeMs: p.responseTimes?.[question.id] ?? null
         }))
     );
-    try {
-      await session.repository.recordAnonymousAnswers(rows);
-    } catch (err) {
+    // Not awaited. Awaiting held every question_ended behind the write, and
+    // under autopilot the advance timer (armed above) could start the next
+    // question first, landing a stale results screen on top of it.
+    session.repository.recordAnonymousAnswers(rows).catch(err => {
       console.error('[SURVEY] anonymous batch write failed:', err.message);
-    }
+    });
 
     const questionNumber = question.displayNumber ?? question.index + 1;
     const totalQuestions = surveyQuestionCount(session.quiz);

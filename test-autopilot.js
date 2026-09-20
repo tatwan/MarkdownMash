@@ -13,8 +13,8 @@ const {
 function makeSession(overrides = {}) {
   return {
     participants: {
-      a: { id: 'a', answers: {} },
-      b: { id: 'b', answers: {} }
+      a: { id: 'a', socketId: 'sock-a', answers: {} },
+      b: { id: 'b', socketId: 'sock-b', answers: {} }
     },
     quizState: {
       isRunning: true,
@@ -66,6 +66,31 @@ const zeroIndex = makeSession();
 zeroIndex.participants.a.answers[1] = 0;
 zeroIndex.participants.b.answers[1] = 0; // answer index 0 is falsy but valid
 assert.equal(everyoneAnswered(zeroIndex, 1), true, 'answer index 0 counts as answered');
+
+// Presence: a participant whose tab is closed has no socket and can never
+// answer, so waiting on them would make every question run to the full timer
+// in any room larger than a handful of people.
+const closedTab = makeSession();
+closedTab.participants.a.answers[1] = 0;
+closedTab.participants.b.socketId = null; // disconnected, never answered
+assert.equal(everyoneAnswered(closedTab, 1), true, 'a disconnected participant does not block early close');
+
+const neverConnected = makeSession();
+neverConnected.participants.a.answers[1] = 0;
+neverConnected.participants.b.socketId = undefined; // REST-joined, socket never arrived
+assert.equal(everyoneAnswered(neverConnected, 1), true, 'a participant with no socket yet does not block early close');
+
+const allGone = makeSession();
+allGone.participants.a.socketId = null;
+allGone.participants.b.socketId = null;
+allGone.participants.a.answers[1] = 0;
+allGone.participants.b.answers[1] = 1;
+assert.equal(everyoneAnswered(allGone, 1), false, 'a room with nobody connected never counts as everyone answered');
+
+const connectedSilent = makeSession();
+connectedSilent.participants.a.answers[1] = 0;
+// b is connected and has not answered
+assert.equal(everyoneAnswered(connectedSilent, 1), false, 'a connected participant who has not answered still blocks');
 
 // --- shouldCloseEarly ---
 

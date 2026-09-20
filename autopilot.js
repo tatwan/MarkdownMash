@@ -19,12 +19,20 @@ function normalizePauseSeconds(value) {
   return rounded;
 }
 
-// An empty room never counts: with nobody present there is nothing to wait for,
-// and returning true would close every question instantly.
+// A participant is present while a socket is attached. server.js clears
+// socketId on disconnect, so a closed tab drops out of the wait; without this,
+// one departed student would force every question in a large room to run the
+// full timer, since somebody always leaves.
+function isPresent(participant) {
+  return Boolean(participant?.socketId);
+}
+
+// A room with nobody present never counts: there is nothing to wait for, and
+// returning true would close every question instantly.
 function everyoneAnswered(session, questionId) {
-  const participants = Object.values(session?.participants || {});
-  if (participants.length === 0) return false;
-  return participants.every(p => p?.answers?.[questionId] !== undefined);
+  const present = Object.values(session?.participants || {}).filter(isPresent);
+  if (present.length === 0) return false;
+  return present.every(p => p?.answers?.[questionId] !== undefined);
 }
 
 function isEngaged(session) {
@@ -71,6 +79,7 @@ module.exports = {
   ALL_ANSWERED_BEAT_MS,
   SECTION_HOLD_MS,
   normalizePauseSeconds,
+  isPresent,
   everyoneAnswered,
   shouldCloseEarly,
   nextAutopilotStep
