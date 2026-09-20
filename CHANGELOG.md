@@ -2,7 +2,7 @@
 
 All notable changes to Markdown Mash are documented here.
 
-## [Unreleased]
+## [1.6.2] - 2026-09-21
 
 ### Fixed
 

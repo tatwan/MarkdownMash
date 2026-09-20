@@ -1,6 +1,6 @@
 {
   "name": "markdown-mash",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "A real-time quiz platform with Markdown-based questions and scoring",
   "license": "Apache-2.0",
   "main": "server.js",
