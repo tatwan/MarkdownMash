@@ -5121,6 +5121,12 @@ select:focus-visible {
 .builder-toolbar {
   align-items: flex-start;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.builder-toolbar > div:first-child {
+  flex: 1 1 260px;
+  min-width: 240px;
 }
 
 .builder-toolbar h2 {
@@ -5136,6 +5142,8 @@ select:focus-visible {
   align-items: center;
   justify-content: flex-end;
   gap: 0.65rem;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
 }
 
 .builder-tools .course-name-input {
