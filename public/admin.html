@@ -16,6 +16,7 @@
   <script defer src="/js/quiz-preview-parser.js"></script>
   <script defer src="/js/survey-preview-parser.js"></script>
   <script defer src="/js/admin.js"></script>
+  <script defer src="/js/library.js"></script>
 </head>
 <body class="admin-body">
   <div class="admin-shell">
@@ -222,6 +223,14 @@
                 <span>Manage your profile, password, plan, and host access.</span>
               </span>
               <img src="/assets/sidekicks/webp/256/chestie.webp" alt="" width="132" height="132">
+            </button>
+            <button id="home-library-btn" type="button" class="instructor-launch-card instructor-launch-card-library">
+              <span class="instructor-launch-copy">
+                <span class="section-eyebrow">Your shelf</span>
+                <strong>My library</strong>
+                <span>Keep quizzes and surveys ready to host again.</span>
+              </span>
+              <img src="/assets/sidekicks/webp/256/luna.webp" alt="" width="132" height="132">
             </button>
           </div>
         </section>
@@ -561,6 +570,38 @@
             <p id="no-ranking-msg" class="empty-state-copy text-center hidden">No participant results are available.</p>
           </article>
         </section>
+        <section id="library-section" class="analytics-workspace hidden" aria-labelledby="library-heading">
+          <div class="analytics-header">
+            <div>
+              <p class="section-eyebrow">Your shelf</p>
+              <h1 id="library-heading" tabindex="-1">My library</h1>
+              <p class="text-muted">Quizzes and surveys you keep to host again. Nothing here is a past run.</p>
+            </div>
+            <div class="library-header-actions">
+              <button id="library-add-btn" type="button" class="btn btn-primary">
+                <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#book"></use></svg>
+                Add to library
+              </button>
+              <button id="library-back-btn" type="button" class="btn btn-secondary">
+                <svg class="btn-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg>
+                Back home
+              </button>
+            </div>
+          </div>
+          <div class="analytics-tabs" role="tablist" aria-label="Library filter">
+            <button type="button" class="tab-btn active" data-library-filter="all" role="tab">All</button>
+            <button type="button" class="tab-btn" data-library-filter="quiz" role="tab">Quizzes</button>
+            <button type="button" class="tab-btn" data-library-filter="survey" role="tab">Surveys</button>
+          </div>
+          <div id="library-status" class="status-message mt-4 hidden" role="status"></div>
+          <div id="library-empty" class="card library-empty hidden">
+            <p class="section-eyebrow">Nothing saved yet</p>
+            <h2>Your library is empty</h2>
+            <p class="text-muted">Add a quiz or a survey now and host it whenever you are ready. Saved Mashes open in the studio, so you can tweak them before the room opens.</p>
+            <button id="library-empty-add-btn" type="button" class="btn btn-primary">Add your first Mash</button>
+          </div>
+          <div id="library-grid" class="library-grid" aria-live="polite"></div>
+        </section>
       </div>
     </main>
   </div>
@@ -883,6 +924,64 @@
           </div>
           <button type="submit" class="btn btn-primary btn-block">Save Changes</button>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="library-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="library-editor-title">
+    <div class="modal-content library-editor-content">
+      <div class="modal-header">
+        <div>
+          <p class="section-eyebrow">My library</p>
+          <h2 id="library-editor-title">Add to library</h2>
+        </div>
+        <button id="library-editor-close" class="btn-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="library-field">
+          <span>Name</span>
+          <input type="text" id="library-editor-name" maxlength="80" autocomplete="off" placeholder="Week 3 warm-up">
+        </label>
+        <fieldset class="library-kind" id="library-editor-kind">
+          <legend>Kind</legend>
+          <label><input type="radio" name="library-kind" value="quiz" checked> Quiz</label>
+          <label><input type="radio" name="library-kind" value="survey"> Survey</label>
+        </fieldset>
+        <fieldset class="library-kind hidden" id="library-editor-target">
+          <legend>Save as</legend>
+          <label><input type="radio" name="library-target" value="update" checked> <span id="library-editor-target-update">Update the saved Mash</span></label>
+          <label><input type="radio" name="library-target" value="new"> Save as a new Mash</label>
+        </fieldset>
+        <label class="library-field" id="library-editor-markdown-field">
+          <span>Markdown</span>
+          <textarea id="library-editor-markdown" aria-label="Saved Mash Markdown" spellcheck="false" placeholder="# Quiz Title
+
+## Q1: Question text?
+- [ ] Wrong option
+- [x] Correct option
+::time=20"></textarea>
+        </label>
+        <div id="library-editor-status" class="status-message hidden" role="status"></div>
+      </div>
+      <div class="confirm-modal-footer">
+        <button id="library-editor-cancel" type="button" class="btn btn-secondary">Cancel</button>
+        <button id="library-editor-save" type="button" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="library-picker-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="library-picker-title">
+    <div class="modal-content template-modal-content">
+      <div class="modal-header">
+        <div>
+          <p class="section-eyebrow">My library</p>
+          <h2 id="library-picker-title">Choose a saved Mash</h2>
+        </div>
+        <button id="library-picker-close" class="btn-close" type="button" aria-label="Close library picker">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="library-picker-empty" class="template-modal-intro hidden"></p>
+        <div id="library-picker-grid" class="template-card-grid"></div>
       </div>
     </div>
   </div>

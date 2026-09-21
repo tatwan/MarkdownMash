@@ -21,6 +21,36 @@ for (const id of [
   assert.match(adminHtml, new RegExp(`id=["']${id}["']`), `${id} must exist`);
 }
 
+// My library (v1.7.0)
+for (const id of [
+  'home-library-btn',
+  'library-section',
+  'library-heading',
+  'library-grid',
+  'library-empty',
+  'library-add-btn',
+  'library-back-btn',
+  'library-editor-modal',
+  'library-editor-name',
+  'library-editor-markdown',
+  'library-picker-modal',
+  'library-picker-grid'
+]) {
+  assert.match(adminHtml, new RegExp(`id=["']${id}["']`), `${id} must exist`);
+}
+assert.match(adminHtml, /<script defer src="\/js\/library\.js"><\/script>/, 'library.js is loaded after admin.js');
+assert.ok(
+  adminHtml.indexOf('/js/admin.js') < adminHtml.indexOf('/js/library.js'),
+  'library.js must load after admin.js because it uses its globals'
+);
+const libraryJs = fs.readFileSync(path.join(__dirname, 'public', 'js', 'library.js'), 'utf8');
+assert.match(libraryJs, /homeLibraryBtn\?\.addEventListener\('click', showLibrary\)/);
+assert.doesNotMatch(libraryJs, /innerHTML/, 'host-authored names and Markdown never reach innerHTML');
+assert.match(adminJs, /const librarySection = document\.getElementById\('library-section'\)/);
+assert.match(adminJs, /let loadedLibraryItem = null/);
+assert.match(styleCss, /\.instructor-launch-card-library\s*\{/);
+assert.match(styleCss, /\.library-grid\s*\{/);
+
 for (const sidekick of ['zap', 'booky', 'chestie', 'byte', 'rocketo', 'popstar', 'luna']) {
   assert.ok(
     fs.existsSync(path.join(__dirname, 'assets', 'sidekicks', 'webp', '256', `${sidekick}.webp`)),

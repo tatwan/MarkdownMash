@@ -16,6 +16,7 @@ const homeHostAction = document.getElementById('home-host-action');
 const homeSurveyBtn = document.getElementById('home-survey-btn');
 const homeAnalyticsBtn = document.getElementById('home-analytics-btn');
 const homeAccountBtn = document.getElementById('home-account-btn');
+const librarySection = document.getElementById('library-section');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
 const loginSuccess = document.getElementById('login-success');
@@ -143,6 +144,9 @@ const STARTER_TEMPLATE_FILES = Object.freeze({
 // 'quiz' | 'survey' — set from Host Home; default quiz for trial.
 let studioMode = 'quiz';
 const studioDrafts = { quiz: '', survey: '' };
+// The saved Mash the studio last loaded, so Save to library can offer an
+// update instead of a duplicate. Cleared whenever the draft stops being it.
+let loadedLibraryItem = null;
 
 let previewQuizData = null;
 let previewCurrentQuestionIndex = 0;
@@ -396,6 +400,7 @@ function showInstructorHome() {
   liveWorkspace.classList.add('hidden');
   analyticsSection.classList.add('hidden');
   sessionDetailSection.classList.add('hidden');
+  librarySection?.classList.add('hidden');
   instructorHomeSection.classList.remove('hidden');
   studioTitleLabel.textContent = 'Host home';
   updateInstructorHome();
@@ -447,6 +452,7 @@ function switchStudioMode(mode) {
 
   studioDrafts[studioMode] = quizMarkdown.value;
   studioMode = mode;
+  loadedLibraryItem = null;
   quizMarkdown.value = studioDrafts[studioMode];
 }
 
@@ -460,6 +466,7 @@ function showInstructorStudio(mode) {
   instructorHomeSection.classList.add('hidden');
   analyticsSection.classList.add('hidden');
   sessionDetailSection.classList.add('hidden');
+  librarySection?.classList.add('hidden');
   if (sessionCode) {
     uploadSection.classList.add('hidden');
     liveWorkspace.classList.remove('hidden');
@@ -648,6 +655,7 @@ clearEditorBtn?.addEventListener('click', async () => {
 
   quizMarkdown.value = '';
   studioDrafts[studioMode] = '';
+  loadedLibraryItem = null;
   uploadStatus.classList.add('hidden');
   quizMarkdown.focus({ preventScroll: true });
 });
@@ -684,6 +692,7 @@ templateCards.forEach(card => {
       }
       quizMarkdown.value = markdown;
       studioDrafts[studioMode] = markdown;
+      loadedLibraryItem = null;
       closeTemplateModal();
       showStatus('upload-status', 'Starter template loaded. Edit anything you like, then preview your questions.', true);
       quizMarkdown.focus({ preventScroll: true });
@@ -2154,6 +2163,7 @@ async function showAnalytics() {
   // Show analytics
   analyticsSection.classList.remove('hidden');
   sessionDetailSection.classList.add('hidden');
+  librarySection?.classList.add('hidden');
   studioTitleLabel.textContent = 'Analytics';
 
   // Reset to overview tab
@@ -2742,6 +2752,7 @@ async function loadSessionDetail(code) {
     // Hide analytics list, show detail
     analyticsSection.classList.add('hidden');
     sessionDetailSection.classList.remove('hidden');
+    librarySection?.classList.add('hidden');
 
     const isSurvey = data.session.sessionType === 'survey' || data.mode === 'survey';
 

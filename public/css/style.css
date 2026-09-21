@@ -7797,3 +7797,135 @@ select:focus-visible {
   .survey-finale-option-track span,
   .survey-response-progress span { transition: none; }
 }
+
+/* My library */
+.instructor-launch-card-library {
+  background:
+    radial-gradient(circle at 100% 100%, rgba(124, 92, 255, 0.14), transparent 10rem),
+    var(--bg-card);
+}
+
+.library-header-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.library-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.1rem;
+  background: var(--bg-card);
+  border: 1px solid rgba(167, 176, 208, 0.18);
+  border-radius: 1rem;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.library-card:hover {
+  border-color: rgba(124, 92, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.library-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.library-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.library-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.library-empty {
+  margin-top: 1rem;
+  padding: 2rem;
+  text-align: center;
+  display: grid;
+  gap: 0.6rem;
+  justify-items: center;
+}
+
+.library-filter-empty {
+  grid-column: 1 / -1;
+}
+
+.library-editor-content {
+  width: min(720px, 100%);
+}
+
+.library-field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.library-field > span {
+  font-weight: 600;
+}
+
+.library-field input[type="text"],
+.library-field textarea {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+}
+
+.library-field textarea {
+  min-height: 260px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  resize: vertical;
+}
+
+.library-kind {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin: 0 0 1rem;
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.library-kind legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+}
+
+.library-picker-card .session-type-badge {
+  align-self: flex-start;
+}
+
+@media (max-width: 640px) {
+  .library-card-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-card,
+  .library-card:hover {
+    transition: none;
+    transform: none;
+  }
+}
