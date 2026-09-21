@@ -46,6 +46,12 @@ const {
 } = require('./survey-structure');
 const { buildSurveySummary } = require('./survey-results');
 const { decodeMarkdownPayload } = require('./markdown-transport');
+const {
+  validateSavedMashInput,
+  canCreateAnother,
+  summarizeSavedMash,
+  MAX_SAVED_MASHES_PER_OWNER
+} = require('./saved-mash');
 const { createTrialManager } = require('./trial-manager');
 const {
   createOpaqueToken,
@@ -1933,6 +1939,126 @@ app.post('/api/join', (req, res) => {
     error: 'Please use a session code to join. Go to /play.html and enter a session code.'
   });
 });
+
+// --- My library ---
+// Saved Mashes a host keeps to host again. Owner is always req.admin.id:
+// this is private content, so there is no master override, and a foreign
+// id returns the same 404 as a missing one.
+
+const LIBRARY_NOT_FOUND = { success: false, error: 'Saved Mash not found' };
+const libraryParsers = { parseQuiz: parseQuizMarkdown, parseSurvey: parseSurveyMarkdown };
+
+function parseLibraryId(raw) {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+// decodeMarkdownPayload throws on bad base64 or oversize; both are the
+// caller's fault, so they map to 400 exactly as session creation does.
+function decodeLibraryMarkdown(body, res) {
+  try {
+    return decodeMarkdownPayload(body);
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+    return null;
+  }
+}
+
+app.get('/api/admin/library', authenticateToken, async (req, res) => {
+  try {
+    const rows = await db.listSavedMashes(req.admin.id);
+    res.json({ success: true, items: rows.map(summarizeSavedMash) });
+  } catch (err) {
+    console.error('List library error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+app.get('/api/admin/library/:id', authenticateToken, async (req, res) => {
+  const id = parseLibraryId(req.params.id);
+  if (!id) return res.status(404).json(LIBRARY_NOT_FOUND);
+  try {
+    const row = await db.getSavedMash(id, req.admin.id);
+    if (!row) return res.status(404).json(LIBRARY_NOT_FOUND);
+    res.json({ success: true, item: { ...summarizeSavedMash(row), markdown: row.markdown } });
+  } catch (err) {
+    console.error('Get library item error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+app.post('/api/admin/library', authenticateToken, async (req, res) => {
+  const markdown = decodeLibraryMarkdown(req.body, res);
+  if (markdown === null) return;
+  try {
+    const validation = validateSavedMashInput(
+      { name: req.body?.name, kind: req.body?.kind, markdown },
+      libraryParsers
+    );
+    if (!validation.ok) {
+      return res.status(validation.status).json({ success: false, error: validation.error });
+    }
+
+    const count = await db.countSavedMashes(req.admin.id);
+    if (!canCreateAnother(count)) {
+      return res.status(409).json({
+        success: false,
+        error: `Your library holds up to ${MAX_SAVED_MASHES_PER_OWNER} Mashes. Delete one to add another.`
+      });
+    }
+
+    const row = await db.createSavedMash({ ownerId: req.admin.id, ...validation.value });
+    await db.logActivity(req.admin.id, 'library_create', { id: Number(row.id), name: row.name, kind: row.kind }, req.ip);
+    res.status(201).json({ success: true, item: summarizeSavedMash(row) });
+  } catch (err) {
+    console.error('Create library item error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+app.put('/api/admin/library/:id', authenticateToken, async (req, res) => {
+  const id = parseLibraryId(req.params.id);
+  if (!id) return res.status(404).json(LIBRARY_NOT_FOUND);
+  const markdown = decodeLibraryMarkdown(req.body, res);
+  if (markdown === null) return;
+  try {
+    const existing = await db.getSavedMash(id, req.admin.id);
+    if (!existing) return res.status(404).json(LIBRARY_NOT_FOUND);
+
+    // Kind is fixed at creation: the card promises it, and quiz Markdown
+    // is not valid survey Markdown.
+    const validation = validateSavedMashInput(
+      { name: req.body?.name, kind: existing.kind, markdown },
+      libraryParsers
+    );
+    if (!validation.ok) {
+      return res.status(validation.status).json({ success: false, error: validation.error });
+    }
+
+    const row = await db.updateSavedMash(id, req.admin.id, validation.value);
+    if (!row) return res.status(404).json(LIBRARY_NOT_FOUND);
+    await db.logActivity(req.admin.id, 'library_update', { id, name: row.name, kind: row.kind }, req.ip);
+    res.json({ success: true, item: summarizeSavedMash(row) });
+  } catch (err) {
+    console.error('Update library item error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+app.delete('/api/admin/library/:id', authenticateToken, async (req, res) => {
+  const id = parseLibraryId(req.params.id);
+  if (!id) return res.status(404).json(LIBRARY_NOT_FOUND);
+  try {
+    const removed = await db.deleteSavedMash(id, req.admin.id);
+    if (!removed) return res.status(404).json(LIBRARY_NOT_FOUND);
+    await db.logActivity(req.admin.id, 'library_delete', { id }, req.ip);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete library item error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+// --- End My library ---
 
 // ============================================
 // ADMIN SETTINGS ENDPOINTS

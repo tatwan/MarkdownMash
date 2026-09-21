@@ -104,4 +104,38 @@ assert.equal(
   'a host controls their own live room'
 );
 
+// --- My library routes ---
+//
+// The library is private content, like session history. Every route must
+// sit behind authenticateToken, the block must contain no master branch,
+// and every db function must carry owner_id into SQL.
+
+const fs = require('fs');
+const path = require('path');
+const serverSource = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+const dbSource = fs.readFileSync(path.join(__dirname, 'db.js'), 'utf8');
+
+const libraryStart = serverSource.indexOf('// --- My library ---');
+const libraryEnd = serverSource.indexOf('// --- End My library ---');
+assert.ok(libraryStart > -1 && libraryEnd > libraryStart, 'library routes are fenced by marker comments');
+const libraryBlock = serverSource.slice(libraryStart, libraryEnd);
+
+const libraryRoutes = libraryBlock.match(
+  /app\.(get|post|put|delete)\('\/api\/admin\/library(?:\/:id)?', authenticateToken/g
+) || [];
+assert.equal(libraryRoutes.length, 5, 'five library routes, each behind authenticateToken');
+assert.doesNotMatch(libraryBlock, /role\s*===\s*'master'/, 'library routes have no master branch');
+assert.doesNotMatch(libraryBlock, /ownerFilterFor\(/, 'library routes use req.admin.id directly, not the nullable filter');
+assert.ok(
+  (libraryBlock.match(/req\.admin\.id/g) || []).length >= 5,
+  'every route passes the caller id to the database'
+);
+
+for (const fn of ['listSavedMashes', 'countSavedMashes', 'getSavedMash', 'createSavedMash', 'updateSavedMash', 'deleteSavedMash']) {
+  const start = dbSource.indexOf(`async ${fn}(`);
+  assert.ok(start > -1, `${fn} exists in db.js`);
+  const body = dbSource.slice(start, dbSource.indexOf('\n  },', start));
+  assert.match(body, /owner_id/, `${fn} filters or writes owner_id`);
+}
+
 console.log('All owner scoping tests passed.');
