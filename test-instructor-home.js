@@ -62,6 +62,15 @@ assert.match(adminHtml, />Create host account<\/button>/);
 assert.match(adminHtml, /class="hosted-plan-sticker"/);
 assert.match(adminHtml, /Unlimited Mashes \+ saved analytics/);
 assert.match(adminHtml, /Up to 50 per Mash · 1 live room/);
+
+for (const id of ['open-library-btn', 'save-library-btn', 'library-editor-target', 'library-picker-empty']) {
+  assert.match(adminHtml, new RegExp(`id=["']${id}["']`), `${id} must exist`);
+}
+assert.match(libraryJs, /openLibraryBtn\?\.addEventListener\('click', openLibraryPicker\)/);
+assert.match(libraryJs, /saveLibraryBtn\?\.addEventListener\('click', openStudioSave\)/);
+assert.doesNotMatch(libraryJs, /Save to library is not available yet/, 'the studio save stub must be replaced');
+assert.match(adminJs, /open-library-btn'\)\?\.classList\.toggle\('hidden', trialMode\)/);
+assert.match(adminJs, /save-library-btn'\)\?\.classList\.toggle\('hidden', trialMode\)/);
 assert.match(styleCss, /\.hosted-plan-sticker\s*\{/);
 assert.match(adminHtml, /Email verification required · 7-day money-back guarantee/);
 assert.match(adminHtml, />Open studio</);

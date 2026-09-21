@@ -283,12 +283,6 @@ async function saveLibraryEditor() {
   }
 }
 
-// Defined in the studio integration; declared here so saveLibraryEditor
-// can reference it before that section exists.
-async function saveStudioDraft() {
-  throw new Error('Save to library is not available yet');
-}
-
 async function deleteLibraryItem(item) {
   const confirmed = await showConfirmModal({
     title: `Delete "${item.name}"?`,
@@ -333,6 +327,175 @@ async function hostLibraryItem(item) {
     showLibraryStatus(error.message || 'Could not load that Mash.', false);
   }
 }
+
+// --- studio: Save to library -------------------------------------------
+
+const openLibraryBtn = document.getElementById('open-library-btn');
+const saveLibraryBtn = document.getElementById('save-library-btn');
+const libraryPickerModal = document.getElementById('library-picker-modal');
+const libraryPickerTitle = document.getElementById('library-picker-title');
+const libraryPickerGrid = document.getElementById('library-picker-grid');
+const libraryPickerEmpty = document.getElementById('library-picker-empty');
+const libraryPickerClose = document.getElementById('library-picker-close');
+
+function currentStudioKind() {
+  return studioMode === 'survey' ? 'survey' : 'quiz';
+}
+
+// The first "# Title" line, skipping "# Score" and "# Section:" which are
+// directives, not titles. Mirrors the title rule in quiz-structure.js.
+function titleFromMarkdown(markdown) {
+  const line = markdown
+    .split('\n')
+    .map(text => text.trim())
+    .find(text => /^#\s+/.test(text) && !/^#\s*(Score\s+\d+|Section:)/i.test(text));
+  return line ? line.replace(/^#\s+/, '').trim().slice(0, 80) : '';
+}
+
+function editorTarget() {
+  return libraryEditorTarget.querySelector('input[name="library-target"]:checked')?.value || 'new';
+}
+
+function openStudioSave() {
+  const markdown = quizMarkdown.value;
+  if (!markdown.trim()) {
+    quizMarkdown.focus({ preventScroll: true });
+    showStatus('upload-status', 'Write or paste some Markdown before saving it to your library.', false);
+    return;
+  }
+
+  const kind = currentStudioKind();
+  const canUpdate = Boolean(loadedLibraryItem && loadedLibraryItem.kind === kind);
+
+  resetEditorChrome();
+  libraryEditorMode = 'studio';
+  libraryEditing = null;
+  libraryEditorTitle.textContent = 'Save to library';
+  libraryEditorName.value = canUpdate ? loadedLibraryItem.name : titleFromMarkdown(markdown);
+  setEditorKind(kind, true);
+  libraryEditorMarkdownField.classList.add('hidden');
+
+  libraryEditorTarget.classList.toggle('hidden', !canUpdate);
+  if (canUpdate) {
+    libraryEditorTargetUpdate.textContent = `Update "${loadedLibraryItem.name}"`;
+    libraryEditorTarget.querySelectorAll('input[name="library-target"]').forEach(input => {
+      input.checked = input.value === 'update';
+    });
+  }
+
+  libraryEditorModal.classList.remove('hidden');
+  libraryEditorName.focus({ preventScroll: true });
+  libraryEditorName.select();
+}
+
+// Called by saveLibraryEditor when the editor is in 'studio' mode. Closes
+// the editor itself because saveLibraryEditor returns right after it.
+async function saveStudioDraft(name) {
+  const markdown = quizMarkdown.value;
+  const kind = currentStudioKind();
+  const updating = Boolean(loadedLibraryItem)
+    && loadedLibraryItem.kind === kind
+    && editorTarget() === 'update';
+
+  const saved = updating
+    ? await updateLibraryItem(loadedLibraryItem.id, name, markdown)
+    : await createLibraryItem(name, kind, markdown);
+
+  loadedLibraryItem = { id: saved.id, name: saved.name, kind: saved.kind };
+  closeLibraryEditor();
+  showStatus(
+    'upload-status',
+    updating ? `Updated "${saved.name}" in your library.` : `Saved "${saved.name}" to your library.`,
+    true
+  );
+}
+
+// --- studio: From my library -------------------------------------------
+
+function closeLibraryPicker() {
+  libraryPickerModal.classList.add('hidden');
+}
+
+function buildPickerCard(item) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'template-card library-picker-card';
+
+  const copy = document.createElement('span');
+  const strong = document.createElement('strong');
+  strong.textContent = item.name;
+  const small = document.createElement('small');
+  small.textContent = libraryCardMeta(item);
+  copy.append(strong, small);
+
+  card.append(buildKindBadge(item.kind), copy);
+  card.addEventListener('click', () => pickLibraryItem(item, card));
+  return card;
+}
+
+async function pickLibraryItem(item, card) {
+  if (quizMarkdown.value.trim()) {
+    const confirmed = await showConfirmModal({
+      title: 'Replace Markdown',
+      message: 'Replace the Markdown currently in the editor with this saved Mash?',
+      confirmText: 'Replace'
+    });
+    if (!confirmed) return;
+  }
+
+  card.disabled = true;
+  try {
+    const full = await fetchLibraryItem(item.id);
+    loadMarkdownIntoStudio(full);
+    closeLibraryPicker();
+    showStatus('upload-status', `Loaded "${item.name}" from your library. Edit anything you like, then preview your questions.`, true);
+    quizMarkdown.focus({ preventScroll: true });
+  } catch (error) {
+    showStatus('upload-status', error.message || 'Could not load that Mash.', false);
+  } finally {
+    card.disabled = false;
+  }
+}
+
+async function openLibraryPicker() {
+  const kind = currentStudioKind();
+  libraryPickerTitle.textContent = kind === 'survey' ? 'Choose a saved survey' : 'Choose a saved quiz';
+  libraryPickerGrid.replaceChildren();
+  libraryPickerEmpty.classList.add('hidden');
+  libraryPickerModal.classList.remove('hidden');
+
+  try {
+    const data = await libraryFetchJson('/api/admin/library');
+    libraryItems = data.items;
+    const matching = libraryItems.filter(item => item.kind === kind);
+    if (matching.length === 0) {
+      libraryPickerEmpty.textContent = kind === 'survey'
+        ? 'No saved surveys yet. Use Save to library to keep the draft you are working on.'
+        : 'No saved quizzes yet. Use Save to library to keep the draft you are working on.';
+      libraryPickerEmpty.classList.remove('hidden');
+      return;
+    }
+    for (const item of matching) {
+      libraryPickerGrid.appendChild(buildPickerCard(item));
+    }
+    libraryPickerGrid.querySelector('button')?.focus({ preventScroll: true });
+  } catch (error) {
+    libraryPickerEmpty.textContent = error.message || 'Could not load your library.';
+    libraryPickerEmpty.classList.remove('hidden');
+  }
+}
+
+openLibraryBtn?.addEventListener('click', openLibraryPicker);
+saveLibraryBtn?.addEventListener('click', openStudioSave);
+libraryPickerClose?.addEventListener('click', closeLibraryPicker);
+libraryPickerModal?.addEventListener('click', event => {
+  if (event.target === libraryPickerModal) closeLibraryPicker();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !libraryPickerModal?.classList.contains('hidden')) {
+    closeLibraryPicker();
+  }
+});
 
 // --- wiring ------------------------------------------------------------
 

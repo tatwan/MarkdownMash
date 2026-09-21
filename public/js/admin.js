@@ -498,6 +498,8 @@ function showAuthenticatedWorkspace() {
   const trialMode = isTrialMode();
   analyticsBtn.classList.toggle('hidden', trialMode);
   settingsBtn.classList.toggle('hidden', trialMode);
+  document.getElementById('open-library-btn')?.classList.toggle('hidden', trialMode);
+  document.getElementById('save-library-btn')?.classList.toggle('hidden', trialMode);
   trialBanner.classList.toggle('hidden', !trialMode);
   trialCompletionCta.classList.add('hidden');
 
