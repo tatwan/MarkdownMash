@@ -246,6 +246,15 @@ greet("Alice")
 
 Open any file in the host studio, or choose **Starter templates** after **Host a Mash** — the cards fetch from `/templates/…` on your deployment.
 
+### My library
+
+Signed-in hosts have a **My library** shelf on Host home. Add a quiz or a
+survey by pasting its Markdown and naming it, then host it later with one
+click or pick it from **From my library** inside the studio. **Save to
+library** in the studio keeps the draft you are working on, and offers to
+update the saved Mash it was loaded from. Saved Mashes are private to the
+account that created them and are unrelated to session history.
+
 ## Survey Format
 
 Choose **Host a survey** on Host Home. Survey options may use plain Markdown lists; checkbox marks are also accepted but never represent correctness. `# Score` and `::type` are ignored.

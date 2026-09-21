@@ -2,6 +2,16 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **My library.** A per-host shelf of saved quizzes and surveys. Add a Mash by pasting Markdown and naming it, host it later from the library, or pick it from **From my library** inside the studio. **Save to library** keeps the current studio draft and offers to update the saved Mash it was loaded from. Saved Mashes are private to the account and independent of session history.
+
+### Notes
+
+- Database migration required: `supabase/migrations/20260921180000_add_saved_mashes.sql` (self-hosted deployments create the table automatically on boot).
+
 ## [1.6.2] - 2026-09-21
 
 ### Fixed
