@@ -6,7 +6,8 @@ const {
   normalizeKind,
   validateSavedMashInput,
   canCreateAnother,
-  summarizeSavedMash
+  summarizeSavedMash,
+  parseSavedMashId
 } = require('./saved-mash');
 
 // Parsers are injected so this file never loads quiz-structure or
@@ -102,5 +103,17 @@ assert.deepEqual(summary, {
 });
 assert.equal('markdown' in summary, false, 'list rows never carry the Markdown body');
 assert.equal('owner_id' in summary, false);
+
+// --- route id parsing ---
+assert.equal(parseSavedMashId('12'), 12);
+assert.equal(parseSavedMashId('1'), 1);
+assert.equal(parseSavedMashId('0'), null, 'ids start at 1');
+assert.equal(parseSavedMashId('-3'), null);
+assert.equal(parseSavedMashId('abc'), null);
+assert.equal(parseSavedMashId('1e3'), null, 'exponent notation is not an id');
+assert.equal(parseSavedMashId('1e30'), null, 'a value Postgres cannot parse as bigint must be a 404, not a 500');
+assert.equal(parseSavedMashId('9007199254740993'), null, 'beyond the safe integer range');
+assert.equal(parseSavedMashId(12), null, 'only strings from the URL are accepted');
+assert.equal(parseSavedMashId(''), null);
 
 console.log('saved-mash tests passed');

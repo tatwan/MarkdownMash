@@ -50,7 +50,8 @@ const {
   validateSavedMashInput,
   canCreateAnother,
   summarizeSavedMash,
-  MAX_SAVED_MASHES_PER_OWNER
+  MAX_SAVED_MASHES_PER_OWNER,
+  parseSavedMashId
 } = require('./saved-mash');
 const { createTrialManager } = require('./trial-manager');
 const {
@@ -1948,11 +1949,6 @@ app.post('/api/join', (req, res) => {
 const LIBRARY_NOT_FOUND = { success: false, error: 'Saved Mash not found' };
 const libraryParsers = { parseQuiz: parseQuizMarkdown, parseSurvey: parseSurveyMarkdown };
 
-function parseLibraryId(raw) {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
-
 // decodeMarkdownPayload throws on bad base64 or oversize; both are the
 // caller's fault, so they map to 400 exactly as session creation does.
 function decodeLibraryMarkdown(body, res) {
@@ -1975,7 +1971,7 @@ app.get('/api/admin/library', authenticateToken, async (req, res) => {
 });
 
 app.get('/api/admin/library/:id', authenticateToken, async (req, res) => {
-  const id = parseLibraryId(req.params.id);
+  const id = parseSavedMashId(req.params.id);
   if (!id) return res.status(404).json(LIBRARY_NOT_FOUND);
   try {
     const row = await db.getSavedMash(id, req.admin.id);
@@ -2017,7 +2013,7 @@ app.post('/api/admin/library', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/admin/library/:id', authenticateToken, async (req, res) => {
-  const id = parseLibraryId(req.params.id);
+  const id = parseSavedMashId(req.params.id);
   if (!id) return res.status(404).json(LIBRARY_NOT_FOUND);
   const markdown = decodeLibraryMarkdown(req.body, res);
   if (markdown === null) return;
@@ -2046,12 +2042,14 @@ app.put('/api/admin/library/:id', authenticateToken, async (req, res) => {
 });
 
 app.delete('/api/admin/library/:id', authenticateToken, async (req, res) => {
-  const id = parseLibraryId(req.params.id);
+  const id = parseSavedMashId(req.params.id);
   if (!id) return res.status(404).json(LIBRARY_NOT_FOUND);
   try {
+    const existing = await db.getSavedMash(id, req.admin.id);
+    if (!existing) return res.status(404).json(LIBRARY_NOT_FOUND);
     const removed = await db.deleteSavedMash(id, req.admin.id);
     if (!removed) return res.status(404).json(LIBRARY_NOT_FOUND);
-    await db.logActivity(req.admin.id, 'library_delete', { id }, req.ip);
+    await db.logActivity(req.admin.id, 'library_delete', { id, name: existing.name, kind: existing.kind }, req.ip);
     res.json({ success: true });
   } catch (err) {
     console.error('Delete library item error:', err);

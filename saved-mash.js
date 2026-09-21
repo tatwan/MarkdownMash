@@ -58,6 +58,14 @@ function canCreateAnother(currentCount) {
     && currentCount < MAX_SAVED_MASHES_PER_OWNER;
 }
 
+// Route ids must be plain decimal digits: "1e3" and "1e30" are not ids, and
+// the second one would reach Postgres as a string bigint cannot parse.
+function parseSavedMashId(raw) {
+  if (typeof raw !== 'string' || !/^[1-9]\d{0,15}$/.test(raw)) return null;
+  const id = Number(raw);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
 // The list shape. Deliberately excludes markdown and owner_id.
 function summarizeSavedMash(row) {
   return {
@@ -77,5 +85,6 @@ module.exports = {
   normalizeKind,
   validateSavedMashInput,
   canCreateAnother,
-  summarizeSavedMash
+  summarizeSavedMash,
+  parseSavedMashId
 };

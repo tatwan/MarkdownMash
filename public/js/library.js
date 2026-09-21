@@ -179,6 +179,8 @@ async function loadLibrary() {
 }
 
 function showLibrary() {
+  // Defence in depth: the home card is already unreachable in trial, but this guards future entry points.
+  if (typeof isTrialMode === 'function' && isTrialMode()) return;
   instructorHomeSection.classList.add('hidden');
   uploadSection.classList.add('hidden');
   liveWorkspace.classList.add('hidden');
@@ -224,6 +226,9 @@ async function openLibraryEditor(item = null) {
     libraryEditorModal.classList.remove('hidden');
     try {
       const full = await fetchLibraryItem(item.id);
+      // A slower response for an item the host already closed must not
+      // land in the editor of the item they opened next.
+      if (libraryEditing?.id !== item.id) return;
       libraryEditorMarkdown.value = full.markdown;
     } catch (error) {
       showEditorStatus(error.message, false);

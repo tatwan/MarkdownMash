@@ -50,6 +50,9 @@ assert.match(adminJs, /const librarySection = document\.getElementById\('library
 assert.match(adminJs, /let loadedLibraryItem = null/);
 assert.match(styleCss, /\.instructor-launch-card-library\s*\{/);
 assert.match(styleCss, /\.library-grid\s*\{/);
+const resetBranch = adminJs.slice(adminJs.indexOf('if (shouldClearCompletedDraft) {'), adminJs.indexOf('if (shouldClearCompletedDraft) {') + 300);
+assert.match(resetBranch, /loadedLibraryItem = null/, 'a session reset that wipes the draft must forget the loaded library item');
+assert.match(libraryJs, /libraryEditing\?\.id !== item\.id\) return/, 'the edit modal must drop a late fetch for a different item');
 
 for (const sidekick of ['zap', 'booky', 'chestie', 'byte', 'rocketo', 'popstar', 'luna']) {
   assert.ok(

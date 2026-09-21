@@ -1042,6 +1042,7 @@ async function logout() {
 
   clearTrialCredentials();
   authToken = null;
+  loadedLibraryItem = null;
   currentAdmin = null;
   localStorage.removeItem('authToken');
   localStorage.removeItem('currentAdmin');
@@ -1758,6 +1759,7 @@ function resetToUploadState() {
   setLobbyPanel('ready');
   liveLobbyPanel.classList.remove('hidden');
   uploadSection.classList.remove('hidden');
+  librarySection?.classList.add('hidden');
   uploadStatus.classList.add('hidden');
   trialCompletionCta.classList.add('hidden');
 
@@ -1767,6 +1769,7 @@ function resetToUploadState() {
     studioDrafts[completedStudioMode] = '';
     quizMarkdown.value = '';
     courseNameInput.value = '';
+    loadedLibraryItem = null;
   }
 
   // Remove session-lost banner if present
