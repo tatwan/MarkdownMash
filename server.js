@@ -47,6 +47,7 @@ const {
 } = require('./survey-structure');
 const { buildSurveySummary } = require('./survey-results');
 const { decodeMarkdownPayload } = require('./markdown-transport');
+const { parseHistoryQuery, historyPagination } = require('./analytics-history');
 const {
   validateSavedMashInput,
   canCreateAnother,
@@ -2481,25 +2482,26 @@ app.get('/api/admin/analytics/overview', async (req, res) => {
   });
 });
 
-// List completed sessions with analytics
+// List the caller's session history, filtering before pagination.
 app.get('/api/admin/analytics/sessions', async (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  const filter = req.query.filter || null; // 'ended', 'incomplete', or null
-  const sessions = await db.getSessionAnalytics(
-    limit,
-    filter,
-    ownerFilterFor(req.admin)
+  const parsed = parseHistoryQuery(req.query);
+  if (!parsed.ok) return res.status(400).json({ success: false, error: parsed.error });
+  const { sessions, total, courses } = await db.getSessionAnalytics(
+    ownerFilterFor(req.admin),
+    parsed.value
   );
   res.json({
     success: true,
+    pagination: historyPagination(Number(total), parsed.value),
+    courses,
     sessions: sessions.map(s => ({
       id: s.id,
       code: s.code,
       quizTitle: s.quiz_title,
       status: s.status,
-      createdAt: s.created_at,
-      startedAt: s.started_at,
-      endedAt: s.ended_at,
+      createdAt: s.created_at ? new Date(s.created_at) : null,
+      startedAt: s.started_at ? new Date(s.started_at) : null,
+      endedAt: s.ended_at ? new Date(s.ended_at) : null,
       totalQuestions: s.total_questions,
       participantCount: s.participant_count || 0,
       responseCount: s.response_count || 0,

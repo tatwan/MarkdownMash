@@ -584,42 +584,50 @@ const dbApi = {
   },
 
   // Analytics operations
-  async getSessionAnalytics(limit = 50, statusFilter = null, ownerId = null) {
-    const conditions = ['($1::integer IS NULL OR s.owner_id = $1)'];
-    const params = [ownerId, limit];
-
-    if (statusFilter === 'ended') {
-      conditions.push("s.status = 'ended'");
-    } else if (statusFilter === 'incomplete') {
-      // incomplete = active (interrupted) or created (never started / trial runs)
-      conditions.push("s.status IN ('active', 'created')");
-    }
-
+  async getSessionAnalytics(ownerId, { limit, offset, filter, type, search, course }) {
+    // Ownership is mandatory, including for master. Count, rows and group names
+    // share one snapshot; only the selected page needs participant/answer metrics.
     const result = await pool.query(
-      `SELECT
-        s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at,
-        s.total_questions, s.total_score, s.course_name, s.is_test,
-        COALESCE(s.session_type, 'quiz') as session_type,
-        COUNT(DISTINCT p.id) as participant_count,
-        COALESCE(MAX(a.response_count), 0) as response_count,
-        CASE
-          WHEN COALESCE(s.session_type, 'quiz') = 'survey' THEN NULL
-          ELSE ROUND(AVG(p.correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1)
-        END as avg_score_percent
-      FROM sessions s
-      LEFT JOIN participants p ON p.session_id = s.id
-      LEFT JOIN (
-        SELECT session_id, COUNT(*) as response_count
-        FROM answers
-        GROUP BY session_id
-      ) a ON a.session_id = s.id
-      WHERE ${conditions.join(' AND ')}
-      GROUP BY s.id
-      ORDER BY COALESCE(s.ended_at, s.started_at, s.created_at) DESC
-      LIMIT $2`,
-      params
+      `WITH filtered AS (
+        SELECT s.id, s.code, s.quiz_title, s.status, s.created_at, s.started_at, s.ended_at,
+          s.total_questions, s.total_score, s.course_name, s.is_test,
+          COALESCE(s.session_type, 'quiz') AS session_type
+        FROM sessions s
+        WHERE s.owner_id = $1
+          AND ($2 = 'all'
+            OR ($2 = 'ended' AND s.status = 'ended')
+            OR ($2 = 'incomplete' AND s.status IN ('active', 'created') AND NOT COALESCE(s.is_test, false))
+            OR ($2 = 'test' AND s.is_test = true))
+          AND ($3 = 'all' OR COALESCE(s.session_type, 'quiz') = $3)
+          AND ($4 = '' OR s.course_name = $4)
+          AND ($5 = '' OR strpos(lower(concat(COALESCE(s.code, ''), ' ',
+            COALESCE(s.course_name, ''), ' ', COALESCE(s.quiz_title, ''))), lower($5)) > 0)
+      ), history_page AS (
+        SELECT * FROM filtered
+        ORDER BY COALESCE(ended_at, started_at, created_at) DESC, id DESC
+        LIMIT $6 OFFSET $7
+      ), summaries AS (
+        SELECT s.*, p.participant_count,
+          (SELECT COUNT(*) FROM answers WHERE session_id = s.id) AS response_count,
+          CASE WHEN s.session_type = 'survey' THEN NULL ELSE p.avg_score_percent END AS avg_score_percent
+        FROM history_page s
+        CROSS JOIN LATERAL (
+          SELECT COUNT(*) AS participant_count,
+            ROUND(AVG(correct_count * 100.0 / NULLIF(s.total_questions, 0))::numeric, 1) AS avg_score_percent
+          FROM participants WHERE session_id = s.id
+        ) p
+      )
+      SELECT
+        (SELECT COUNT(*) FROM filtered) AS total,
+        COALESCE((SELECT json_agg(summaries ORDER BY COALESCE(ended_at, started_at, created_at) DESC, id DESC)
+          FROM summaries), '[]'::json) AS sessions,
+        COALESCE((SELECT json_agg(course_name ORDER BY course_name) FROM (
+          SELECT DISTINCT course_name FROM sessions
+          WHERE owner_id = $1 AND course_name IS NOT NULL AND course_name != ''
+        ) courses), '[]'::json) AS courses`,
+      [ownerId, filter, type, course, search, limit, offset]
     );
-    return result.rows;
+    return result.rows[0];
   },
 
   async getQuestionAnalytics(sessionId) {

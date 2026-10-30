@@ -217,6 +217,12 @@ const analyticsSessions = document.getElementById('analytics-sessions');
 const analyticsSessionsBody = document.getElementById('analytics-sessions-body');
 const noSessionsMsg = document.getElementById('no-sessions-msg');
 const sessionSearchInput = document.getElementById('session-search-input');
+const analyticsHistoryPrev = document.getElementById('analytics-history-prev');
+const analyticsHistoryNext = document.getElementById('analytics-history-next');
+const analyticsHistoryStatus = document.getElementById('analytics-history-status');
+const analyticsHistoryRetry = document.getElementById('analytics-history-retry');
+let analyticsHistoryPage = 1;
+let analyticsHistoryRequest = 0;
 const analyticsEmptyState = document.getElementById('analytics-empty-state');
 const analyticsDataContent = document.getElementById('analytics-data-content');
 const analyticsEmptyHostBtn = document.getElementById('analytics-empty-host-btn');
@@ -1043,6 +1049,11 @@ async function logout() {
   if (!confirmed) return;
 
   clearTrialCredentials();
+  analyticsHistoryRequest++;
+  clearTimeout(sessionSearchTimer);
+  analyticsHistoryPage = 1;
+  analyticsSessionsBody.replaceChildren();
+  document.getElementById('course-filter-select').replaceChildren(new Option('All Mash groups', ''));
   authToken = null;
   loadedLibraryItem = null;
   currentAdmin = null;
@@ -2308,195 +2319,205 @@ async function loadPlatformStats() {
   }
 }
 
-// Load sessions list
-async function loadSessionsList() {
+function analyticsHistoryLoading() {
+  analyticsSessionsBody.replaceChildren();
+  analyticsSessions.setAttribute('aria-busy', 'true');
+  noSessionsMsg.classList.add('hidden');
+  analyticsHistoryRetry.classList.add('hidden');
+  analyticsHistoryPrev.disabled = true;
+  analyticsHistoryNext.disabled = true;
+  analyticsHistoryStatus.textContent = 'Loading sessions…';
+}
+
+// Filters run on the full owned history before the server selects a page.
+async function loadSessionsList(page = analyticsHistoryPage) {
+  clearTimeout(sessionSearchTimer);
+  analyticsHistoryPage = page;
+  const request = ++analyticsHistoryRequest;
+  const token = authToken;
+  const courseFilterSelect = document.getElementById('course-filter-select');
+  const selectedCourse = courseFilterSelect.value;
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: '50',
+    filter: currentSessionsFilter,
+    course: selectedCourse,
+    type: document.getElementById('session-type-filter').value,
+    search: sessionSearchInput.value.trim()
+  });
+  analyticsHistoryLoading();
   try {
-    const url = currentSessionsFilter === 'all'
-      ? '/api/admin/analytics/sessions'
-      : `/api/admin/analytics/sessions?filter=${currentSessionsFilter}`;
-
-    const res = await authFetch(url);
+    const res = await authFetch(`/api/admin/analytics/sessions?${params}`);
     const data = await res.json();
+    if (request !== analyticsHistoryRequest || token !== authToken) return;
+    if (!res.ok || !data.success) throw new Error(data.error || 'Session history unavailable');
 
-    analyticsSessionsBody.innerHTML = '';
-    
-    // Populate Course Filter dropdown if not populated yet
-    const courseFilterSelect = document.getElementById('course-filter-select');
-    if (courseFilterSelect.options.length <= 1 && data.success) {
-      const courses = new Set();
-      data.sessions.forEach(s => {
-        if (s.courseName) courses.add(s.courseName);
-      });
-      courses.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c;
-        opt.textContent = c;
-        courseFilterSelect.appendChild(opt);
-      });
+    // Refresh from all owned sessions, including groups absent from this page.
+    courseFilterSelect.replaceChildren(new Option('All Mash groups', ''));
+    data.courses.forEach(course => courseFilterSelect.add(new Option(course, course)));
+    if (selectedCourse && !data.courses.includes(selectedCourse)) {
+      courseFilterSelect.add(new Option(selectedCourse, selectedCourse));
     }
+    courseFilterSelect.value = selectedCourse;
 
-    if (data.success && data.sessions.length > 0) {
-      noSessionsMsg.classList.add('hidden');
-      
-      const selectedCourse = courseFilterSelect.value;
-      const selectedType = document.getElementById('session-type-filter')?.value || 'all';
-      const searchTerm = sessionSearchInput?.value.trim().toLowerCase() || '';
-      const filteredSessions = data.sessions.filter(s => {
-        if (selectedCourse !== 'all' && s.courseName !== selectedCourse) return false;
-        if (selectedType !== 'all' && s.sessionType !== selectedType) return false;
-        if (currentSessionsFilter === 'test' && !s.isTest) return false;
-        if (currentSessionsFilter === 'ended' && s.status !== 'ended') return false;
-        if (currentSessionsFilter === 'incomplete' && (s.status === 'ended' || s.isTest)) return false;
-        if (searchTerm) {
-          const haystack = `${s.code || ''} ${s.courseName || ''} ${s.quizTitle || ''}`.toLowerCase();
-          if (!haystack.includes(searchTerm)) return false;
-        }
-        return true;
-      });
-      
-      if (filteredSessions.length === 0) {
-        noSessionsMsg.classList.remove('hidden');
+    const pagination = data.pagination;
+    // Deleting or editing the last match on a page can shrink the page count.
+    if (page > pagination.totalPages) return loadSessionsList(pagination.totalPages);
+    const first = pagination.total ? (page - 1) * pagination.limit + 1 : 0;
+    const last = (page - 1) * pagination.limit + data.sessions.length;
+    const sessionLabel = pagination.total === 1 ? 'session' : 'sessions';
+    analyticsHistoryStatus.textContent = pagination.total
+      ? `${first}–${last} of ${pagination.total} ${sessionLabel} · Page ${page} of ${pagination.totalPages}`
+      : '0 sessions';
+    analyticsHistoryPrev.disabled = !pagination.hasPrevious;
+    analyticsHistoryNext.disabled = !pagination.hasNext;
+    noSessionsMsg.classList.toggle('hidden', data.sessions.length > 0);
+    analyticsSessions.setAttribute('aria-busy', 'false');
+
+    data.sessions.forEach(session => {
+      const tr = document.createElement('tr');
+      const isInterrupted = session.status === 'active';
+      const isCreated = session.status === 'created';
+      const isSurvey = session.sessionType === 'survey';
+
+      let dateDisplay = 'N/A';
+      if (session.endedAt) {
+        dateDisplay = new Date(session.endedAt).toLocaleDateString();
+      } else if (session.startedAt) {
+        dateDisplay = new Date(session.startedAt).toLocaleDateString() + ' (interrupted)';
+      } else if (session.createdAt) {
+        dateDisplay = new Date(session.createdAt).toLocaleDateString() + ' (never started)';
       }
 
-      filteredSessions.forEach(session => {
-        const tr = document.createElement('tr');
-        const isInterrupted = session.status === 'active';
-        const isCreated = session.status === 'created';
-        const isSurvey = session.sessionType === 'survey';
+      let statusBadge = '';
+      if (session.isTest) {
+        statusBadge += `<span style="background:#9333ea;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Test</span>`;
+      }
+      if (isInterrupted) {
+        statusBadge += `<span style="background:#b45309;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Interrupted</span>`;
+      } else if (isCreated) {
+        statusBadge += `<span style="background:#4b5563;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Trial</span>`;
+      }
 
-        let dateDisplay = 'N/A';
-        if (session.endedAt) {
-          dateDisplay = new Date(session.endedAt).toLocaleDateString();
-        } else if (session.startedAt) {
-          dateDisplay = new Date(session.startedAt).toLocaleDateString() + ' (interrupted)';
-        } else if (session.createdAt) {
-          dateDisplay = new Date(session.createdAt).toLocaleDateString() + ' (never started)';
-        }
+      let primaryAction = '';
+      if (isInterrupted) {
+        primaryAction = `<button class="btn btn-small btn-danger recover-btn" data-code="${escapeHtml(session.code)}">Recover</button>`;
+      } else if (isCreated) {
+        primaryAction = `<span class="text-muted session-no-stats">No stats</span>`;
+      } else {
+        primaryAction = `<button class="btn btn-small btn-primary view-btn" data-code="${escapeHtml(session.code)}">View</button>`;
+      }
 
-        let statusBadge = '';
-        if (session.isTest) {
-          statusBadge += `<span style="background:#9333ea;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Test</span>`;
-        }
-        if (isInterrupted) {
-          statusBadge += `<span style="background:#b45309;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Interrupted</span>`;
-        } else if (isCreated) {
-          statusBadge += `<span style="background:#4b5563;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:bold;margin-left:5px;">Trial</span>`;
-        }
+      let actionBtn = `
+        <div class="session-row-actions">
+          ${primaryAction}
+          <button class="btn btn-small btn-secondary edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.courseName || '')}" data-test="${session.isTest}">Edit</button>
+          <button class="btn btn-small btn-danger delete-btn" data-code="${escapeHtml(session.code)}">Delete</button>
+        </div>
+      `;
 
-        let primaryAction = '';
-        if (isInterrupted) {
-          primaryAction = `<button class="btn btn-small btn-danger recover-btn" data-code="${escapeHtml(session.code)}">Recover</button>`;
-        } else if (isCreated) {
-          primaryAction = `<span class="text-muted session-no-stats">No stats</span>`;
-        } else {
-          primaryAction = `<button class="btn btn-small btn-primary view-btn" data-code="${escapeHtml(session.code)}">View</button>`;
-        }
+      tr.innerHTML = `
+        <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
+        <td><span class="session-type-badge session-type-${isSurvey ? 'survey' : 'quiz'}">${isSurvey ? 'Survey' : 'Quiz'}</span></td>
+        <td>${escapeHtml(session.courseName || '-')}</td>
+        <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
+        <td>${session.participantCount}</td>
+        <td>${(isInterrupted || isCreated)
+          ? '—'
+          : isSurvey
+            ? `${session.responseCount || 0} responses · ${session.responseRate || 0}%`
+            : `${Math.round(session.avgScorePercent || 0)}% average`}</td>
+        <td>${dateDisplay}</td>
+        <td>${actionBtn}</td>
+      `;
 
-        let actionBtn = `
-          <div class="session-row-actions">
-            ${primaryAction}
-            <button class="btn btn-small btn-secondary edit-meta-btn" data-code="${escapeHtml(session.code)}" data-course="${escapeHtml(session.courseName || '')}" data-test="${session.isTest}">Edit</button>
-            <button class="btn btn-small btn-danger delete-btn" data-code="${escapeHtml(session.code)}">Delete</button>
-          </div>
-        `;
-
-        tr.innerHTML = `
-          <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
-          <td><span class="session-type-badge session-type-${isSurvey ? 'survey' : 'quiz'}">${isSurvey ? 'Survey' : 'Quiz'}</span></td>
-          <td>${escapeHtml(session.courseName || '-')}</td>
-          <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
-          <td>${session.participantCount}</td>
-          <td>${(isInterrupted || isCreated)
-            ? '—'
-            : isSurvey
-              ? `${session.responseCount || 0} responses · ${session.responseRate || 0}%`
-              : `${Math.round(session.avgScorePercent || 0)}% average`}</td>
-          <td>${dateDisplay}</td>
-          <td>${actionBtn}</td>
-        `;
-
-        if (isInterrupted) {
-          // Recover button: calls recovery endpoint, then reloads list
-          const recoverBtn = tr.querySelector('.recover-btn');
-          recoverBtn.addEventListener('click', async () => {
-            const confirmed = await showConfirmModal({
-              title: 'Recover Session',
-              message: `Recover interrupted session ${session.code}? This will compute scores from saved answers and mark it as ended.`,
-              confirmText: 'Recover'
-            });
-            if (!confirmed) return;
-            recoverBtn.disabled = true;
-            recoverBtn.textContent = 'Recovering...';
-            try {
-              const res = await authFetch(`/api/admin/session/${session.code}/recover`, { method: 'POST' });
-              const result = await res.json();
-              if (result.success) {
-                showNoticeModal(`Recovered: ${result.participantsRecovered} participants, ${result.answersFound} answers. Session is now viewable in Analytics.`, 'Session Recovered');
-                loadSessionsList(); // Reload to show it as ended now
-              } else {
-                showNoticeModal('Recovery failed: ' + result.error, 'Recovery Failed');
-                recoverBtn.disabled = false;
-                recoverBtn.textContent = 'Recover';
-              }
-            } catch (err) {
-              showNoticeModal('Network error during recovery', 'Recovery Failed');
+      if (isInterrupted) {
+        // Recover button: calls recovery endpoint, then reloads list
+        const recoverBtn = tr.querySelector('.recover-btn');
+        recoverBtn.addEventListener('click', async () => {
+          const confirmed = await showConfirmModal({
+            title: 'Recover Session',
+            message: `Recover interrupted session ${session.code}? This will compute scores from saved answers and mark it as ended.`,
+            confirmText: 'Recover'
+          });
+          if (!confirmed) return;
+          recoverBtn.disabled = true;
+          recoverBtn.textContent = 'Recovering...';
+          try {
+            const res = await authFetch(`/api/admin/session/${session.code}/recover`, { method: 'POST' });
+            const result = await res.json();
+            if (result.success) {
+              showNoticeModal(`Recovered: ${result.participantsRecovered} participants, ${result.answersFound} answers. Session is now viewable in Analytics.`, 'Session Recovered');
+              loadSessionsList(); // Reload to show it as ended now
+            } else {
+              showNoticeModal('Recovery failed: ' + result.error, 'Recovery Failed');
               recoverBtn.disabled = false;
               recoverBtn.textContent = 'Recover';
             }
-          });
-        } else if (!isCreated) {
-          // Normal view button
-          const viewBtn = tr.querySelector('.view-btn');
-          viewBtn.addEventListener('click', () => {
-            loadSessionDetail(session.code);
-          });
-        }
+          } catch (err) {
+            showNoticeModal('Network error during recovery', 'Recovery Failed');
+            recoverBtn.disabled = false;
+            recoverBtn.textContent = 'Recover';
+          }
+        });
+      } else if (!isCreated) {
+        // Normal view button
+        const viewBtn = tr.querySelector('.view-btn');
+        viewBtn.addEventListener('click', () => {
+          loadSessionDetail(session.code);
+        });
+      }
 
-        // Edit Metadata Button
-        const editBtn = tr.querySelector('.edit-meta-btn');
-        if (editBtn) {
-          editBtn.addEventListener('click', () => {
-            editSessionCode.value = session.code;
-            editCourseName.value = session.courseName || '';
-            editIsTest.checked = session.isTest;
-            editMetadataModal.classList.remove('hidden');
+      // Edit Metadata Button
+      const editBtn = tr.querySelector('.edit-meta-btn');
+      if (editBtn) {
+        editBtn.addEventListener('click', () => {
+          editSessionCode.value = session.code;
+          editCourseName.value = session.courseName || '';
+          editIsTest.checked = session.isTest;
+          editMetadataModal.classList.remove('hidden');
+        });
+      }
+
+      // Delete Session Button
+      const delBtn = tr.querySelector('.delete-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', async () => {
+          const confirmed = await showConfirmModal({
+            title: 'Delete Session',
+            message: `Are you sure you want to permanently delete session ${session.code}? This action cannot be undone.`,
+            confirmText: 'Delete Permanently',
+            danger: true
           });
-        }
-        
-        // Delete Session Button
-        const delBtn = tr.querySelector('.delete-btn');
-        if (delBtn) {
-          delBtn.addEventListener('click', async () => {
-            const confirmed = await showConfirmModal({
-              title: 'Delete Session',
-              message: `Are you sure you want to permanently delete session ${session.code}? This action cannot be undone.`,
-              confirmText: 'Delete Permanently',
-              danger: true
-            });
-            if (!confirmed) return;
-            try {
-              const res = await authFetch(`/api/admin/session/${session.code}`, { method: 'DELETE' });
-              const result = await res.json();
-              if (result.success) {
-                loadSessionsList();
-              } else {
-                showNoticeModal('Delete failed: ' + result.error, 'Delete Failed');
-              }
-            } catch (err) {
-              showNoticeModal('A network error interrupted the request.', 'Connection Error');
+          if (!confirmed) return;
+          try {
+            const res = await authFetch(`/api/admin/session/${session.code}`, { method: 'DELETE' });
+            const result = await res.json();
+            if (result.success) {
+              loadSessionsList();
+            } else {
+              showNoticeModal('Delete failed: ' + result.error, 'Delete Failed');
             }
-          });
-        }
+          } catch (err) {
+            showNoticeModal('A network error interrupted the request.', 'Connection Error');
+          }
+        });
+      }
 
-        analyticsSessionsBody.appendChild(tr);
-      });
-    } else {
-      noSessionsMsg.classList.remove('hidden');
-    }
+      analyticsSessionsBody.appendChild(tr);
+    });
   } catch (err) {
+    if (request !== analyticsHistoryRequest || token !== authToken) return;
+    analyticsSessions.setAttribute('aria-busy', 'false');
+    analyticsHistoryStatus.textContent = 'Could not load sessions. Please try again.';
+    analyticsHistoryRetry.classList.remove('hidden');
     console.error('Failed to load sessions list', err);
   }
 }
+
+analyticsHistoryPrev.addEventListener('click', () => loadSessionsList(analyticsHistoryPage - 1));
+analyticsHistoryNext.addEventListener('click', () => loadSessionsList(analyticsHistoryPage + 1));
+analyticsHistoryRetry.addEventListener('click', () => loadSessionsList());
 
 // Handle Edit Metadata Submission
 editMetadataForm.addEventListener('submit', async (e) => {
@@ -2527,19 +2548,22 @@ closeEditMetadataBtn.addEventListener('click', () => {
   editMetadataModal.classList.add('hidden');
 });
 
-// Update the filter logic to re-render using local data, or just re-fetch
+// Changing a filter always starts at the first page.
 document.getElementById('course-filter-select')?.addEventListener('change', () => {
-  loadSessionsList();
+  loadSessionsList(1);
 });
 
 document.getElementById('session-type-filter')?.addEventListener('change', () => {
-  loadSessionsList();
+  loadSessionsList(1);
 });
 
 let sessionSearchTimer = null;
 sessionSearchInput?.addEventListener('input', () => {
   clearTimeout(sessionSearchTimer);
-  sessionSearchTimer = setTimeout(loadSessionsList, 180);
+  analyticsHistoryRequest++;
+  analyticsHistoryPage = 1;
+  analyticsHistoryLoading();
+  sessionSearchTimer = setTimeout(() => loadSessionsList(1), 180);
 });
 
 // Wire up the session status filter buttons (All, Completed, Incomplete, Tests Only)
@@ -2548,7 +2572,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentSessionsFilter = btn.getAttribute('data-filter') || 'all';
-    loadSessionsList();
+    loadSessionsList(1);
   });
 });
 

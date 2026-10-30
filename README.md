@@ -682,6 +682,7 @@ View detailed insights from completed quiz and survey sessions:
 
 - **Platform Overview**: Quiz and survey counts, participants, quiz-only average score, and survey response totals
 - **Session Type Filters**: Separate quizzes from surveys at a glance
+- **Session History**: Browse all saved sessions in pages, search by code, title, or Mash group, and filter by group, type, or status
 - **Survey Summaries**: Response rate, most-popular choices, and anonymous option distributions
 - **Question Difficulty**: Automatic difficulty ratings (easy/medium/hard)
 - **Answer Distribution**: See which options players chose

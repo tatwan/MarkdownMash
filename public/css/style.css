@@ -7921,6 +7921,13 @@ select:focus-visible {
 .session-type-quiz { color: #bfdbfe; background: rgba(59, 130, 246, 0.16); }
 .session-type-survey { color: #ddd6fe; background: rgba(139, 92, 246, 0.18); }
 
+.analytics-history-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.75rem; margin-top: 1rem; }
+.analytics-history-pagination p { margin: 0; color: var(--text-muted); text-align: center; }
+
+@media (max-width: 600px) {
+  .analytics-history-pagination p { flex-basis: 100%; order: -1; }
+}
+
 .section-transition-opening {
   position: fixed !important;
   inset: 0;

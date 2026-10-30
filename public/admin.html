@@ -502,9 +502,9 @@
               <label class="search-field">
                 <span class="sr-only">Search sessions</span>
                 <svg aria-hidden="true"><use href="/assets/icons.svg#chart"></use></svg>
-                <input id="session-search-input" type="search" placeholder="Search code, quiz, or Mash group">
+                <input id="session-search-input" type="search" maxlength="500" placeholder="Search code, quiz, or Mash group">
               </label>
-              <select id="course-filter-select" aria-label="Filter by Mash group"><option value="all">All Mash groups</option></select>
+              <select id="course-filter-select" aria-label="Filter by Mash group"><option value="">All Mash groups</option></select>
               <select id="session-type-filter" aria-label="Filter by session type">
                 <option value="all">All types</option>
                 <option value="quiz">Quizzes</option>
@@ -524,6 +524,12 @@
               </table>
             </div>
             <p id="no-sessions-msg" class="empty-state-copy text-center hidden">No sessions match these filters.</p>
+            <nav class="analytics-history-pagination" aria-label="Session history pages">
+              <button id="analytics-history-prev" class="btn btn-secondary" disabled>Previous</button>
+              <p id="analytics-history-status" role="status" aria-live="polite"></p>
+              <button id="analytics-history-next" class="btn btn-secondary" disabled>Next</button>
+              <button id="analytics-history-retry" class="btn btn-secondary hidden">Retry</button>
+            </nav>
           </div>
         </section>
 
