@@ -2,6 +2,24 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [1.10.0] - 2026-10-30
+
+### Added
+
+- Participants now see the room’s top-three podium above their personal quiz results, with scores, Sidekicks and a highlight for their own place. The podium is restored when they rejoin a completed quiz and honours the host’s Sidekicks setting.
+
+### Changed
+
+- Analytics session history, question breakdowns and participant rankings use labeled cards on smaller screens, with accessible session actions and wrapping text. Desktop views retain their tables.
+
+### Fixed
+
+- Wide analytics tables retain horizontal scrolling inside their cards.
+
+### Notes
+
+- No database migration, new dependency or build step is required.
+
 ## [1.9.0] - 2026-10-30
 
 ### Added
