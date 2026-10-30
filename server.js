@@ -116,7 +116,7 @@ app.use(helmet({
       fontSrc: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
+      imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
       objectSrc: ["'none'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
@@ -140,6 +140,7 @@ app.use((req, res, next) => {
   next();
 });
 const vendorFiles = new Map([
+  ['/vendor/mermaid.js', path.join(__dirname, 'node_modules', '@mermaid-js', 'tiny', 'dist', 'mermaid.tiny.js')],
   ['/vendor/marked.js', path.join(__dirname, 'node_modules', 'marked', 'marked.min.js')],
   ['/vendor/dompurify.js', path.join(__dirname, 'node_modules', 'dompurify', 'dist', 'purify.min.js')],
   ['/vendor/highlight.js', path.join(__dirname, 'node_modules', '@highlightjs', 'cdn-assets', 'highlight.min.js')],
@@ -147,8 +148,31 @@ const vendorFiles = new Map([
   ['/vendor/chart.js', path.join(__dirname, 'node_modules', 'chart.js', 'dist', 'chart.umd.min.js')]
 ]);
 for (const [route, file] of vendorFiles) {
-  app.get(route, (req, res) => res.sendFile(file));
+  app.get(route, (req, res) => {
+    // The renderer has an opaque sandbox origin and cannot load same-origin CORP assets.
+    if (route === '/vendor/mermaid.js') res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.sendFile(file);
+  });
 }
+for (const name of ['mermaid-policy', 'mermaid-renderer']) {
+  app.get(`/js/${name}.js`, (req, res) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.sendFile(path.join(__dirname, 'public', 'js', `${name}.js`));
+  });
+}
+// Generation is isolated too: no same-origin privilege, network, forms or nested frames.
+app.get('/mermaid-renderer.html', helmet.contentSecurityPolicy({
+  useDefaults: false,
+  directives: {
+    defaultSrc: ["'none'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'unsafe-inline'"],
+    frameAncestors: ["'self'"],
+    baseUri: ["'none'"],
+    formAction: ["'none'"],
+    sandbox: ['allow-scripts']
+  }
+}), (req, res) => res.sendFile(path.join(__dirname, 'public', 'mermaid-renderer.html')));
 app.use('/assets/sidekicks', express.static(path.join(__dirname, 'assets', 'sidekicks')));
 // Example Mashes — same files as the public GitHub templates/ folder, loaded by
 // the host studio starter gallery so the product and the repo stay in sync.

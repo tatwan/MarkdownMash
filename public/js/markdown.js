@@ -27,6 +27,9 @@
           );
         },
         code(token) {
+          if (root.MarkdownMashMermaidPolicy?.isMermaidFence(token.lang)) {
+            return `<div class="mermaid-diagram"><pre><code>${escapeHtml(token.text)}</code></pre></div>`;
+          }
           if (!root.hljs) return defaultRenderer.code.call(this, token);
           const requestedLanguage = String(token.lang || '').trim();
           const language = root.hljs.getLanguage(requestedLanguage)

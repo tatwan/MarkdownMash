@@ -255,6 +255,43 @@ the viewer's network request; Markdown Mash does not upload or store the image.
 A missing or inaccessible image shows an unavailable message with its alt text.
 The same formatting works in survey questions and the studio preview.
 
+### Mermaid diagrams
+
+Use a fenced `mermaid` block in a question body or a shared case-study panel:
+
+````markdown
+## Q1: Which table belongs in the middle?
+
+```mermaid
+flowchart TD
+  accTitle: Star schema
+  accDescr: Three dimensions connect to an unknown fact table.
+  C[dim_customer] -->|customer_id| F["?"]
+  P[dim_product] -->|product_id| F
+  D[Date table] -->|order_date| F
+```
+
+- [x] fact_sales
+- [ ] dim_product
+````
+
+Studio preview, host, participant and presenter views render the same diagram.
+Diagrams fit the screen; tap or click to enlarge, then choose **Actual size** to
+read small labels and scroll on a phone. **Diagram source** shows the original
+text. Optional `accTitle` and `accDescr` provide an accessible image description.
+Invalid or unsupported diagrams show a message and their source while the
+question remains usable.
+
+Rendering uses locally served Mermaid Tiny: flowcharts, sequence diagrams,
+entity relationships and other included types are supported; mindmaps,
+architecture diagrams and KaTeX are unavailable. Diagrams use fixed security
+settings. Configuration frontmatter/init directives, HTML labels, interactive
+links, external images and icons are unavailable. Each block is limited to
+12,000 characters and 100 connections or events, checked before rendering.
+Sequence notes, activations and control events count toward this budget too;
+tree and railroad diagrams count structural items. Diagram text stays in the
+current browser; rendering does not contact a third-party diagram service.
+
 ### Shared case-study panels
 
 Define a named scenario once and link any related question with `::case=id`.

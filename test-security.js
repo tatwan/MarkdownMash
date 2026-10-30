@@ -113,7 +113,7 @@ async function run() {
     assert.match(landing.headers.get('content-security-policy') || '', /script-src 'self'/);
     const imagePolicy = (landing.headers.get('content-security-policy') || '')
       .split(';').find(directive => directive.trim().startsWith('img-src '));
-    assert.equal(imagePolicy.trim(), "img-src 'self' data: https:");
+    assert.equal(imagePolicy.trim(), "img-src 'self' data: https: blob:");
     assert.match(landing.headers.get('strict-transport-security') || '', /max-age=31536000/);
     assert.match(landing.headers.get('permissions-policy') || '', /camera=\(\)/);
     for (const page of ['admin.html', 'play.html', 'present.html']) {
@@ -123,7 +123,20 @@ async function run() {
       assert.match(html, /\/js\/markdown\.js/);
       assert.match(html, /\/js\/markdown-media\.js/);
       assert.match(html, /\/js\/case-study-panels\.js/);
+      assert.match(html, /\/js\/mermaid-policy\.js/);
+      assert.match(html, /\/js\/mermaid-diagrams\.js/);
     }
+
+    const diagramFrame = await fetch(`${baseUrl}/mermaid-renderer.html`);
+    const diagramPolicy = diagramFrame.headers.get('content-security-policy');
+    assert.match(diagramPolicy, /default-src 'none'/);
+    assert.match(diagramPolicy, /sandbox allow-scripts(?:;|$)/);
+    assert.doesNotMatch(diagramPolicy, /allow-same-origin|unsafe-eval/);
+    assert.match(diagramPolicy, /frame-ancestors 'self'/);
+    const mermaidBundle = await fetch(`${baseUrl}/vendor/mermaid.js`);
+    assert.equal(mermaidBundle.status, 200);
+    assert.match(mermaidBundle.headers.get('content-type'), /javascript/);
+    assert.equal(mermaidBundle.headers.get('cross-origin-resource-policy'), 'cross-origin');
 
     const trial = await jsonFetch(baseUrl, '/api/trial', { method: 'POST' });
     trialToken = trial.token;

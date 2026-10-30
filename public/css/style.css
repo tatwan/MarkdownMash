@@ -317,6 +317,52 @@ label {
   cursor: zoom-in;
 }
 
+.mermaid-diagram {
+  min-width: 0;
+  max-width: 100%;
+  margin: 1rem 0;
+  font-size: 1rem;
+  text-align: left;
+}
+
+.mermaid-image {
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.mermaid-hint, .mermaid-error {
+  margin: 0.5rem 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.mermaid-diagram pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.mermaid-diagram summary {
+  cursor: pointer;
+}
+
+.mermaid-render-frame {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1200px;
+  height: 800px;
+  visibility: hidden;
+  pointer-events: none;
+  border: 0;
+}
+
+.markdown-image-canvas img[src^="blob:"] {
+  background: #fff;
+}
+
 .markdown-image[hidden] {
   display: none;
 }
