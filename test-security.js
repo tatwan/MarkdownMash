@@ -111,6 +111,9 @@ async function run() {
     const landing = await fetch(`${baseUrl}/`);
     assert.equal(landing.headers.has('x-powered-by'), false);
     assert.match(landing.headers.get('content-security-policy') || '', /script-src 'self'/);
+    const imagePolicy = (landing.headers.get('content-security-policy') || '')
+      .split(';').find(directive => directive.trim().startsWith('img-src '));
+    assert.equal(imagePolicy.trim(), "img-src 'self' data: https:");
     assert.match(landing.headers.get('strict-transport-security') || '', /max-age=31536000/);
     assert.match(landing.headers.get('permissions-policy') || '', /camera=\(\)/);
     for (const page of ['admin.html', 'play.html', 'present.html']) {
@@ -118,6 +121,8 @@ async function run() {
       assert.doesNotMatch(html, /https:\/\/(?:cdn\.jsdelivr|cdnjs\.cloudflare)/);
       assert.match(html, /\/vendor\/dompurify\.js/);
       assert.match(html, /\/js\/markdown\.js/);
+      assert.match(html, /\/js\/markdown-media\.js/);
+      assert.match(html, /\/js\/case-study-panels\.js/);
     }
 
     const trial = await jsonFetch(baseUrl, '/api/trial', { method: 'POST' });

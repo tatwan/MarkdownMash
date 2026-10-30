@@ -10,9 +10,12 @@
   <script defer src="/vendor/dompurify.js"></script>
   <script defer src="/vendor/highlight.js"></script>
   <script defer src="/js/markdown.js"></script>
+  <script defer src="/js/markdown-media.js"></script>
+  <script defer src="/js/case-study-panels.js"></script>
   <script defer src="/vendor/chart.js"></script>
   <script defer src="/socket.io/socket.io.js"></script>
   <script defer src="/js/settings-state.js"></script>
+  <script defer src="/js/mash-parser.js"></script>
   <script defer src="/js/quiz-preview-parser.js"></script>
   <script defer src="/js/survey-preview-parser.js"></script>
   <script defer src="/js/admin.js"></script>
@@ -324,6 +327,7 @@
                 <div class="live-timer"><svg aria-hidden="true"><use href="/assets/icons.svg#clock"></use></svg><span id="timer-display">20</span>s</div>
               </div>
               <h2 id="current-question-text" class="question-text">Question text here</h2>
+              <div id="current-question-text-references" class="case-study" hidden></div>
               <div id="options-display" class="options-grid admin-options-grid"></div>
               <div class="response-progress">
                 <div class="response-progress-label">
@@ -885,6 +889,7 @@
                   <div id="preview-timer" class="timer-text">20</div>
                 </div>
                 <h1 class="player-question preview-question" id="preview-question-text">Question?</h1>
+                <div id="preview-question-text-references" class="case-study" hidden></div>
                 <div class="player-options preview-options" id="preview-options-container"></div>
               </div>
               <div id="preview-section-card" class="preview-section-card hidden">

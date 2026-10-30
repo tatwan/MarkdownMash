@@ -224,6 +224,105 @@ greet("Alice")
 | Time limit | `::time=20` | Seconds per question (default: 20) |
 | Ungraded | `::type=ungraded` | Captures correctness but awards no points; under a section heading it becomes that section's default |
 
+### Tables and images
+
+Put Markdown tables and images in the question body, before the answer options:
+
+```markdown
+## Q1: Which service meets the latency requirement?
+
+| Service | Latency | Monthly cost |
+| --- | ---: | ---: |
+| A | 10 ms | $80 |
+| B | 50 ms | $30 |
+
+![Architecture diagram](https://example.com/architecture.png)
+
+- [x] A
+- [ ] B
+::time=60
+```
+
+Tables preserve column alignment and scroll horizontally when they are wider
+than the screen. Images fit the screen; click or tap a question image to enlarge
+it, then choose **Actual size** to inspect details. Keyboard users can focus an
+image and press Enter or Space; Escape closes it. Images inside answer buttons
+remain part of the answer rather than opening the viewer.
+
+Use a direct, publicly accessible **HTTPS image URL**, with descriptive alt
+text between the brackets. Images load directly from that host, which receives
+the viewer's network request; Markdown Mash does not upload or store the image.
+A missing or inaccessible image shows an unavailable message with its alt text.
+The same formatting works in survey questions and the studio preview.
+
+### Shared case-study panels
+
+Define a named scenario once and link any related question with `::case=id`.
+Each `:::panel` starts a separately browsable Markdown reference; `:::endcase`
+closes the scenario. This works in quizzes and surveys.
+
+`````markdown
+# Service review
+# Score 100
+
+:::case services | Choosing a service
+:::panel Scenario
+A school needs a service with latency below 25 ms. Compare the evidence.
+
+:::panel Measurements
+| Service | Latency | Monthly cost |
+| --- | ---: | ---: |
+| A | 10 ms | $80 |
+| B | 50 ms | $30 |
+
+:::panel Code
+```python
+limit_ms = 25
+print(latency_ms < limit_ms)
+```
+
+:::panel Architecture
+![Service architecture](https://example.com/architecture.png)
+:::endcase
+
+## Q1: Which service meets the latency requirement?
+::case=services
+- [x] A
+- [ ] B
+::time=60
+
+## Q2: Which service costs less?
+::case=services
+- [ ] A
+- [x] B
+::time=45
+`````
+
+The host advances the live question. Each participant browses the current
+question's reference panels independently, including after submitting an answer.
+Browsing leaves the timer running and the answer locked. The presenter, host,
+and studio preview use the same panel controls. Use the panel buttons, Previous
+panel / Next panel, or arrow keys (Home/End also work) when a panel tab has focus.
+Your selected panel is remembered for the same case in that browser tab, where
+browser storage is available, including after refresh.
+
+Case ids start with a lowercase letter and contain lowercase letters, digits,
+or hyphens. Ids must be unique. Put `::case=id` under **each** question that uses
+that case; questions do not inherit it. Put definitions before a question heading
+or after its complete body, options, and metadata; a definition ends any open
+question. Definitions can precede or follow the questions that reference them.
+Each case needs at least one named, nonempty panel and an
+explicit `:::endcase`; cases cannot nest. Preview and upload report invalid
+blocks or unknown ids.
+
+Only the current question's linked case is sent to participants and the
+presenter. All panels in that case are available together: keep future
+questions and solutions out of reference panels. Panels add no questions,
+section curtains, points, or timer resets. Headings and lists inside panels
+are reference content. Inside fenced code blocks (backticks or tildes), quiz
+headings, options, metadata, and case directives are literal code in both
+question bodies and panels.
+
 ### Scoring
 
 - Set total points with `# Score X` (e.g., `# Score 1000`)

@@ -11,11 +11,23 @@
   const parser = root.marked;
   const sanitizer = root.DOMPurify;
 
-  if (parser && root.hljs) {
+  if (parser) {
+    const defaultRenderer = new parser.Renderer();
     parser.use({
       breaks: true,
       renderer: {
+        table(token) {
+          const table = defaultRenderer.table.call(this, token);
+          return `<div class="markdown-table-scroll" role="region" tabindex="0" aria-label="Scrollable table">${table}</div>`;
+        },
+        image(token) {
+          return defaultRenderer.image.call(this, token).replace(
+            '<img ',
+            '<img class="markdown-image" referrerpolicy="no-referrer" decoding="async" '
+          );
+        },
         code(token) {
+          if (!root.hljs) return defaultRenderer.code.call(this, token);
           const requestedLanguage = String(token.lang || '').trim();
           const language = root.hljs.getLanguage(requestedLanguage)
             ? requestedLanguage
@@ -29,6 +41,7 @@
 
   const sanitizeOptions = {
     USE_PROFILES: { html: true },
+    ADD_ATTR: ['referrerpolicy'],
     FORBID_TAGS: [
       'base',
       'button',

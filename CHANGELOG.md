@@ -2,6 +2,22 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Reusable case-study panels for quizzes and surveys: define a scenario with text, tables, code, or images and link it to several questions. Participants browse references independently while the host controls the question; preview, host, and presenter share the controls.
+- Question images from HTTPS URLs now display across the studio preview, participant, and presenter views. Click or tap an image to enlarge it, inspect its actual size, and close it with Escape or the Close image button. Unavailable images show their alt text in a readable fallback.
+
+### Changed
+
+- Markdown tables now have shared styling, column alignment, and a keyboard-accessible horizontal scroll area for smaller screens.
+
+### Fixed
+
+- Fenced code no longer interprets heading-like text, answer lists, or metadata as quiz/survey structure. Server and preview now share one parser.
+- Reconnecting to an open question restores the submitted answer and keeps its answer buttons locked.
+
 ## [1.7.0] - 2026-09-21
 
 ### Added

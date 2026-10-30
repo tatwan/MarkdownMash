@@ -243,6 +243,151 @@ label {
   margin-bottom: 24px;
 }
 
+/* Rich Markdown shares the same layout in preview, live questions, and results. */
+.markdown-table-scroll {
+  max-width: 100%;
+  margin: 1rem 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  font-size: clamp(0.9rem, 0.65em, 1.4rem);
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.markdown-table-scroll:focus-visible,
+.markdown-image[role="button"]:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.markdown-table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.markdown-table-scroll th,
+.markdown-table-scroll td {
+  min-width: 7rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  vertical-align: top;
+  text-align: left;
+}
+
+.markdown-table-scroll [align="center"] {
+  text-align: center;
+}
+
+.markdown-table-scroll [align="right"] {
+  text-align: right;
+}
+
+.markdown-table-scroll th {
+  background: var(--bg-input);
+  font-weight: 700;
+}
+
+.markdown-table-scroll tbody tr:nth-child(even) {
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.markdown-table-scroll tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-table-scroll tr > :last-child {
+  border-right: 0;
+}
+
+.markdown-image {
+  display: block;
+  max-width: 100%;
+  max-height: 28rem;
+  width: auto;
+  height: auto;
+  margin: 1rem auto;
+  border-radius: 0.5rem;
+  object-fit: contain;
+}
+
+.markdown-image[role="button"] {
+  cursor: zoom-in;
+}
+
+.markdown-image[hidden] {
+  display: none;
+}
+
+.markdown-image-error {
+  display: block;
+  margin: 1rem 0;
+  padding: 0.8rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.markdown-image-viewer {
+  width: min(96vw, 1500px);
+  max-width: 96vw;
+  max-height: 94dvh;
+  margin: auto;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.markdown-image-viewer[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.markdown-image-viewer::backdrop {
+  background: rgba(2, 6, 23, 0.88);
+}
+
+.markdown-image-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.markdown-image-canvas {
+  min-height: 0;
+  overflow: auto;
+}
+
+.markdown-image-canvas img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(94dvh - 10rem);
+  width: auto;
+  height: auto;
+  margin: auto;
+  object-fit: contain;
+}
+
+.markdown-image-actual-size .markdown-image-canvas img {
+  max-width: none;
+  max-height: none;
+}
+
+.markdown-image-caption {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
 .timer {
   font-size: 3rem;
   font-weight: 700;
@@ -7937,3 +8082,43 @@ select:focus-visible {
     transform: none;
   }
 }
+
+/* A reference panel changes locally; question controls stay outside it. */
+.case-study {
+  min-width: 0;
+  max-width: 100%;
+  margin: 1.25rem 0;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bg-input);
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+.case-study[hidden] { display: none; }
+.case-study-title { margin: 0; font-size: 1.2em; overflow-wrap: anywhere; }
+.case-study-hint { margin: 0.25rem 0 0.75rem; color: var(--text-muted); font-size: 0.85em; }
+.case-study-tabs { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.25rem; }
+.case-study-tabs button {
+  flex: 0 0 auto;
+  max-width: 16rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.case-study-tabs button[aria-selected="true"] { border-color: var(--primary); background: var(--primary); color: #fff; }
+.case-study-tabs button:focus-visible,
+.case-study-content:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.case-study-content { margin: 0.75rem 0; overflow-wrap: anywhere; }
+.case-study-content > :first-child { margin-top: 0; }
+.case-study-content > :last-child { margin-bottom: 0; }
+.case-study-content pre { max-width: 100%; overflow-x: auto; white-space: pre; }
+.case-study-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.8em; }
+.presenter-section .case-study { font-size: clamp(1rem, 1.5vw, 1.65rem); }

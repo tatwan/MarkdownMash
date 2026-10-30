@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { getQuestionForParticipants } = require('./question-payload');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -114,7 +115,7 @@ app.use(helmet({
       fontSrc: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"],
-      imgSrc: ["'self'", 'data:'],
+      imgSrc: ["'self'", 'data:', 'https:'],
       objectSrc: ["'none'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
@@ -475,19 +476,6 @@ function createSessionState({
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-function getQuestionForParticipants(question) {
-  // Send question without correct answers
-  return {
-    id: question.id,
-    text: question.text,
-    options: question.options,
-    timeLimit: question.timeLimit,
-    type: question.type,
-    gradedNumber: question.gradedNumber,
-    displayNumber: question.displayNumber ?? null
-  };
-}
-
 function isSurveySession(session) {
   return session?.sessionType === 'survey'
     || session?.quiz?.sessionKind === 'survey'
@@ -1276,6 +1264,9 @@ app.post('/api/trial/session', authenticateTrial, async (req, res) => {
       session: sessionResponse(req, session, qrCode)
     });
   } catch (error) {
+    if (error.code === 'MARKDOWN_STRUCTURE_INVALID') {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     console.error('Practice-room launch error:', error);
     return res.status(500).json({ success: false, error: 'Unable to launch the practice room' });
   }
@@ -2007,6 +1998,9 @@ app.post('/api/admin/library', authenticateToken, async (req, res) => {
     await db.logActivity(req.admin.id, 'library_create', { id: Number(row.id), name: row.name, kind: row.kind }, req.ip);
     res.status(201).json({ success: true, item: summarizeSavedMash(row) });
   } catch (err) {
+    if (err.code === 'MARKDOWN_STRUCTURE_INVALID') {
+      return res.status(400).json({ success: false, error: err.message });
+    }
     console.error('Create library item error:', err);
     res.status(500).json({ success: false, error: 'Server error' });
   }
@@ -2036,6 +2030,9 @@ app.put('/api/admin/library/:id', authenticateToken, async (req, res) => {
     await db.logActivity(req.admin.id, 'library_update', { id, name: row.name, kind: row.kind }, req.ip);
     res.json({ success: true, item: summarizeSavedMash(row) });
   } catch (err) {
+    if (err.code === 'MARKDOWN_STRUCTURE_INVALID') {
+      return res.status(400).json({ success: false, error: err.message });
+    }
     console.error('Update library item error:', err);
     res.status(500).json({ success: false, error: 'Server error' });
   }
@@ -2950,7 +2947,7 @@ function sendLiveSessionSnapshot(socket, session, sessionCode, audience = 'admin
     const survey = isSurveySession(session);
     socket.emit('question_started', {
       question: audience === 'presenter'
-        ? getQuestionForParticipants(question)
+        ? getQuestionForParticipants(question, session.quiz)
         : question,
       timeRemaining,
       questionNumber: survey ? (question.displayNumber ?? question.index + 1) : question.gradedNumber,
@@ -3179,7 +3176,7 @@ io.on('connection', (socket) => {
           socket.emit('question_ended', {
             mode: 'survey',
             questionId: question.id,
-            question: getQuestionForParticipants(question),
+            question: getQuestionForParticipants(question, session.quiz),
             responseRecorded: participant.surveyAnsweredQuestions?.[question.index] === true,
             answered: presentation.answered || 0,
             totalParticipants: presentation.totalParticipants || Object.keys(session.participants).length,
@@ -3194,7 +3191,7 @@ io.on('connection', (socket) => {
           ?.find(entry => entry.id === participant.id);
         socket.emit('question_ended', {
           questionId: question.id,
-          question: getQuestionForParticipants(question),
+          question: getQuestionForParticipants(question, session.quiz),
           correctIndices: question.correctIndices,
           stats: calculateStats(session, question.id),
           participantResults: {
@@ -3220,11 +3217,12 @@ io.on('connection', (socket) => {
       } else if (timeRemaining > 0) {
         const survey = isSurveySession(session);
         socket.emit('question_started', {
-          question: getQuestionForParticipants(question),
+          question: getQuestionForParticipants(question, session.quiz),
           timeRemaining,
           questionNumber: survey ? (question.displayNumber ?? question.index + 1) : question.gradedNumber,
           totalQuestions: survey ? surveyQuestionCount(session.quiz) : gradedCount(session.quiz),
-          mode: survey ? 'survey' : 'quiz'
+          mode: survey ? 'survey' : 'quiz',
+          submittedAnswer: participant.answers[question.id] ?? null
         });
       }
     }
@@ -3700,7 +3698,7 @@ function startQuestionStep(sessionCode, session) {
     : question.gradedNumber;
 
   io.to(`session:${sessionCode}`).emit('question_started', {
-    question: getQuestionForParticipants(question),
+    question: getQuestionForParticipants(question, session.quiz),
     timeRemaining: question.timeLimit,
     questionNumber,
     totalQuestions,
@@ -3718,7 +3716,7 @@ function startQuestionStep(sessionCode, session) {
   });
 
   io.to(`presenter:${sessionCode}`).emit('question_started', {
-    question: getQuestionForParticipants(question),
+    question: getQuestionForParticipants(question, session.quiz),
     timeRemaining: question.timeLimit,
     questionNumber,
     totalQuestions,

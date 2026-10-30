@@ -1,45 +1,10 @@
-// Two markdown parsers exist for the same quiz format: quiz-structure.js's
-// parseQuizMarkdown (server, authoritative — scores and runs the quiz) and
-// public/js/quiz-preview-parser.js's parseQuizMarkdownLocal (admin studio's
-// inline preview / mobile simulator, client-side, no server round trip).
-//
-// This test is what stops them diverging. It runs the same markdown through
-// both and asserts they agree on every field they share. If it fails, a host
-// previewing a quiz would see something different from what the class
-// actually gets — that is the failure mode this guards against.
-//
-// The intended long-term fix is a single shared parsing module; keeping two
-// copies in sync by hand (with this test as the tripwire) is a deliberate,
-// accepted-for-now shortcut for this release, not an oversight.
-//
-// Fields intentionally NOT compared: quiz.totalScore and quiz.passingPercent
-// exist only on the server's quiz object — the preview never scores
-// anything, so parseQuizMarkdownLocal doesn't produce them. That is
-// intentional, not a gap to "fix" here.
-
+// Server and preview share a parser. Keep the public entry points aligned.
 const assert = require('node:assert/strict');
 const { parseQuizMarkdown } = require('./quiz-structure');
 const { parseQuizMarkdownLocal } = require('./public/js/quiz-preview-parser');
 
-const QUESTION_FIELDS = ['text', 'options', 'correctIndices', 'timeLimit', 'type', 'gradedNumber', 'sectionTitle'];
-
 function assertParsersAgree(markdown, label) {
-  const server = parseQuizMarkdown(markdown);
-  const preview = parseQuizMarkdownLocal(markdown);
-
-  assert.deepStrictEqual(preview.steps, server.steps, `${label}: steps disagree`);
-  assert.equal(preview.questions.length, server.questions.length, `${label}: question count disagrees`);
-
-  server.questions.forEach((serverQuestion, i) => {
-    const previewQuestion = preview.questions[i];
-    for (const field of QUESTION_FIELDS) {
-      assert.deepStrictEqual(
-        previewQuestion[field],
-        serverQuestion[field],
-        `${label}: question ${i} field "${field}" disagrees (server=${JSON.stringify(serverQuestion[field])}, preview=${JSON.stringify(previewQuestion[field])})`
-      );
-    }
-  });
+  assert.deepStrictEqual(parseQuizMarkdownLocal(markdown), parseQuizMarkdown(markdown), label);
 }
 
 // --- a plain legacy quiz (no sections, one question without ::time=,

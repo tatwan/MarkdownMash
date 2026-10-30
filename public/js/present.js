@@ -246,6 +246,7 @@ function initSocket() {
       totalQNum.textContent = data.totalQuestions;
     }
     questionText.innerHTML = markdown.block(data.question.text);
+    MarkdownMashReferences.render(document.getElementById('question-text-references'), data.question.caseStudy);
     answeredCount.textContent = '0';
     renderOptions(data.question.options);
     startTimer(data.timeRemaining);

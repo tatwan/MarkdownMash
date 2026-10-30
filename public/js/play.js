@@ -492,7 +492,7 @@ function initSocket() {
     stopSectionCountdown();
 
     currentQuestion = data.question;
-    selectedAnswer = null;
+    selectedAnswer = data.submittedAnswer ?? null;
     timerDuration = data.timeRemaining;
 
     currentSessionMode = data.mode === 'survey' ? 'survey' : currentSessionMode;
@@ -506,9 +506,16 @@ function initSocket() {
       totalQNum.textContent = data.totalQuestions;
     }
     questionText.innerHTML = markdown.block(data.question.text);
-    answerStatus.classList.add('hidden');
+    MarkdownMashReferences.render(document.getElementById('question-text-references'), data.question.caseStudy);
+    answerStatus.classList.toggle('hidden', selectedAnswer === null);
 
     renderOptions(data.question.options);
+    if (selectedAnswer !== null) {
+      optionsContainer.querySelectorAll('.player-option').forEach((button, index) => {
+        button.disabled = true;
+        button.classList.toggle('selected', index === selectedAnswer);
+      });
+    }
     startTimer(data.timeRemaining);
 
     hideAllSections();

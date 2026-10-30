@@ -1309,7 +1309,21 @@ function initSocket(code) {
   });
 
   socket.on('question_ended', (data) => {
+    MarkdownMashMedia.closeImage();
     clearInterval(timerInterval);
+    if (data.question) {
+      // A reconnect during the pause receives no question_started event.
+      currentQuestion = data.question;
+      showQuestion({
+        ...data,
+        totalQuestions: data.totalQuestions ?? currentQuiz.questions.filter(q => q.type === 'graded').length
+      });
+      questionSection.classList.remove('hidden');
+      liveLobbyPanel.classList.add('hidden');
+      liveSectionPanel.classList.add('hidden');
+    }
+    timerDisplay.textContent = '0';
+    startBtn.classList.add('hidden');
     endQuestionBtn.classList.add('hidden');
     nextBtn.classList.remove('hidden');
 
@@ -1317,6 +1331,8 @@ function initSocket(code) {
       answersReceived.textContent = data.answered || 0;
       updateResponseProgress(data.answered || 0, data.totalParticipants || 0);
     } else {
+      answersReceived.textContent = data.stats?.totalAnswered || 0;
+      updateResponseProgress(data.stats?.totalAnswered || 0, data.stats?.totalParticipants || 0);
       const optionBtns = optionsDisplay.querySelectorAll('.option-btn');
       optionBtns.forEach((btn, i) => {
         if (data.correctIndices.includes(i)) btn.classList.add('correct');
@@ -1530,12 +1546,14 @@ previewBtn.addEventListener('click', () => {
     return;
   }
   
-  // Reuse the parseQuizMarkdown logic if possible, or just parse locally
-  // Since we want to preview it, we should use the same logic
-  // Let's implement a lightweight local parser
-  previewQuizData = studioMode === 'survey' && typeof parseSurveyMarkdownLocal === 'function'
-    ? parseSurveyMarkdownLocal(markdown)
-    : parseQuizMarkdownLocal(markdown);
+  try {
+    previewQuizData = studioMode === 'survey'
+      ? parseSurveyMarkdownLocal(markdown)
+      : parseQuizMarkdownLocal(markdown);
+  } catch (error) {
+    showNoticeModal(error.message, 'Check Your Markdown');
+    return;
+  }
 
   if (previewQuizData.steps.length === 0) {
     showNoticeModal('No valid questions were found in the Markdown.', 'Check Your Markdown');
@@ -1650,6 +1668,10 @@ function renderPreviewQuestionCard(q) {
   }
 
   previewQuestionText.innerHTML = markdown.block(q.text);
+  MarkdownMashReferences.render(
+    document.getElementById('preview-question-text-references'),
+    MarkdownMashParser.caseStudyForQuestion(previewQuizData, q)
+  );
 
   previewOptionsContainer.innerHTML = '';
   q.options.forEach((opt, idx) => {
@@ -2000,6 +2022,10 @@ function showQuestion(data) {
     document.getElementById('total-q-num').textContent = data.totalQuestions;
   }
   currentQuestionText.innerHTML = markdown.block(data.question.text);
+  MarkdownMashReferences.render(
+    document.getElementById('current-question-text-references'),
+    MarkdownMashParser.caseStudyForQuestion(currentQuiz, data.question)
+  );
   answersReceived.textContent = '0';
   optionsDisplay.innerHTML = ''; // Clear previous options
   data.question.options.forEach((opt, i) => {
