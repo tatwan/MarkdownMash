@@ -16,6 +16,7 @@ const db = require('./db');
 const autopilot = require('./autopilot');
 const {
   buildFinaleSummary,
+  buildParticipantPodium,
   buildQuestionPresentation,
   rankParticipants
 } = require('./presentation');
@@ -3172,7 +3173,8 @@ io.on('connection', (socket) => {
         passingPercent: session.quiz.passingPercent,
         rank: standing?.rank || null,
         participantCount: session.finale.leaderboard?.length || 0,
-        bestStreak: participant.bestStreak || 0
+        bestStreak: participant.bestStreak || 0,
+        podium: buildParticipantPodium(session.finale.leaderboard)
       });
       return;
     }
@@ -3636,6 +3638,7 @@ async function finishQuiz(sessionCode, session) {
   // Save final scores to database and send results to each participant
   console.log(`[FINAL SCORES] Points per question: ${pointsPer}`);
   const finalLeaderboard = rankParticipants(session);
+  const podium = buildParticipantPodium(finalLeaderboard);
   for (const participant of Object.values(session.participants)) {
     const finalScore = Math.round((participant.correctCount || 0) * pointsPer);
     const percentage = totalGraded === 0
@@ -3659,7 +3662,8 @@ async function finishQuiz(sessionCode, session) {
         passingPercent: session.quiz.passingPercent,
         rank: standing?.rank || null,
         participantCount: finalLeaderboard.length,
-        bestStreak: participant.bestStreak || 0
+        bestStreak: participant.bestStreak || 0,
+        podium
       });
     }
   }

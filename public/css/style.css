@@ -2226,6 +2226,7 @@ label {
 .sidekicks-disabled .participant-sidekick,
 .sidekicks-disabled .responder-sidekick,
 .sidekicks-disabled .podium-sidekick,
+.sidekicks-disabled .player-podium-sidekick,
 .sidekicks-disabled .runner-sidekick {
   display: none;
 }
@@ -6358,6 +6359,10 @@ select:focus-visible {
   overflow: hidden;
 }
 
+.table-card.table-scroll {
+  overflow-x: auto;
+}
+
 .table-card .results-table {
   margin: 0;
 }
@@ -6912,6 +6917,153 @@ select:focus-visible {
 .final-display h2 {
   margin-bottom: 1rem;
   font-size: clamp(2rem, 6vw, 3rem);
+}
+
+.player-podium {
+  width: min(620px, 100%);
+  margin: 0 auto 1.5rem;
+  text-align: center;
+}
+
+.player-podium h2 {
+  margin-bottom: 0.5rem;
+}
+
+.player-podium-places {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.player-podium-place {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 1rem 0.4rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top: 4px solid #bac5dc;
+  border-radius: 1rem 1rem 0.4rem 0.4rem;
+  overflow-wrap: anywhere;
+}
+
+.player-podium-place[data-rank="1"] {
+  grid-column: 2;
+  grid-row: 1;
+  border-top-color: var(--yellow);
+  background: rgba(255, 216, 77, 0.08);
+}
+
+.player-podium-place[data-rank="2"] {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 2rem;
+}
+
+.player-podium-place[data-rank="3"] {
+  grid-column: 3;
+  grid-row: 1;
+  margin-top: 3rem;
+  border-top-color: #d9a379;
+}
+
+.player-podium-place img {
+  width: min(80px, 100%);
+  height: auto;
+}
+
+.player-podium-rank {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.player-podium-score {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.player-podium-you {
+  color: var(--yellow);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.player-podium-place.is-you {
+  box-shadow: 0 0 0 2px var(--yellow);
+}
+
+@media (max-width: 780px) {
+  .analytics-workspace .stat-label {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .analytics-responsive-table,
+  .analytics-responsive-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .analytics-responsive-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .analytics-responsive-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .analytics-responsive-table tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .analytics-responsive-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  .analytics-responsive-table td[data-label="Title"],
+  .analytics-responsive-table td[data-label="Prompt"],
+  .analytics-responsive-table td[data-label="Actions"] {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+
+  .analytics-responsive-table .session-row-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .analytics-responsive-table .session-row-actions .btn {
+    flex: 1;
+    min-height: 44px;
+  }
 }
 
 .final-metrics {

@@ -257,8 +257,19 @@ function buildFinaleSummary(session) {
   };
 }
 
+function buildParticipantPodium(leaderboard) {
+  return leaderboard.slice(0, 3).map(entry => ({
+    rank: entry.rank,
+    name: entry.name,
+    avatarId: entry.avatarId,
+    correctCount: entry.correctCount,
+    score: entry.score
+  }));
+}
+
 module.exports = {
   buildFinaleSummary,
+  buildParticipantPodium,
   buildHardestQuestions,
   buildQuestionPresentation,
   createRankSnapshot,

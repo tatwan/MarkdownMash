@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const {
   buildFinaleSummary,
+  buildParticipantPodium,
   buildHardestQuestions,
   buildQuestionPresentation,
   rankParticipants,
@@ -125,6 +126,16 @@ function run() {
   assert.equal(finale.leaderboard.length, 5);
   assert.equal(finale.leaderboard[0].name, 'Amina');
   assert.equal(finale.hardestQuestions.length, 3);
+  const podium = buildParticipantPodium(finale.leaderboard);
+  assert.deepEqual(podium.map(entry => entry.name), ['Amina', 'Basil', 'Carla']);
+  assert.deepEqual(podium[0], {
+    rank: 1, name: 'Amina', avatarId: 'shades', correctCount: 3, score: 100
+  }, 'participant podium includes only public display fields');
+  assert.deepEqual(buildParticipantPodium([]), []);
+  assert.equal(buildParticipantPodium(ranked.slice(0, 1)).length, 1);
+  assert.equal(buildParticipantPodium(ranked.slice(0, 2)).length, 2);
+  podium[0].name = 'Changed';
+  assert.equal(finale.leaderboard[0].name, 'Amina', 'projection must not mutate the finale');
 
   // Mixed graded + ungraded: scores use graded denominator; hardest excludes ungraded.
   const mixed = {

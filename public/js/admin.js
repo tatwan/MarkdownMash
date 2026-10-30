@@ -2417,18 +2417,18 @@ async function loadSessionsList(page = analyticsHistoryPage) {
       `;
 
       tr.innerHTML = `
-        <td><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
-        <td><span class="session-type-badge session-type-${isSurvey ? 'survey' : 'quiz'}">${isSurvey ? 'Survey' : 'Quiz'}</span></td>
-        <td>${escapeHtml(session.courseName || '-')}</td>
-        <td>${escapeHtml(session.quizTitle || 'Untitled')}</td>
-        <td>${session.participantCount}</td>
-        <td>${(isInterrupted || isCreated)
+        <td data-label="Session"><code>${escapeHtml(session.code)}</code> ${statusBadge}</td>
+        <td data-label="Type"><span class="session-type-badge session-type-${isSurvey ? 'survey' : 'quiz'}">${isSurvey ? 'Survey' : 'Quiz'}</span></td>
+        <td data-label="Mash group">${escapeHtml(session.courseName || '-')}</td>
+        <td data-label="Title">${escapeHtml(session.quizTitle || 'Untitled')}</td>
+        <td data-label="Participants">${session.participantCount}</td>
+        <td data-label="Summary">${(isInterrupted || isCreated)
           ? '—'
           : isSurvey
             ? `${session.responseCount || 0} responses · ${session.responseRate || 0}%`
             : `${Math.round(session.avgScorePercent || 0)}% average`}</td>
-        <td>${dateDisplay}</td>
-        <td>${actionBtn}</td>
+        <td data-label="Date">${dateDisplay}</td>
+        <td data-label="Actions">${actionBtn}</td>
       `;
 
       if (isInterrupted) {
@@ -2872,11 +2872,11 @@ async function loadSessionDetail(code) {
         const difficultyClass = `difficulty-${q.difficulty}`;
 
         tr.innerHTML = `
-          <td>Q${q.index + 1}</td>
-          <td class="question-text-cell" title="${escapeHtml(q.text)}">${escapeHtml(truncateText(q.text, 50))}</td>
-          <td>${Math.round(q.correctPercent)}%</td>
-          <td>${avgTime}</td>
-          <td><span class="difficulty-badge ${difficultyClass}">${q.difficulty}</span></td>
+          <td data-label="Question">Q${q.index + 1}</td>
+          <td data-label="Prompt" class="question-text-cell" title="${escapeHtml(q.text)}">${escapeHtml(truncateText(q.text, 50))}</td>
+          <td data-label="Correct">${Math.round(q.correctPercent)}%</td>
+          <td data-label="Avg time">${avgTime}</td>
+          <td data-label="Difficulty"><span class="difficulty-badge ${difficultyClass}">${q.difficulty}</span></td>
         `;
         questionBreakdownBody.appendChild(tr);
       });
@@ -2937,13 +2937,13 @@ async function loadSessionDetail(code) {
           : '0';
 
         tr.innerHTML = `
-          <td>${rankHtml}</td>
-          <td>${escapeHtml(p.name)}</td>
-          <td>${p.correctCount} / ${totalQuestions}</td>
-          <td>${computedScore} / ${totalScore}</td>
-          <td><span class="pass-badge ${p.passed ? 'pass-badge-passed' : 'pass-badge-failed'}">${p.passed ? 'Passed' : 'Below threshold'}</span></td>
-          <td>${avgTime}</td>
-          <td>${streakHtml}</td>
+          <td data-label="Rank">${rankHtml}</td>
+          <td data-label="Name">${escapeHtml(p.name)}</td>
+          <td data-label="Correct">${p.correctCount} / ${totalQuestions}</td>
+          <td data-label="Score">${computedScore} / ${totalScore}</td>
+          <td data-label="Status"><span class="pass-badge ${p.passed ? 'pass-badge-passed' : 'pass-badge-failed'}">${p.passed ? 'Passed' : 'Below threshold'}</span></td>
+          <td data-label="Avg response">${avgTime}</td>
+          <td data-label="Best streak">${streakHtml}</td>
         `;
         return tr;
       }

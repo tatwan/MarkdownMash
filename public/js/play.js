@@ -72,6 +72,8 @@ const finalRank = document.getElementById('final-rank');
 const finalCorrect = document.getElementById('final-correct');
 const finalStreak = document.getElementById('final-streak');
 const finalSidekick = document.getElementById('final-sidekick');
+const playerPodium = document.getElementById('player-podium');
+const playerPodiumPlaces = document.getElementById('player-podium-places');
 const surveyCompleteSection = document.getElementById('survey-complete-section');
 const surveyCompleteParticipants = document.getElementById('survey-complete-participants');
 const surveyCompleteRate = document.getElementById('survey-complete-rate');
@@ -636,6 +638,7 @@ function initSocket() {
     }
 
     // Get my final results
+    renderPlayerPodium(data.podium || [], data.rank);
     const myResults = data.participantResults ? data.participantResults[participantId] : null;
 
     if (myResults || data.finalScore !== undefined) {
@@ -681,6 +684,44 @@ function initSocket() {
 function hideAllAnsweredBanner() {
   allAnsweredBanner.classList.add('hidden');
   timerRing.classList.remove('hidden');
+}
+
+function renderPlayerPodium(podium, myRank) {
+  playerPodiumPlaces.replaceChildren();
+  playerPodium.classList.toggle('hidden', podium.length === 0);
+  podium.forEach(entry => {
+    const place = document.createElement('li');
+    place.className = 'player-podium-place';
+    place.dataset.rank = entry.rank;
+    if (entry.rank === myRank) place.classList.add('is-you');
+
+    const rank = document.createElement('span');
+    rank.className = 'player-podium-rank';
+    rank.textContent = `#${entry.rank}`;
+    place.appendChild(rank);
+    if (entry.avatarId) {
+      const avatar = document.createElement('img');
+      avatar.className = 'player-podium-sidekick';
+      avatar.src = sidekickAsset(entry.avatarId, 256);
+      avatar.alt = '';
+      avatar.width = 80;
+      avatar.height = 80;
+      place.appendChild(avatar);
+    }
+    const name = document.createElement('strong');
+    name.textContent = entry.name;
+    const score = document.createElement('span');
+    score.className = 'player-podium-score';
+    score.textContent = `${entry.score} pts`;
+    place.append(name, score);
+    if (entry.rank === myRank) {
+      const you = document.createElement('span');
+      you.className = 'player-podium-you';
+      you.textContent = 'You';
+      place.appendChild(you);
+    }
+    playerPodiumPlaces.appendChild(place);
+  });
 }
 
 function showAllAnsweredBanner() {
