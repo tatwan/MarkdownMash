@@ -2,6 +2,27 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [1.9.0] - 2026-10-30
+
+### Added
+
+- Fenced `mermaid` diagrams in quiz and survey question bodies and shared case-study panels across Studio preview, host, participant and presenter views. Diagrams fit the screen, support enlargement and actual-size scrolling, use accessible descriptions, and retain their source when rendering is unavailable.
+- Quiz and survey field-trip starters demonstrating shared photo and table panels, available in the Studio galleries and `templates/`.
+
+### Fixed
+
+- Owned session history now uses pagination and applies search, group, type and status filters across the complete history. Stale requests cannot replace newer results.
+
+### Security
+
+- Diagrams are generated locally in an isolated sandbox, sanitized and displayed as images. Fixed configuration rejects author overrides, HTML labels, interactive links, external images and icons. Each block is limited to 12,000 characters and 100 connections or events; sequence controls and notes, and tree/railroad structural items, count toward the budget.
+- Updated DOMPurify, Express and compatible transitive runtime dependencies to resolve dependency audit findings.
+
+### Notes
+
+- Uses pinned Mermaid Tiny 11.16.1; mindmaps, architecture diagrams and KaTeX are unavailable.
+- No database migration or build step is required.
+
 ## [1.8.0] - 2026-10-30
 
 ### Added
