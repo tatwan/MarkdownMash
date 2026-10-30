@@ -1,6 +1,6 @@
 # Example Mashes
 
-Ready-to-run Markdown quizzes for Markdown Mash. These files are the
+Ready-to-run Markdown quizzes and surveys for Markdown Mash. These files are the
 **single source of truth** for the host studio’s **Starter templates**
 gallery: the app serves this folder and loads a file when you pick a card.
 
@@ -28,6 +28,8 @@ when writing your own Mashes.
 | [`music.md`](music.md) | Music & lyrics | Classic three-question graded Mash |
 | [`history.md`](history.md) | History highlights | Bonus section with an ungraded question |
 | [`classroom-modules.md`](classroom-modules.md) | Classroom showcase | Full v1.4 demo: two sections, mixed graded/ungraded |
+| [`quiz-field-trip.md`](quiz-field-trip.md) | Mountain field trip quiz | Shared photo and table panels across three graded questions |
+| [`survey-field-trip.md`](survey-field-trip.md) | Mountain field trip survey | Shared photo and table panels across two anonymous questions |
 | [`survey-food.md`](survey-food.md) | Survey · food | Anonymous pulse (v1.5) |
 | [`survey-movies.md`](survey-movies.md) | Survey · movies | Anonymous pulse (v1.5) |
 | [`survey-sports.md`](survey-sports.md) | Survey · sports | Anonymous pulse (v1.5) |
@@ -55,5 +57,6 @@ when writing your own Mashes.
 - `# Section: Name` announces a curtain before that module’s questions.
 - `::type=ungraded` captures correctness without points or streak changes.
 - `# Score N` divides points among **graded** questions only.
+- The field trip examples define a case once and link each question with `::case=trip`. Browse its photo and table panels in preview or during a session. The photograph uses a 1,280-pixel Wikimedia Commons rendition (about 221 KB) over HTTPS and needs an internet connection; credit and license links are included in each template.
 
 See the project [README](../README.md#quiz-format) for the full format guide.

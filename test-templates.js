@@ -56,6 +56,27 @@ assert.ok(
 );
 
 const { parseSurveyMarkdown } = require('./survey-structure');
+const { parseQuizMarkdownLocal } = require('./public/js/quiz-preview-parser');
+const { parseSurveyMarkdown: parseSurveyPreview } = require('./public/js/survey-preview-parser');
+const { caseStudyForQuestion } = require('./public/js/mash-parser');
+for (const [key, parse, preview, count] of [
+  ['quiz-field-trip', parseQuizMarkdown, parseQuizMarkdownLocal, 3],
+  ['survey-field-trip', parseSurveyMarkdown, parseSurveyPreview, 2]
+]) {
+  const markdown = fs.readFileSync(path.join(templatesDir, `${key}.md`), 'utf8');
+  const mash = parse(markdown);
+  assert.deepEqual(preview(markdown), mash, `${key} preview matches server`);
+  assert.equal(mash.questions.length, count);
+  assert.equal(mash.caseStudies.length, 1);
+  assert.equal(mash.steps.length, count);
+  const panels = caseStudyForQuestion(mash, mash.questions[0]).panels;
+  assert.equal(panels.length, 2);
+  assert.match(panels[0].text, /!\[.+\]\(https:\/\//);
+  assert.match(panels[1].text, /\| Route \| Walking time \|/);
+  assert.ok(mash.questions.every(q => q.caseStudyId === 'trip' && q.options.length === 3));
+  if (key.startsWith('survey')) assert.ok(mash.questions.every(q => q.correctIndices.length === 0));
+  else assert.ok(mash.questions.every(q => q.correctIndices.length === 1));
+}
 for (const key of surveyKeys) {
   const filePath = path.join(templatesDir, `${key}.md`);
   assert.ok(fs.existsSync(filePath), `templates/${key}.md must exist`);

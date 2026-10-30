@@ -342,6 +342,8 @@ question bodies and panels.
 | Music & Lyrics | [`templates/music.md`](templates/music.md) | Classic graded Mash |
 | History Highlights | [`templates/history.md`](templates/history.md) | Bonus section with ungraded question |
 | Classroom Modules | [`templates/classroom-modules.md`](templates/classroom-modules.md) | Full showcase: two sections, mixed graded/ungraded |
+| Mountain Field Trip | [`templates/quiz-field-trip.md`](templates/quiz-field-trip.md) | Quiz with a shared photograph and route table |
+| Mountain Field Trip Pulse | [`templates/survey-field-trip.md`](templates/survey-field-trip.md) | Survey with shared photograph and route table |
 
 Open any file in the host studio, or choose **Starter templates** after **Host a Mash** — the cards fetch from `/templates/…` on your deployment.
 

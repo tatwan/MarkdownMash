@@ -136,6 +136,8 @@ const STARTER_TEMPLATE_FILES = Object.freeze({
   marvel: '/templates/marvel.md',
   music: '/templates/music.md',
   history: '/templates/history.md',
+  'quiz-field-trip': '/templates/quiz-field-trip.md',
+  'survey-field-trip': '/templates/survey-field-trip.md',
   'survey-food': '/templates/survey-food.md',
   'survey-movies': '/templates/survey-movies.md',
   'survey-sports': '/templates/survey-sports.md'
