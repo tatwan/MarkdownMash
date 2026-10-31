@@ -59,6 +59,21 @@ const { parseSurveyMarkdown } = require('./survey-structure');
 const { parseQuizMarkdownLocal } = require('./public/js/quiz-preview-parser');
 const { parseSurveyMarkdown: parseSurveyPreview } = require('./public/js/survey-preview-parser');
 const { caseStudyForQuestion } = require('./public/js/mash-parser');
+const guestMarkdown = fs.readFileSync(path.join(__dirname, 'demo-quizzes', 'quick-wins.md'), 'utf8');
+const guestQuiz = parseQuizMarkdown(guestMarkdown);
+assert.deepEqual(parseQuizMarkdownLocal(guestMarkdown), guestQuiz, 'guest mission preview matches the launched quiz');
+assert.equal(guestQuiz.questions.length, 5, 'guest mission stays short');
+assert.equal(gradedCount(guestQuiz), 4, 'the bonus does not affect the score');
+assert.equal(guestQuiz.totalScore, 100);
+assert.ok(guestQuiz.questions.every(q => q.timeLimit <= 45), 'guest questions keep a quick pace');
+assert.ok(guestQuiz.questions.some(q => q.correctIndices.length > 1 && q.type !== 'ungraded'), 'guest mission demonstrates multiple valid answers');
+assert.ok(guestQuiz.steps.some(step => step.kind === 'section'), 'guest mission demonstrates a section curtain');
+const guestReference = caseStudyForQuestion(guestQuiz, guestQuiz.questions[0]);
+assert.equal(guestReference.panels.length, 3);
+assert.ok(guestReference.panels.some(panel => panel.text.includes('```mermaid')), 'guest mission includes a route diagram');
+assert.ok(guestReference.panels.some(panel => panel.text.includes('| Robot |')), 'guest mission includes a clue table');
+assert.equal(caseStudyForQuestion(guestQuiz, guestQuiz.questions[4]), null, 'the bonus does not carry stale mission references');
+
 for (const [key, parse, preview, count] of [
   ['quiz-field-trip', parseQuizMarkdown, parseQuizMarkdownLocal, 3],
   ['survey-field-trip', parseSurveyMarkdown, parseSurveyPreview, 2]

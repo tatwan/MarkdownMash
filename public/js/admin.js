@@ -415,6 +415,13 @@ function showInstructorHome() {
 }
 
 function applyStudioModeCopy() {
+  if (isTrialMode()) {
+    builderEyebrow.textContent = 'Your first mission';
+    builderHeading.textContent = 'Save movie night. Try a Mash.';
+    builderDescription.textContent = 'A snack rescue in space: follow clues, meet the robots, and try the live quiz. Preview the mission, launch it, then join from another tab or device.';
+    uploadBtnLabel.textContent = 'Launch practice room';
+    return;
+  }
   const survey = studioMode === 'survey';
   if (builderEyebrow) builderEyebrow.textContent = survey ? 'New survey session' : 'New live session';
   if (builderHeading) builderHeading.textContent = survey ? 'Build your next survey' : 'Build your next Mash';
@@ -555,12 +562,8 @@ function configureTrialWorkspace(data) {
   quizMarkdown.readOnly = true;
   courseNameInput.value = '';
   courseNameInput.classList.add('hidden');
-  builderEyebrow.textContent = 'Temporary playground';
-  builderHeading.textContent = 'Your practice room is ready.';
-  builderDescription.textContent = 'Preview the sample, launch it, then join from another tab to experience both sides.';
-  builderCardHeading.textContent = data.template.title || 'Mini Mash: Quick Wins';
-  builderCardDescription.textContent = `${data.template.questionCount} quick questions · Nothing is saved`;
-  uploadBtnLabel.textContent = 'Launch practice room';
+  builderCardHeading.textContent = data.template.title || 'Operation: Snack Rescue';
+  builderCardDescription.textContent = `${data.template.questionCount} quick questions · A space adventure · Nothing is saved`;
   openTemplateBtn.classList.add('hidden');
   clearEditorBtn.classList.add('hidden');
   showAuthenticatedWorkspace();
