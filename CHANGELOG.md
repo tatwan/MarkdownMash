@@ -2,6 +2,20 @@
 
 All notable changes to Markdown Mash are documented here.
 
+## [1.10.1] - 2026-10-31
+
+### Changed
+
+- The default guest trial is now **Operation: Snack Rescue**, a five-question space adventure with shared clues, a Mermaid route map, a robot tracker table, a section curtain and an ungraded bonus. Four graded questions share 100 points.
+
+### Fixed
+
+- Guest Studio headings, instructions and launch copy remain specific to the trial instead of being overwritten by signed-in Studio copy.
+
+### Notes
+
+- No database migration, new dependency or build step is required.
+
 ## [1.10.0] - 2026-10-30
 
 ### Added
