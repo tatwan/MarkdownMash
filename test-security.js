@@ -307,6 +307,14 @@ async function run() {
     presenter.emit('next_question', sessionCode);
     assert.match((await presenterControlRejected).message, /permission/i);
 
+    // A trial may introduce the room with section curtains before its first question.
+    for (const step of launched.session.quiz.steps) {
+      if (step.kind === 'question') break;
+      const sectionStarted = waitForSocket(admin, 'section_started');
+      admin.emit('next_question', sessionCode);
+      await sectionStarted;
+    }
+
     const presenterQuestion = waitForSocket(presenter, 'question_started');
     const playerQuestion = waitForSocket(playerA, 'question_started');
     admin.emit('next_question', sessionCode);

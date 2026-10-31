@@ -416,9 +416,9 @@ function showInstructorHome() {
 
 function applyStudioModeCopy() {
   if (isTrialMode()) {
-    builderEyebrow.textContent = 'Your first mission';
-    builderHeading.textContent = 'Save movie night. Try a Mash.';
-    builderDescription.textContent = 'A snack rescue in space: follow clues, meet the robots, and try the live quiz. Preview the mission, launch it, then join from another tab or device.';
+    builderEyebrow.textContent = 'Try a quick quiz';
+    builderHeading.textContent = 'Three questions. Let’s play.';
+    builderDescription.textContent = 'Preview the quiz, launch a practice room, then join from another tab or device to play along.';
     uploadBtnLabel.textContent = 'Launch practice room';
     return;
   }
@@ -562,8 +562,8 @@ function configureTrialWorkspace(data) {
   quizMarkdown.readOnly = true;
   courseNameInput.value = '';
   courseNameInput.classList.add('hidden');
-  builderCardHeading.textContent = data.template.title || 'Operation: Snack Rescue';
-  builderCardDescription.textContent = `${data.template.questionCount} quick questions · A space adventure · Nothing is saved`;
+  builderCardHeading.textContent = data.template.title || 'Movie Night';
+  builderCardDescription.textContent = `${data.template.questionCount} quick questions · Nothing is saved`;
   openTemplateBtn.classList.add('hidden');
   clearEditorBtn.classList.add('hidden');
   showAuthenticatedWorkspace();

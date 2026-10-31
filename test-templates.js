@@ -61,18 +61,20 @@ const { parseSurveyMarkdown: parseSurveyPreview } = require('./public/js/survey-
 const { caseStudyForQuestion } = require('./public/js/mash-parser');
 const guestMarkdown = fs.readFileSync(path.join(__dirname, 'demo-quizzes', 'quick-wins.md'), 'utf8');
 const guestQuiz = parseQuizMarkdown(guestMarkdown);
-assert.deepEqual(parseQuizMarkdownLocal(guestMarkdown), guestQuiz, 'guest mission preview matches the launched quiz');
-assert.equal(guestQuiz.questions.length, 5, 'guest mission stays short');
-assert.equal(gradedCount(guestQuiz), 4, 'the bonus does not affect the score');
+assert.deepEqual(parseQuizMarkdownLocal(guestMarkdown), guestQuiz, 'guest preview matches the launched quiz');
+assert.equal(guestQuiz.questions.length, 3, 'guest demo stays short');
+assert.equal(gradedCount(guestQuiz), 3);
 assert.equal(guestQuiz.totalScore, 100);
-assert.ok(guestQuiz.questions.every(q => q.timeLimit <= 45), 'guest questions keep a quick pace');
-assert.ok(guestQuiz.questions.some(q => q.correctIndices.length > 1 && q.type !== 'ungraded'), 'guest mission demonstrates multiple valid answers');
-assert.ok(guestQuiz.steps.some(step => step.kind === 'section'), 'guest mission demonstrates a section curtain');
-const guestReference = caseStudyForQuestion(guestQuiz, guestQuiz.questions[0]);
-assert.equal(guestReference.panels.length, 3);
-assert.ok(guestReference.panels.some(panel => panel.text.includes('```mermaid')), 'guest mission includes a route diagram');
-assert.ok(guestReference.panels.some(panel => panel.text.includes('| Robot |')), 'guest mission includes a clue table');
-assert.equal(caseStudyForQuestion(guestQuiz, guestQuiz.questions[4]), null, 'the bonus does not carry stale mission references');
+assert.equal(guestQuiz.steps[0].kind, 'section', 'guest demo opens with an introduction');
+assert.deepEqual(guestQuiz.steps.slice(1).map(step => step.questionIndex), [0, 1, 2]);
+assert.ok(guestQuiz.questions.every(q => q.correctIndices.length === 1 && q.timeLimit <= 30));
+assert.equal(caseStudyForQuestion(guestQuiz, guestQuiz.questions[0]), null, 'first question needs only answer buttons');
+assert.doesNotMatch(guestQuiz.questions[0].text, /!\[|```|\|/);
+assert.equal(caseStudyForQuestion(guestQuiz, guestQuiz.questions[1]), null, 'photo question has no reference panels');
+assert.match(guestQuiz.questions[1].text, /!\[.+\]\(https:\/\//, 'second question introduces a photo');
+const guestReference = caseStudyForQuestion(guestQuiz, guestQuiz.questions[2]);
+assert.equal(guestReference.panels.length, 2, 'only the final question introduces two short panels');
+assert.doesNotMatch(guestMarkdown, /```|^\s*\|/m, 'guest demo needs no diagrams or tables');
 
 for (const [key, parse, preview, count] of [
   ['quiz-field-trip', parseQuizMarkdown, parseQuizMarkdownLocal, 3],
