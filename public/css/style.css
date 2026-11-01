@@ -26,6 +26,19 @@ body {
   line-height: 1.5;
 }
 
+pre,
+pre code {
+  text-align: left;
+  direction: ltr;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: clamp(0.75rem, 1.5vw, 1rem);
+  line-height: 1.5;
+}
+
 .container {
   max-width: 900px;
   margin: 0 auto;
@@ -5658,6 +5671,7 @@ select:focus-visible {
   font-size: 0.52em;
   line-height: 1.55;
   text-align: left;
+  direction: ltr;
 }
 
 .preview-timer-ring {
